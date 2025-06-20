@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getJwtSecret, validateAuthConfig } from '@/lib/auth-config';
+import { sessionManager } from '@/lib/session-manager';
 
 // Paths that require authentication
 const protectedPaths = [
@@ -21,6 +23,11 @@ const publicPaths = [
   '/auth/register',
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/customer/login',
+  '/api/auth/customer/register',
+  '/api/auth/admin/login',
+  '/api/auth/refresh',
+  '/api/auth/logout',
   '/api/products',
   '/api/cart',
   '/shop',
@@ -29,12 +36,14 @@ const publicPaths = [
   '/api/auth/admin/login'  // Allow access to admin login API
 ];
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
 // Proper JWT verification using Web Crypto API
-async function verifyJWT(token: string): Promise<any> {
+async function verifyJWT(token: string, userType: 'customer' | 'admin'): Promise<any> {
   try {
     const [headerB64, payloadB64, signatureB64] = token.split('.');
+    
+    if (!headerB64 || !payloadB64 || !signatureB64) {
+      throw new Error('Invalid token format');
+    }
     
     // Decode header and payload
     const header = JSON.parse(atob(headerB64));
@@ -45,15 +54,21 @@ async function verifyJWT(token: string): Promise<any> {
       throw new Error('Token expired');
     }
 
+    // Check if token is blacklisted
+    if (await sessionManager.isTokenBlacklisted(token)) {
+      throw new Error('Token has been revoked');
+    }
+
     // Verify signature using Web Crypto API
     const encoder = new TextEncoder();
     const data = encoder.encode(`${headerB64}.${payloadB64}`);
     const signature = Uint8Array.from(atob(signatureB64), c => c.charCodeAt(0));
     
     // Import the secret key
+    const secret = getJwtSecret(userType);
     const key = await crypto.subtle.importKey(
       'raw',
-      encoder.encode(JWT_SECRET),
+      encoder.encode(secret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
       ['verify']
@@ -79,54 +94,43 @@ async function verifyJWT(token: string): Promise<any> {
 }
 
 export async function middleware(request: NextRequest) {
-  // Enforce HTTPS
-  if (process.env.NODE_ENV === 'production' && !request.nextUrl.protocol.includes('https')) {
-    return NextResponse.redirect(
-      new URL(`https://${request.nextUrl.host}${request.nextUrl.pathname}`, request.url)
-    );
+  const path = request.nextUrl.pathname;
+  
+  // Validate auth configuration
+  try {
+    validateAuthConfig();
+  } catch (error) {
+    console.error('Auth configuration error:', error);
+    // Continue with middleware but log the error
   }
 
-  // Create a new response for each path
-  const createResponse = () => {
-    const response = NextResponse.next();
-    
-    // Set security headers
-    response.headers.set('X-Frame-Options', 'DENY');
-    response.headers.set('X-Content-Type-Options', 'nosniff');
-    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    response.headers.set('X-XSS-Protection', '1; mode=block');
-    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    response.headers.set(
-      'Content-Security-Policy',
-      "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-      "style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: https:; " +
-      "font-src 'self' data:; " +
-      "frame-ancestors 'none'; " +
-      "form-action 'self'; " +
-      "base-uri 'self'; " +
-      "object-src 'none'"
-    );
-    
-    return response;
-  };
+  // Check if path is public
+  const isPublicPath = publicPaths.some(publicPath => 
+    path.startsWith(publicPath) || path === publicPath
+  );
 
-  console.log('Middleware called for path:', request.nextUrl.pathname);
-  
-  const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path));
-  const isAdminPath = adminPaths.some(path => request.nextUrl.pathname.startsWith(path));
-  const isPublicPath = publicPaths.some(path => request.nextUrl.pathname.startsWith(path));
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+
+  // Check if path requires admin authentication
+  const isAdminPath = adminPaths.some(adminPath => 
+    path.startsWith(adminPath) || path === adminPath
+  );
+
+  // Check if path requires customer authentication
+  const isProtectedPath = protectedPaths.some(protectedPath => 
+    path.startsWith(protectedPath) || path === protectedPath
+  );
 
   // Handle admin routes
   if (isAdminPath) {
-    console.log('Admin path detected:', request.nextUrl.pathname);
+    console.log('Admin path detected:', path);
     
     // Skip middleware for admin login page and its API
-    if (request.nextUrl.pathname === '/admin/login' || request.nextUrl.pathname === '/api/auth/admin/login') {
+    if (path === '/admin/login' || path === '/api/auth/admin/login') {
       console.log('Skipping middleware for login page/API');
-      return createResponse();
+      return NextResponse.next();
     }
 
     // Check for admin token in cookies
@@ -138,9 +142,9 @@ export async function middleware(request: NextRequest) {
 
     if (adminToken?.value) {
       try {
-        const decoded = await verifyJWT(adminToken.value);
+        const decoded = await verifyJWT(adminToken.value, 'admin');
         console.log('Middleware - Decoded token:', decoded);
-        isAdmin = decoded.role === 'admin';
+        isAdmin = decoded.type === 'admin';
         console.log('Is admin:', isAdmin);
       } catch (error) {
         console.error('Token verification error:', error);
@@ -157,28 +161,55 @@ export async function middleware(request: NextRequest) {
     }
 
     console.log('Admin verified, proceeding');
-    return createResponse();
+    return NextResponse.next();
   }
 
-  // Handle protected routes
+  // Handle protected customer routes
   if (isProtectedPath) {
-    const response = createResponse();
-    // Add your protected route logic here
-    return response;
+    console.log('Protected path detected:', path);
+    
+    // Check for customer token in cookies
+    const customerToken = request.cookies.get('token');
+    console.log('Middleware - Customer token from cookie:', customerToken?.value);
+
+    let isAuthenticated = false;
+
+    if (customerToken?.value) {
+      try {
+        const decoded = await verifyJWT(customerToken.value, 'customer');
+        console.log('Middleware - Decoded customer token:', decoded);
+        isAuthenticated = decoded.type === 'customer';
+        console.log('Is authenticated customer:', isAuthenticated);
+      } catch (error) {
+        console.error('Customer token verification error:', error);
+        isAuthenticated = false;
+      }
+    }
+
+    if (!isAuthenticated) {
+      console.log('Not authenticated, redirecting to login');
+      const response = NextResponse.redirect(new URL('/auth/login', request.url));
+      // Clear any existing customer token
+      response.cookies.delete('token');
+      return response;
+    }
+
+    console.log('Customer verified, proceeding');
+    return NextResponse.next();
   }
 
-  return createResponse();
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    '/account/:path*',
-    '/auth/:path*',
-    '/api/customers/:path*',
-    '/api/cart/:path*',
-    '/api/orders/:path*',
-    '/shop/:path*',
-    '/admin/:path*',
-    '/api/admin/:path*'
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 }; 

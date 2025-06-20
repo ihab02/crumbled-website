@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import {
@@ -19,18 +19,14 @@ import {
 interface Product {
   id: number;
   name: string;
-  description: string;
+  description: string | null;
   base_price: string;
   is_pack: number;
   count: number;
+  flavor_size: string;
   image_url: string | null;
-  flavors: Array<{
-    id: number;
-    name: string;
-    description: string;
-    price: number;
-    image_url: string | null;
-  }>;
+  is_active: boolean;
+  flavors?: Flavor[];
 }
 
 interface Flavor {
@@ -39,13 +35,24 @@ interface Flavor {
   description: string;
   price: number;
   image_url: string | null;
+  category?: string;
+  is_active?: boolean;
+}
+
+interface SelectedFlavor {
+  id: number;
+  name: string;
+  price: number;
   quantity: number;
+  size: string;
 }
 
 export default function PackProductPage() {
   const { id } = useParams();
+  const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
-  const [selectedFlavors, setSelectedFlavors] = useState<Flavor[]>([]);
+  const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
+  const [selectedFlavors, setSelectedFlavors] = useState<SelectedFlavor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -56,70 +63,89 @@ export default function PackProductPage() {
 
   const fetchProduct = async () => {
     try {
-      const response = await fetch(`/api/products/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch product');
-      const data = await response.json();
-      console.log('Product data received:', data);
-      console.log('Flavors data:', data.flavors);
-      setProduct(data);
+      setIsLoading(true);
+      
+      // Fetch product details (includes flavors)
+      const productResponse = await fetch(`/api/products/${id}`);
+      if (!productResponse.ok) throw new Error('Failed to fetch product');
+      const productData = await productResponse.json();
+      console.log('Product data:', productData);
+      setProduct(productData);
+
+      // Use flavors from the product response
+      if (productData.flavors && Array.isArray(productData.flavors)) {
+        console.log('Flavors from product:', productData.flavors);
+        setAvailableFlavors(productData.flavors);
+      } else {
+        console.log('No flavors found in product data');
+        setAvailableFlavors([]);
+      }
     } catch (error) {
-      console.error('Error fetching product:', error);
+      console.error('Error fetching data:', error);
       toast.error('Failed to load product');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const getFlavorPrice = (flavor: Flavor, size: string): number => {
+    // The products API returns a single price field
+    return flavor.price || 0;
+  };
+
   const handleFlavorSelect = (flavor: Flavor, action: 'add' | 'remove') => {
     if (!product) return;
 
     const totalSelectedCount = selectedFlavors.reduce((sum, f) => sum + f.quantity, 0);
+    const flavorSize = product.flavor_size || 'Medium';
     
     if (action === 'add') {
       if (totalSelectedCount >= product.count) {
         toast.error(`You need to select exactly ${product.count} flavors for this pack`);
         return;
       }
-      setSelectedFlavors(prev => [...prev, {
-        ...flavor,
-        quantity: 1
-      }]);
-    } else {
-      // Remove one instance of the flavor
-      const index = selectedFlavors.findIndex(f => f.id === flavor.id);
-      if (index !== -1) {
-        setSelectedFlavors(prev => prev.filter((_, i) => i !== index));
+      
+      const existingFlavor = selectedFlavors.find(f => f.id === flavor.id);
+      if (existingFlavor) {
+        setSelectedFlavors(prev => prev.map(f => 
+          f.id === flavor.id 
+            ? { ...f, quantity: f.quantity + 1 }
+            : f
+        ));
+      } else {
+        setSelectedFlavors(prev => [...prev, {
+          id: flavor.id,
+          name: flavor.name,
+          price: getFlavorPrice(flavor, flavorSize),
+          quantity: 1,
+          size: flavorSize
+        }]);
       }
+    } else {
+      setSelectedFlavors(prev => {
+        const existingFlavor = prev.find(f => f.id === flavor.id);
+        if (existingFlavor && existingFlavor.quantity > 1) {
+          return prev.map(f => 
+            f.id === flavor.id 
+              ? { ...f, quantity: f.quantity - 1 }
+              : f
+          );
+        } else {
+          return prev.filter(f => f.id !== flavor.id);
+        }
+      });
     }
-  };
-
-  const handleFlavorQuantityChange = (flavorId: number, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    
-    // Check if changing quantity would exceed pack size
-    const flavor = selectedFlavors.find(f => f.id === flavorId);
-    if (!flavor) return;
-    
-    const otherFlavorsCount = selectedFlavors
-      .filter(f => f.id !== flavorId)
-      .reduce((sum, f) => sum + f.quantity, 0);
-    const newTotalCount = otherFlavorsCount + newQuantity;
-    
-    if (newTotalCount > (product?.count || 0)) {
-      toast.error(`You need to select exactly ${product?.count} flavors for this pack`);
-      return;
-    }
-    
-    setSelectedFlavors(prev =>
-      prev.map(flavor =>
-        flavor.id === flavorId ? { ...flavor, quantity: newQuantity } : flavor
-      )
-    );
   };
 
   const handleQuantityChange = (newQuantity: number) => {
-    if (newQuantity < 1) return;
-    setQuantity(newQuantity);
+    if (newQuantity >= 1) {
+      setQuantity(newQuantity);
+    }
+  };
+
+  const getSelectedFlavorCount = (flavorId: number): number => {
+    const flavor = selectedFlavors.find(f => f.id === flavorId);
+    return flavor ? flavor.quantity : 0;
   };
 
   const handleAddToBag = async () => {
@@ -148,15 +174,21 @@ export default function PackProductPage() {
           quantity: quantity,
           flavors: selectedFlavors.map(flavor => ({
             id: flavor.id,
-            quantity: flavor.quantity
+            quantity: flavor.quantity,
+            size: flavor.size
           }))
         }),
       });
 
       if (!response.ok) throw new Error('Failed to add to cart');
       
-      toast.success('Added to cart!');
-      setShowConfirmation(true);
+      const data = await response.json();
+      if (data.success) {
+        toast.success('Added to cart!');
+        setShowConfirmation(true);
+      } else {
+        throw new Error(data.error || 'Failed to add to cart');
+      }
     } catch (error) {
       console.error('Error adding to cart:', error);
       toast.error('Failed to add to cart');
@@ -165,11 +197,24 @@ export default function PackProductPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-4">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-1/4 bg-gray-200 rounded"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
+        <div className="container mx-auto px-4 py-8">
+          <div className="animate-pulse space-y-8">
+            <div className="h-8 w-1/4 bg-gray-200 rounded"></div>
+            <div className="grid gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-1">
+                <div className="h-96 bg-gray-200 rounded-3xl"></div>
+              </div>
+              <div className="lg:col-span-2">
+                <div className="h-8 w-1/2 bg-gray-200 rounded mb-4"></div>
+                <div className="space-y-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="h-24 bg-gray-200 rounded-2xl"></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -177,243 +222,323 @@ export default function PackProductPage() {
 
   if (!product) {
     return (
-      <div className="container mx-auto p-4">
-        <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900">Product not found</h1>
-          <Button
-            onClick={() => window.history.back()}
-            className="mt-4 bg-pink-600 hover:bg-pink-700"
-          >
-            Go Back
-          </Button>
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-12">
+            <h1 className="text-2xl font-bold text-pink-800 mb-4">Product not found</h1>
+            <Button
+              onClick={() => router.back()}
+              className="bg-pink-600 hover:bg-pink-700"
+            >
+              Go Back
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   const totalFlavorPrice = selectedFlavors.reduce((sum, flavor) => sum + (flavor.price * flavor.quantity), 0);
-  const totalPrice = (Number(product.base_price) + totalFlavorPrice) * quantity;
+  const basePrice = parseFloat(product.base_price);
+  const totalPrice = (basePrice + totalFlavorPrice) * quantity;
+  const totalSelectedCount = selectedFlavors.reduce((sum, f) => sum + f.quantity, 0);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <Button variant="ghost" className="text-pink-600 hover:text-pink-800" onClick={() => window.history.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Shop
-        </Button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <Button 
+            variant="ghost" 
+            className="text-pink-600 hover:text-pink-800" 
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Shop
+          </Button>
+        </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Product Info */}
-        <div className="lg:col-span-1">
-          <Card className="border-2 border-pink-200 rounded-3xl sticky top-8">
-            <CardHeader>
-              <CardTitle className="text-pink-800">{product.name}</CardTitle>
-              <p className="text-pink-600">{product.description}</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-pink-700">Selected:</span>
-                <Badge
-                  className={`${
-                    selectedFlavors.reduce((sum, f) => sum + f.quantity, 0) === product.count
-                      ? "bg-green-100 text-green-800"
-                      : "bg-yellow-100 text-yellow-800"
-                  }`}
-                >
-                  {selectedFlavors.reduce((sum, f) => sum + f.quantity, 0)} / {product.count}
-                </Badge>
-              </div>
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Product Info */}
+          <div className="lg:col-span-1">
+            <Card className="border-2 border-pink-200 rounded-3xl sticky top-8 bg-white/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="text-pink-800 text-2xl">{product.name}</CardTitle>
+                {product.description && (
+                  <p className="text-pink-600">{product.description}</p>
+                )}
+              </CardHeader>
+              
+              <CardContent className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-pink-700">Selected:</span>
+                  <Badge
+                    className={`${
+                      totalSelectedCount === product.count
+                        ? "bg-green-100 text-green-800 border-green-200"
+                        : "bg-yellow-100 text-yellow-800 border-yellow-200"
+                    }`}
+                  >
+                    {totalSelectedCount} / {product.count}
+                  </Badge>
+                </div>
 
-              {selectedFlavors.length > 0 && (
+                {selectedFlavors.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-pink-800">Selected Flavors:</h4>
+                    {selectedFlavors.map((flavor) => (
+                      <div key={flavor.id} className="flex justify-between items-center text-sm bg-pink-50 p-2 rounded-lg">
+                        <span className="text-pink-700">
+                          {flavor.quantity}x {flavor.name}
+                        </span>
+                        <span className="font-bold text-pink-800">
+                          +{(flavor.price * flavor.quantity).toFixed(2)} EGP
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-pink-800">Selected Flavors:</h4>
-                  {selectedFlavors.map((flavor) => (
-                    <div key={flavor.id} className="flex justify-between items-center text-sm">
-                      <span className="text-pink-700">{flavor.name}</span>
-                      <span className="font-bold text-pink-800">+{Number(flavor.price * flavor.quantity).toFixed(2)} EGP</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg text-pink-700">Base Price:</span>
+                    <span className="text-lg font-bold text-pink-800">{basePrice.toFixed(2)} EGP</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg text-pink-700">Flavor Add-ons:</span>
+                    <span className="text-lg font-bold text-pink-800">
+                      +{totalFlavorPrice.toFixed(2)} EGP
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-bold text-pink-800">Quantity:</span>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuantityChange(quantity - 1)}
+                        disabled={quantity <= 1}
+                        className="border-pink-300 text-pink-600 hover:bg-pink-50"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="w-12 text-center font-bold text-pink-800">{quantity}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuantityChange(quantity + 1)}
+                        className="border-pink-300 text-pink-600 hover:bg-pink-50"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="border-t border-pink-200 pt-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-lg text-pink-700">Base Price:</span>
-                  <span className="text-lg font-bold text-pink-800">{Number(product.base_price).toFixed(2)} EGP</span>
-                </div>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg text-pink-700">Flavor Add-ons:</span>
-                  <span className="text-lg font-bold text-pink-800">
-                    +{totalFlavorPrice.toFixed(2)} EGP
-                  </span>
-                </div>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-bold text-pink-800">Quantity:</span>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleQuantityChange(quantity - 1)}
-                      disabled={quantity <= 1}
-                    >
-                      -
-                    </Button>
-                    <input
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-                      className="w-16 text-center border rounded-md p-1"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleQuantityChange(quantity + 1)}
-                    >
-                      +
-                    </Button>
                   </div>
                 </div>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-bold text-pink-800">Total:</span>
-                  <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
-                    {totalPrice.toFixed(2)} EGP
-                  </span>
+                
+                <div className="border-t border-pink-200 pt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold text-pink-800">Total:</span>
+                    <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
+                      {totalPrice.toFixed(2)} EGP
+                    </span>
+                  </div>
                 </div>
 
                 <Button
                   onClick={handleAddToBag}
-                  disabled={selectedFlavors.reduce((sum, f) => sum + f.quantity, 0) !== product.count}
-                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold disabled:opacity-50"
+                  disabled={totalSelectedCount !== product.count}
+                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-4 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all"
                 >
-                  <ShoppingBag className="mr-2 h-4 w-4" />
-                  {selectedFlavors.reduce((sum, f) => sum + f.quantity, 0) === product.count 
+                  <ShoppingBag className="mr-2 h-5 w-5" />
+                  {totalSelectedCount === product.count 
                     ? 'Add to Bag' 
-                    : `Select ${product.count - selectedFlavors.reduce((sum, f) => sum + f.quantity, 0)} more flavor${product.count - selectedFlavors.reduce((sum, f) => sum + f.quantity, 0) === 1 ? '' : 's'}`}
+                    : `Select ${product.count - totalSelectedCount} more flavor${product.count - totalSelectedCount === 1 ? '' : 's'}`}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Available Flavors */}
-        <div className="lg:col-span-2">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-pink-800 mb-2">Select Your Flavors</h1>
-            <p className="text-lg text-pink-600">Choose {product.count} flavors for your pack</p>
+              </CardContent>
+            </Card>
           </div>
 
-          <div className="space-y-4">
-            {product.flavors && product.flavors.length > 0 ? (
-              product.flavors.map((flavor) => {
-                console.log('Rendering flavor:', flavor);
-                const isSelected = selectedFlavors.some(f => f.id === flavor.id);
-                const selectedFlavor = selectedFlavors.find(f => f.id === flavor.id);
-                const selectedCount = selectedFlavors.filter(f => f.id === flavor.id).length;
-                
-                return (
-                  <Card
-                    key={flavor.id}
-                    className={`overflow-hidden border-2 transition-all hover:shadow-xl rounded-3xl group ${
-                      isSelected
-                        ? "border-pink-400 bg-gradient-to-br from-pink-50 to-rose-50"
-                        : "border-pink-200 bg-gradient-to-br from-white to-pink-50"
-                    }`}
-                  >
-                    <div className="p-6 flex items-center">
-                      <div className="flex-shrink-0 w-24 h-24 relative rounded-2xl overflow-hidden">
-                        {flavor.image_url ? (
-                          <Image
-                            src={flavor.image_url}
-                            alt={flavor.name}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                            <Package className="h-8 w-8 text-gray-400" />
+          {/* Available Flavors */}
+          <div className="lg:col-span-2">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-pink-800 mb-2">Select Your Flavors</h1>
+              <p className="text-lg text-pink-600">
+                Choose {product.count} flavors for your {product.name}. You can select multiple quantities of the same flavor.
+              </p>
+              <p className="text-sm text-pink-500 mt-2">
+                💡 Use the + and - buttons to adjust quantities. You can select the same flavor multiple times!
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {availableFlavors.length > 0 ? (
+                availableFlavors.map((flavor) => {
+                  const selectedCount = getSelectedFlavorCount(flavor.id);
+                  const flavorSize = product.flavor_size || 'Medium';
+                  const flavorPrice = getFlavorPrice(flavor, flavorSize) || 0;
+                  const isSelected = selectedCount > 0;
+                  const canAddMore = totalSelectedCount < product.count;
+                  
+                  return (
+                    <Card
+                      key={flavor.id}
+                      className={`overflow-hidden border-2 transition-all hover:shadow-lg rounded-2xl group ${
+                        isSelected
+                          ? "border-pink-400 bg-gradient-to-br from-pink-50 to-rose-50 shadow-md"
+                          : "border-pink-200 bg-white hover:border-pink-300"
+                      }`}
+                    >
+                      <div className="flex items-center p-6">
+                        {/* Flavor Image */}
+                        <div className="w-20 h-20 overflow-hidden rounded-xl mr-6 flex-shrink-0">
+                          {flavor.image_url ? (
+                            <Image
+                              src={flavor.image_url}
+                              alt={flavor.name}
+                              width={80}
+                              height={80}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
+                              <Package className="h-8 w-8 text-pink-400" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Flavor Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h3 className="font-bold text-xl text-pink-800 group-hover:text-pink-600 transition-colors">
+                                {flavor.name}
+                              </h3>
+                              {flavor.description && (
+                                <p className="text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
+                              )}
+                            </div>
+                            <div className="text-right ml-4">
+                              <div className="text-lg font-bold text-pink-700">+{Number(flavorPrice).toFixed(2)} EGP</div>
+                              {isSelected && (
+                                <div className="text-sm text-pink-600 mt-1">
+                                  {selectedCount} selected
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex-1 ml-6">
-                        <h3 className="text-xl font-bold text-pink-800 mb-1">{flavor.name}</h3>
-                        <p className="text-sm text-pink-600 mb-2 line-clamp-2">{flavor.description}</p>
-                        <div className="flex justify-between items-center">
-                          <span className="text-lg font-bold text-pink-700">{Number(flavor.price).toFixed(2)} EGP</span>
-                          
-                          <div className="flex items-center space-x-2">
-                            {selectedCount > 0 && (
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 rounded-full border-pink-200 text-pink-600 hover:bg-pink-50"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleFlavorQuantityChange(flavor.id, (selectedFlavor?.quantity || 1) - 1);
-                                }}
-                                disabled={(selectedFlavor?.quantity || 1) <= 1}
-                              >
-                                -
-                              </Button>
+
+                          {/* Selection Controls */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              {/* Quantity Controls */}
+                              <div className="flex items-center space-x-2 bg-white rounded-full border-2 border-pink-300 p-1 shadow-md">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
+                                  onClick={() => handleFlavorSelect(flavor, 'remove')}
+                                  disabled={selectedCount === 0}
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+                                
+                                <span className="w-8 text-center font-bold text-pink-800 text-sm">
+                                  {selectedCount}
+                                </span>
+                                
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
+                                  onClick={() => handleFlavorSelect(flavor, 'add')}
+                                  disabled={!canAddMore}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+
+                              {/* Selection Status */}
+                              {isSelected && (
+                                <Badge className="bg-green-500 text-white border-0 px-3 py-1">
+                                  <Check className="h-3 w-3 mr-1" />
+                                  {selectedCount} selected
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Max Reached Status */}
+                            {!canAddMore && !isSelected && (
+                              <Badge className="bg-gray-300 text-gray-600 border-0 px-3 py-1">
+                                Max reached
+                              </Badge>
                             )}
-                            
-                            {selectedCount > 0 && (
-                              <span className="text-pink-800 font-bold min-w-[2rem] text-center">
-                                {selectedFlavor?.quantity || 1}
-                              </span>
-                            )}
-                            
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className={`h-8 w-8 rounded-full ${
-                                selectedCount > 0
-                                  ? "border-pink-200 text-pink-600 hover:bg-pink-50"
-                                  : "border-pink-300 text-pink-600 hover:bg-pink-50"
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (selectedCount > 0) {
-                                  handleFlavorQuantityChange(flavor.id, (selectedFlavor?.quantity || 1) + 1);
-                                } else {
-                                  handleFlavorSelect(flavor, 'add');
-                                }
-                              }}
-                              disabled={selectedFlavors.length >= (product?.count || 0) && !selectedCount}
-                            >
-                              +
-                            </Button>
                           </div>
                         </div>
                       </div>
+                    </Card>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12">
+                  <Package className="h-16 w-16 text-pink-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-pink-800 mb-2">No Flavors Available</h3>
+                  <p className="text-pink-600">Please check back later or contact support.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Selection Summary */}
+            {selectedFlavors.length > 0 && (
+              <Card className="mt-8 border-2 border-pink-200 rounded-2xl bg-gradient-to-br from-pink-50 to-rose-50">
+                <CardHeader>
+                  <CardTitle className="text-pink-800">Your Selection Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {selectedFlavors.map((flavor) => (
+                      <div key={flavor.id} className="flex justify-between items-center p-3 bg-white rounded-lg border border-pink-200">
+                        <div className="flex items-center">
+                          <span className="font-medium text-pink-800">{flavor.name}</span>
+                          <Badge className="ml-3 bg-pink-100 text-pink-800 border-pink-200">
+                            {flavor.quantity}x
+                          </Badge>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-bold text-pink-700">
+                            +{(flavor.price * flavor.quantity).toFixed(2)} EGP
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="border-t border-pink-200 pt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-pink-800">Total Flavors:</span>
+                        <span className="font-bold text-pink-800">
+                          {totalSelectedCount} / {product.count}
+                        </span>
+                      </div>
                     </div>
-                  </Card>
-                );
-              })
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No flavors available</p>
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         </div>
       </div>
 
+      {/* Confirmation Dialog */}
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Item Added to Cart</DialogTitle>
+            <DialogTitle className="text-pink-800">Item Added to Cart!</DialogTitle>
             <DialogDescription>
-              Your item has been successfully added to your cart. Would you like to proceed to checkout or continue shopping?
+              Your {product.name} has been successfully added to your cart. Would you like to proceed to checkout or continue shopping?
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-4 mt-4">
             <Button
               onClick={() => {
                 setShowConfirmation(false);
-                window.history.back();
+                router.back();
               }}
               className="flex-1 bg-pink-600 hover:bg-pink-700"
             >
@@ -422,7 +547,7 @@ export default function PackProductPage() {
             <Button
               onClick={() => {
                 setShowConfirmation(false);
-                window.location.href = '/cart';
+                router.push('/cart');
               }}
               className="flex-1 bg-pink-600 hover:bg-pink-700"
             >

@@ -811,6 +811,9 @@ video {
 .ml-3 {
   margin-left: 0.75rem;
 }
+.ml-4 {
+  margin-left: 1rem;
+}
 .ml-6 {
   margin-left: 1.5rem;
 }
@@ -826,8 +829,8 @@ video {
 .mr-4 {
   margin-right: 1rem;
 }
-.mt-0\.5 {
-  margin-top: 0.125rem;
+.mr-6 {
+  margin-right: 1.5rem;
 }
 .mt-1 {
   margin-top: 0.25rem;
@@ -1040,6 +1043,9 @@ video {
 .w-1 {
   width: 0.25rem;
 }
+.w-1\/2 {
+  width: 50%;
+}
 .w-1\/4 {
   width: 25%;
 }
@@ -1160,9 +1166,6 @@ video {
 }
 .min-w-\[150px\] {
   min-width: 150px;
-}
-.min-w-\[2rem\] {
-  min-width: 2rem;
 }
 .min-w-\[300px\] {
   min-width: 300px;
@@ -1470,6 +1473,11 @@ video {
 .overflow-x-hidden {
   overflow-x: hidden;
 }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .whitespace-nowrap {
   white-space: nowrap;
 }
@@ -1615,6 +1623,10 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(134 239 172 / var(--tw-border-opacity, 1));
 }
+.border-green-500 {
+  --tw-border-opacity: 1;
+  border-color: rgb(34 197 94 / var(--tw-border-opacity, 1));
+}
 .border-indigo-500 {
   --tw-border-opacity: 1;
   border-color: rgb(99 102 241 / var(--tw-border-opacity, 1));
@@ -1650,6 +1662,10 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(236 72 153 / var(--tw-border-opacity, 1));
 }
+.border-pink-600 {
+  --tw-border-opacity: 1;
+  border-color: rgb(219 39 119 / var(--tw-border-opacity, 1));
+}
 .border-primary {
   border-color: hsl(var(--primary));
 }
@@ -1673,6 +1689,10 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(252 165 165 / var(--tw-border-opacity, 1));
 }
+.border-red-500 {
+  --tw-border-opacity: 1;
+  border-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
+}
 .border-transparent {
   border-color: transparent;
 }
@@ -1694,6 +1714,10 @@ video {
 .border-yellow-500 {
   --tw-border-opacity: 1;
   border-color: rgb(234 179 8 / var(--tw-border-opacity, 1));
+}
+.border-blue-500 {
+  --tw-border-opacity: 1;
+  border-color: rgb(59 130 246 / var(--tw-border-opacity, 1));
 }
 .border-l-transparent {
   border-left-color: transparent;
@@ -1755,6 +1779,10 @@ video {
 .bg-gray-200 {
   --tw-bg-opacity: 1;
   background-color: rgb(229 231 235 / var(--tw-bg-opacity, 1));
+}
+.bg-gray-300 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(209 213 219 / var(--tw-bg-opacity, 1));
 }
 .bg-gray-50 {
   --tw-bg-opacity: 1;
@@ -1860,6 +1888,9 @@ video {
 .bg-white\/50 {
   background-color: rgb(255 255 255 / 0.5);
 }
+.bg-white\/80 {
+  background-color: rgb(255 255 255 / 0.8);
+}
 .bg-white\/95 {
   background-color: rgb(255 255 255 / 0.95);
 }
@@ -1879,9 +1910,6 @@ video {
 }
 .bg-opacity-75 {
   --tw-bg-opacity: 0.75;
-}
-.bg-gradient-to-b {
-  background-image: linear-gradient(to bottom, var(--tw-gradient-stops));
 }
 .bg-gradient-to-br {
   background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
@@ -1907,11 +1935,6 @@ video {
 .from-blue-500 {
   --tw-gradient-from: #3b82f6 var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(59 130 246 / 0) var(--tw-gradient-to-position);
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
-}
-.from-gray-50 {
-  --tw-gradient-from: #f9fafb var(--tw-gradient-from-position);
-  --tw-gradient-to: rgb(249 250 251 / 0) var(--tw-gradient-to-position);
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
 }
 .from-green-500 {
@@ -1980,9 +2003,6 @@ video {
 }
 .to-emerald-500 {
   --tw-gradient-to: #10b981 var(--tw-gradient-to-position);
-}
-.to-gray-100 {
-  --tw-gradient-to: #f3f4f6 var(--tw-gradient-to-position);
 }
 .to-indigo-50 {
   --tw-gradient-to: #eef2ff var(--tw-gradient-to-position);
@@ -2171,6 +2191,9 @@ video {
 .pt-1 {
   padding-top: 0.25rem;
 }
+.pt-2 {
+  padding-top: 0.5rem;
+}
 .pt-3 {
   padding-top: 0.75rem;
 }
@@ -2212,6 +2235,10 @@ video {
 .text-4xl {
   font-size: 2.25rem;
   line-height: 2.5rem;
+}
+.text-6xl {
+  font-size: 3.75rem;
+  line-height: 1;
 }
 .text-\[0\.8rem\] {
   font-size: 0.8rem;
@@ -2641,6 +2668,30 @@ video {
   transition-timing-function: linear;
 }
 
+/* Local font fallbacks in case Google Fonts fail */
+@font-face {
+  font-family: 'Quicksand-Fallback';
+  src: local('Arial'), local('Helvetica'), local('sans-serif');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Inter-Fallback';
+  src: local('Arial'), local('Helvetica'), local('sans-serif');
+  font-display: swap;
+}
+
+/* CSS Variables for fonts with fallbacks */
+:root {
+  --font-quicksand: 'Quicksand', 'Quicksand-Fallback', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-inter: 'Inter', 'Inter-Fallback', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Ensure fonts load gracefully */
+.font-sans {
+  font-family: var(--font-quicksand);
+}
+
 @keyframes slide-in-right {
   from {
     transform: translateX(100%);
@@ -2775,10 +2826,6 @@ video {
   border-left-width: 1px;
 }
 
-.last\:mb-0:last-child {
-  margin-bottom: 0px;
-}
-
 .last\:rounded-r-md:last-child {
   border-top-right-radius: calc(var(--radius) - 2px);
   border-bottom-right-radius: calc(var(--radius) - 2px);
@@ -2821,6 +2868,11 @@ video {
 .hover\:border-gray-400:hover {
   --tw-border-opacity: 1;
   border-color: rgb(156 163 175 / var(--tw-border-opacity, 1));
+}
+
+.hover\:border-pink-300:hover {
+  --tw-border-opacity: 1;
+  border-color: rgb(249 168 212 / var(--tw-border-opacity, 1));
 }
 
 .hover\:border-pink-400:hover {
@@ -3135,6 +3187,21 @@ video {
   border-color: transparent;
 }
 
+.focus\:border-blue-500:focus {
+  --tw-border-opacity: 1;
+  border-color: rgb(59 130 246 / var(--tw-border-opacity, 1));
+}
+
+.focus\:border-green-500:focus {
+  --tw-border-opacity: 1;
+  border-color: rgb(34 197 94 / var(--tw-border-opacity, 1));
+}
+
+.focus\:border-red-500:focus {
+  --tw-border-opacity: 1;
+  border-color: rgb(239 68 68 / var(--tw-border-opacity, 1));
+}
+
 .focus\:bg-accent:focus {
   background-color: hsl(var(--accent));
 }
@@ -3183,6 +3250,21 @@ video {
 
 .focus\:ring-ring:focus {
   --tw-ring-color: hsl(var(--ring));
+}
+
+.focus\:ring-blue-500:focus {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(59 130 246 / var(--tw-ring-opacity, 1));
+}
+
+.focus\:ring-green-500:focus {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(34 197 94 / var(--tw-ring-opacity, 1));
+}
+
+.focus\:ring-red-500:focus {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(239 68 68 / var(--tw-ring-opacity, 1));
 }
 
 .focus\:ring-offset-2:focus {
@@ -4348,9 +4430,9 @@ video {
   cursor: e-resize;
 }
 
-/*!************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
-  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[14].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"app\\layout.tsx","import":"Quicksand","arguments":[{"subsets":["latin"],"variable":"--font-quicksand","display":"swap"}],"variableName":"quicksand"} ***!
-  \************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+/*!************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[14].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"app\\layout.tsx","import":"Quicksand","arguments":[{"subsets":["latin"],"variable":"--font-quicksand","display":"swap","preload":true,"fallback":["system-ui","arial"]}],"variableName":"quicksand"} ***!
+  \************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 /* vietnamese */
 @font-face {
   font-family: '__Quicksand_8b9a43';
@@ -4378,13 +4460,13 @@ video {
   src: url(/_next/static/media/c9d2740a66c9a4f1-s.p.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }@font-face {font-family: '__Quicksand_Fallback_8b9a43';src: local("Arial");ascent-override: 95.87%;descent-override: 23.97%;line-gap-override: 0.00%;size-adjust: 104.31%
-}.__className_8b9a43 {font-family: '__Quicksand_8b9a43', '__Quicksand_Fallback_8b9a43';font-style: normal
-}.__variable_8b9a43 {--font-quicksand: '__Quicksand_8b9a43', '__Quicksand_Fallback_8b9a43'
+}.__className_8b9a43 {font-family: '__Quicksand_8b9a43', '__Quicksand_Fallback_8b9a43', system-ui, arial;font-style: normal
+}.__variable_8b9a43 {--font-quicksand: '__Quicksand_8b9a43', '__Quicksand_Fallback_8b9a43', system-ui, arial
 }
 
-/*!*****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
-  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[14].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"app\\layout.tsx","import":"Inter","arguments":[{"subsets":["latin"]}],"variableName":"inter"} ***!
-  \*****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
+/*!**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** css ./node_modules/next/dist/build/webpack/loaders/css-loader/src/index.js??ruleSet[1].rules[14].oneOf[2].use[1]!./node_modules/next/dist/build/webpack/loaders/next-font-loader/index.js??ruleSet[1].rules[14].oneOf[2].use[2]!./node_modules/next/font/google/target.css?{"path":"app\\layout.tsx","import":"Inter","arguments":[{"subsets":["latin"],"display":"swap","preload":true,"fallback":["system-ui","arial"]}],"variableName":"inter"} ***!
+  \**********************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************/
 /* cyrillic-ext */
 @font-face {
   font-family: '__Inter_e8ce0c';
@@ -4448,6 +4530,6 @@ video {
   src: url(/_next/static/media/e4af272ccee01ff0-s.p.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }@font-face {font-family: '__Inter_Fallback_e8ce0c';src: local("Arial");ascent-override: 90.49%;descent-override: 22.56%;line-gap-override: 0.00%;size-adjust: 107.06%
-}.__className_e8ce0c {font-family: '__Inter_e8ce0c', '__Inter_Fallback_e8ce0c';font-style: normal
+}.__className_e8ce0c {font-family: '__Inter_e8ce0c', '__Inter_Fallback_e8ce0c', system-ui, arial;font-style: normal
 }
 

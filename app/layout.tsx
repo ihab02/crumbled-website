@@ -12,9 +12,16 @@ const quicksand = Quicksand({
   subsets: ["latin"],
   variable: "--font-quicksand",
   display: "swap",
+  preload: true,
+  fallback: ['system-ui', 'arial'],
 })
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: "swap",
+  preload: true,
+  fallback: ['system-ui', 'arial'],
+})
 
 export const metadata: Metadata = {
   title: "Crumbled - Delicious Cookies Delivered",
@@ -24,6 +31,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
       <body className={`${quicksand.variable} font-sans ${inter.className}`} suppressHydrationWarning>
         <Providers>
           <div className="min-h-screen flex flex-col">

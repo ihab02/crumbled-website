@@ -2,14 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { generateToken } from '@/lib/middleware/auth';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { hash } from 'bcryptjs';
 
 interface Customer extends RowDataPacket {
   id: number;
-  email: string;
-  password_hash: string;
-  first_name: string;
-  last_name: string;
-  phone?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -20,6 +16,31 @@ export async function POST(req: NextRequest) {
     if (!email || !password || !firstName || !lastName) {
       return NextResponse.json(
         { error: 'Email, password, first name, and last name are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters long' },
+        { status: 400 }
+      );
+    }
+
+    // Validate name length
+    if (firstName.length < 2 || lastName.length < 2) {
+      return NextResponse.json(
+        { error: 'First name and last name must be at least 2 characters long' },
         { status: 400 }
       );
     }
@@ -37,11 +58,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Store password as plain text (NOT recommended for production)
-    const passwordHash = password;
+    // Hash password with bcrypt
+    const passwordHash = await hash(password, 12);
 
     // Insert new customer
-    const [[result]] = await databaseService.query<[ResultSetHeader, any]>(
+    const result = await databaseService.query<ResultSetHeader>(
       `INSERT INTO customers (email, password_hash, first_name, last_name, phone)
        VALUES (?, ?, ?, ?, ?)`,
       [email, passwordHash, firstName, lastName, phone || null]
@@ -52,7 +73,7 @@ export async function POST(req: NextRequest) {
     // Generate JWT token
     const token = generateToken({
       type: 'customer',
-      userId: customerId.toString(),
+      id: customerId,
       email
     });
 

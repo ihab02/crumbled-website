@@ -130,7 +130,7 @@ export default function CustomizeBundlePage() {
 
   const totalSelected = selectedCookies.reduce((sum, cookie) => sum + cookie.quantity, 0)
   const totalPrice = selectedCookies.reduce((sum, cookie) => sum + cookie.price * cookie.quantity, 0)
-  const remainingSlots = bundle.bundleSize - totalSelected
+  const remainingSlots = (bundle?.bundleSize || 0) - totalSelected
 
   const updateCookieQuantity = (cookieId: string, newQuantity: number) => {
     if (newQuantity < 0) return
@@ -169,7 +169,7 @@ export default function CustomizeBundlePage() {
   }
 
   const canAddMore = (cookieId: string) => {
-    return totalSelected < bundle.bundleSize
+    return totalSelected < (bundle?.bundleSize || 0)
   }
 
   const getStockQuantity = (cookieId: string): number => {
@@ -198,31 +198,46 @@ export default function CustomizeBundlePage() {
     return stockItem?.stock_status || "unknown"
   }
 
-  const handleAddToCart = () => {
-    if (totalSelected !== bundle.bundleSize) {
-      alert(`Please select exactly ${bundle.bundleSize} cookies for this bundle.`)
+  const handleAddToCart = async () => {
+    if (!bundle || totalSelected !== bundle.bundleSize) {
+      alert(`Please select exactly ${bundle?.bundleSize || 0} cookies for this bundle.`)
       return
     }
 
-    const customBundle = {
-      id: Date.now(), // Generate unique ID for custom bundle
-      name: `Custom ${bundle.name}`,
-      price: totalPrice,
-      quantity: 1,
-      image: bundle.image,
-      isBundle: true,
-      bundleSize: bundle.bundleSize,
-      bundleItems: selectedCookies.map((cookie) => ({
-        id: cookie.id,
-        name: cookie.name,
-        price: cookie.price,
+    try {
+      // Convert selected cookies to the format expected by the API
+      const flavors = selectedCookies.map((cookie) => ({
+        id: parseInt(cookie.id),
         quantity: cookie.quantity,
-        image: cookie.image,
-      })),
-    }
+        size: bundle?.category === "Mini Bundles" ? "Mini" : "Large"
+      }));
 
-    addToCart(customBundle)
-    router.push("/cart")
+      const response = await fetch('/api/cart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          productId: parseInt(bundleId),
+          quantity: 1,
+          flavors: flavors
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add to cart');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        router.push("/cart");
+      } else {
+        throw new Error(data.error || 'Failed to add to cart');
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      alert('Failed to add to cart. Please try again.');
+    }
   }
 
   if (loading) {
@@ -274,20 +289,20 @@ export default function CustomizeBundlePage() {
                 <div className="flex items-center gap-4">
                   <Badge
                     className={`${
-                      totalSelected === bundle.bundleSize
+                      totalSelected === (bundle?.bundleSize || 0)
                         ? "bg-green-100 text-green-800 border-green-200"
-                        : totalSelected > bundle.bundleSize
+                        : totalSelected > (bundle?.bundleSize || 0)
                           ? "bg-red-100 text-red-800 border-red-200"
                           : "bg-pink-100 text-pink-800 border-pink-200"
                     }`}
                   >
-                    {totalSelected} / {bundle.bundleSize} cookies selected
+                    {totalSelected} / {bundle?.bundleSize || 0} cookies selected
                   </Badge>
                   {remainingSlots > 0 && (
                     <span className="text-sm text-pink-600">Choose {remainingSlots} more cookies</span>
                   )}
-                  {totalSelected > bundle.bundleSize && (
-                    <span className="text-sm text-red-600">Remove {totalSelected - bundle.bundleSize} cookies</span>
+                  {totalSelected > (bundle?.bundleSize || 0) && (
+                    <span className="text-sm text-red-600">Remove {totalSelected - (bundle?.bundleSize || 0)} cookies</span>
                   )}
                 </div>
               </CardHeader>
@@ -387,7 +402,7 @@ export default function CustomizeBundlePage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-pink-700">Bundle Size:</span>
-                    <span className="font-bold text-pink-800">{bundle.bundleSize} cookies</span>
+                    <span className="font-bold text-pink-800">{bundle?.bundleSize || 0} cookies</span>
                   </div>
 
                   {selectedCookies.length > 0 && (
@@ -417,18 +432,18 @@ export default function CustomizeBundlePage() {
 
                   <Button
                     onClick={handleAddToCart}
-                    disabled={totalSelected !== bundle.bundleSize}
+                    disabled={totalSelected !== (bundle?.bundleSize || 0)}
                     className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ShoppingCart className="mr-2 h-5 w-5" />
                     Add to Cart
                   </Button>
 
-                  {totalSelected !== bundle.bundleSize && (
+                  {totalSelected !== (bundle?.bundleSize || 0) && (
                     <p className="text-sm text-pink-600 text-center">
-                      {totalSelected < bundle.bundleSize
-                        ? `Select ${bundle.bundleSize - totalSelected} more cookies to continue`
-                        : `Remove ${totalSelected - bundle.bundleSize} cookies to continue`}
+                      {totalSelected < (bundle?.bundleSize || 0)
+                        ? `Select ${(bundle?.bundleSize || 0) - totalSelected} more cookies to continue`
+                        : `Remove ${totalSelected - (bundle?.bundleSize || 0)} cookies to continue`}
                     </p>
                   )}
 

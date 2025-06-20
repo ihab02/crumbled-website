@@ -42,6 +42,24 @@ class CustomSMSService {
     try {
       // Format phone number for Egyptian numbers
       const formattedPhone = this.formatPhoneNumber(phone)
+      
+      // In development, log to console instead of sending SMS
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📱 [DEV MODE] SMS would be sent:')
+        console.log('   To:', formattedPhone)
+        console.log('   Message:', message)
+        console.log('   Sender:', this.config.senderName)
+        console.log('   URL:', `${this.config.baseUrl}/sendSMS`)
+        
+        return {
+          success: true,
+          messageId: `dev_${Date.now()}`,
+          status: "sent",
+          message: "SMS logged to console (development mode)",
+          rawResponse: { development: true }
+        }
+      }
+
       const smsUrl = `${this.config.baseUrl}/sendSMS`
 
       console.log(`🚀 Sending SMS to ${formattedPhone}`)
@@ -223,30 +241,34 @@ class CustomSMSService {
 // Create a singleton instance
 const smsService = new CustomSMSService();
 
-export async function sendVerificationCode(phoneNumber: string) {
+export async function sendVerificationCode(phoneNumber: string, existingOtp?: string) {
   try {
     // Format phone number
     const formattedPhone = phoneNumber.replace(/\D/g, "")
+    console.log('📱 [SMS Service] Original phone:', phoneNumber)
+    console.log('📱 [SMS Service] Formatted phone:', formattedPhone)
 
-    // Generate a 6-digit code
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
+    // Use existing OTP or generate a new one
+    const code = existingOtp || Math.floor(100000 + Math.random() * 900000).toString()
+    console.log('🔑 [SMS Service] OTP code:', code)
 
     // Always send the SMS
     await smsService.sendVerificationCode(formattedPhone, code)
 
-    // Store the verification code in MySQL
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-    const mysqlExpiresAt = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
+    // Store the verification code in MySQL (always store, whether existing or new)
+    console.log('⏰ [SMS Service] Storing OTP with 10-minute expiration');
+    console.log('💾 [SMS Service] Inserting into database:', { phone: formattedPhone, code })
 
-    await databaseService.query(
-      'INSERT INTO phone_verification (phone, verification_code, expires_at) VALUES (?, ?, ?)',
-      [formattedPhone, code, mysqlExpiresAt]
+    const result = await databaseService.query(
+      'INSERT INTO phone_verification (phone, verification_code, expires_at) VALUES (?, ?, NOW() + INTERVAL 10 MINUTE)',
+      [formattedPhone, code]
     );
+    
+    console.log('✅ [SMS Service] Database insert result:', result)
 
     return { success: true }
   } catch (error) {
-    console.error("Error sending verification code:", error)
+    console.error("❌ [SMS Service] Error sending verification code:", error)
     throw error
   }
 }

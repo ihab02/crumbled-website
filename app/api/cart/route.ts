@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 import { databaseService } from '@/lib/services/databaseService';
 
+// Types
 interface Cart {
   id: number;
   session_id: string;
@@ -20,6 +21,7 @@ interface Product {
   flavor_size: string;
   base_price: number;
   is_active: boolean;
+  image_url: string | null;
 }
 
 interface CartItem {
@@ -32,18 +34,11 @@ interface CartItem {
   base_price?: number;
   size?: string;
   image_url?: string;
-  flavors?: Array<{
-    flavor_id: number;
-    flavor_name: string;
-    mini_price: number;
-    medium_price: number;
-    large_price: number;
-    quantity: number;
-    size: string;
-  }>;
+  count?: number;
+  flavors?: CartItemFlavor[];
 }
 
-interface FlavorResult {
+interface CartItemFlavor {
   cart_item_id: number;
   flavor_id: number;
   flavor_name: string;
@@ -51,9 +46,37 @@ interface FlavorResult {
   medium_price: number;
   large_price: number;
   quantity: number;
+  size: string;
 }
 
-async function getCartId(): Promise<string> {
+interface FlavorSelection {
+  id: number;
+  quantity: number;
+  size: string;
+}
+
+interface ProcessedCartItem {
+  id: number;
+  name: string;
+  basePrice: number;
+  quantity: number;
+  isPack: boolean;
+  packSize: string;
+  imageUrl: string;
+  count: number;
+  flavorDetails: string;
+  total: number;
+  flavors: Array<{
+    id: number;
+    name: string;
+    quantity: number;
+    price: number;
+    size: string;
+  }>;
+}
+
+// Helper Functions
+async function getOrCreateCart(): Promise<string> {
   const cookieStore = cookies();
   let cartId = cookieStore.get('cart_id')?.value;
 
@@ -64,30 +87,48 @@ async function getCartId(): Promise<string> {
       [sessionId]
     );
     
-    if (!result.insertId) {
-      throw new Error('Failed to create cart');
-    }
-    
     cartId = result.insertId.toString();
-    cookieStore.set('cart_id', cartId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 // 7 days
-    });
+    setCartCookie(cartId);
+    console.log('Created new cart:', cartId);
+  } else {
+    const cartExists = await databaseService.query<Cart[]>(
+      'SELECT * FROM carts WHERE id = ? AND status = "active"',
+      [cartId]
+    );
+
+    if (cartExists.length === 0) {
+      const sessionId = uuidv4();
+      const result = await databaseService.query<{ insertId: number }>(
+        'INSERT INTO carts (session_id, status, created_at) VALUES (?, "active", NOW())',
+        [sessionId]
+      );
+      
+      cartId = result.insertId.toString();
+      setCartCookie(cartId);
+      console.log('Created new cart (old one invalid):', cartId);
+    }
   }
 
   return cartId;
 }
 
+function setCartCookie(cartId: string) {
+  const cookieStore = cookies();
+  cookieStore.set('cart_id', cartId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60
+  });
+}
+
+// API Routes
 export async function GET() {
   try {
-    const cartId = await getCartId();
+    const cartId = await getOrCreateCart();
     console.log('GET /api/cart - Cart ID from cookie:', cartId);
 
-    // Get cart items with their flavors
-    console.log('Fetching cart items for cart ID:', cartId);
-    const [rows] = await databaseService.query<CartItem[]>(`
+    const cartItems = await databaseService.query<CartItem[]>(`
       SELECT 
         ci.id,
         ci.quantity,
@@ -101,27 +142,48 @@ export async function GET() {
       FROM cart_items ci
       JOIN products p ON ci.product_id = p.id
       WHERE ci.cart_id = ? AND p.is_active = true
+      ORDER BY ci.id DESC
     `, [cartId]);
-    console.log('Cart items found:', rows);
 
-    // Ensure we have an array of items and convert data types
-    const cartItems = (Array.isArray(rows) ? rows : rows ? [rows] : []).map(item => ({
-      ...item,
-      is_pack: Boolean(item.is_pack),
-      base_price: Number(item.base_price),
+    console.log('Raw cartItems from database:', cartItems);
+    console.log('cartItems type:', typeof cartItems);
+    console.log('cartItems is array:', Array.isArray(cartItems));
+    console.log('cartItems length:', Array.isArray(cartItems) ? cartItems.length : 'not array');
+
+    const cartItemsArray = Array.isArray(cartItems) ? cartItems : (cartItems ? [cartItems] : []);
+
+    if (cartItemsArray.length === 0) {
+      console.log('No cart items found, returning empty cart');
+      return NextResponse.json({
+        items: [],
+        total: 0,
+        itemCount: 0
+      });
+    }
+
+    console.log('Cart items found:', cartItemsArray);
+    console.log('Cart items array length:', cartItemsArray.length);
+
+    const processedItems: ProcessedCartItem[] = cartItemsArray.map((item: CartItem) => ({
+      id: item.id,
+      name: item.product_name || '',
+      basePrice: Number(item.base_price),
       quantity: Number(item.quantity),
-      count: Number(item.count)
+      isPack: Boolean(item.is_pack),
+      packSize: item.size || '',
+      imageUrl: item.image_url || '',
+      count: Number(item.count),
+      flavorDetails: '',
+      total: 0,
+      flavors: []
     }));
-    console.log('Processed cart items:', cartItems);
 
-    // Get flavors for pack items
-    console.log('Fetching flavors for pack items');
-    const packItems = cartItems.filter((item) => item.is_pack);
+    const packItems = processedItems.filter((item: ProcessedCartItem) => item.isPack);
     if (packItems.length > 0) {
-      const packItemIds = packItems.map(item => item.id);
+      const packItemIds = packItems.map((item: ProcessedCartItem) => item.id);
       console.log('Fetching flavors for pack items:', packItemIds);
       
-      const [flavorRows] = await databaseService.query<any[]>(`
+      const flavorRows = await databaseService.query<CartItemFlavor[]>(`
         SELECT 
           cif.cart_item_id,
           f.id as flavor_id,
@@ -134,91 +196,64 @@ export async function GET() {
         FROM cart_item_flavors cif
         JOIN flavors f ON cif.flavor_id = f.id
         WHERE cif.cart_item_id IN (${packItemIds.join(',')})
+        ORDER BY cif.cart_item_id, f.name
       `);
 
-      console.log('Raw flavor rows:', flavorRows);
+      console.log('Raw flavor rows from database:', flavorRows);
+      console.log('Flavor rows type:', typeof flavorRows);
+      console.log('Flavor rows is array:', Array.isArray(flavorRows));
+      console.log('Flavor rows length:', Array.isArray(flavorRows) ? flavorRows.length : 'not array');
 
-      // Ensure we have an array of flavors and convert data types
-      const flavors = (Array.isArray(flavorRows) ? flavorRows : flavorRows ? [flavorRows] : []).map(f => ({
+      const processedFlavors = (Array.isArray(flavorRows) ? flavorRows : flavorRows ? [flavorRows] : []).map((f: CartItemFlavor) => ({
         ...f,
         mini_price: Number(f.mini_price),
         medium_price: Number(f.medium_price),
         large_price: Number(f.large_price),
-        quantity: Number(f.quantity),
-        size: f.size 
+        quantity: Number(f.quantity)
       }));
-      console.log('Processed flavors:', flavors);
 
-      // Add flavors to their respective cart items
-      cartItems.forEach((item) => {
-        if (item.is_pack) {
-          const itemFlavors = flavors.filter((f) => f.cart_item_id === item.id);
-          console.log(`Flavors for item ${item.id}:`, itemFlavors);
-          item.flavors = itemFlavors.map((f) => ({
-            flavor_id: f.flavor_id,
-            flavor_name: f.flavor_name,
-            mini_price: f.mini_price,
-            medium_price: f.medium_price,
-            large_price: f.large_price,
-            quantity: f.quantity,
-            size: f.size
+      console.log('Processed flavors array:', processedFlavors);
+      console.log('Processed flavors length:', processedFlavors.length);
+
+      processedItems.forEach((item: ProcessedCartItem) => {
+        if (item.isPack) {
+          const itemFlavors = processedFlavors.filter((f: CartItemFlavor) => f.cart_item_id === item.id);
+          console.log(`Processing flavors for item ${item.id}:`, itemFlavors);
+          console.log(`Item ${item.id} flavor count:`, itemFlavors.length);
+          
+          item.flavors = itemFlavors.map(flavor => ({
+            id: flavor.flavor_id,
+            name: flavor.flavor_name,
+            quantity: flavor.quantity,
+            price: flavor.size === 'Large' ? flavor.large_price : 
+                   flavor.size === 'Medium' ? flavor.medium_price : flavor.mini_price,
+            size: flavor.size
           }));
+          
+          console.log(`Final processed flavors for item ${item.id}:`, item.flavors);
+          console.log(`Final flavor count for item ${item.id}:`, item.flavors.length);
         }
       });
     }
 
-    // Calculate totals
-    const items = cartItems.map((item) => {
-      let total = 0;
-      let flavorDetails = '';
-
-      if (item.is_pack && item.flavors) {
-        // Calculate flavor prices and build flavor details string
-        const flavorTotals = item.flavors.map((flavor: { [key: string]: any }) => {
-          const priceKey = `${item.size?.toLowerCase()}_price` as keyof typeof flavor;
-          const price = Number(flavor[priceKey]) || 0;
-          const flavorTotal = price * flavor.quantity;
-          flavorDetails += `${flavor.flavor_name} (x${flavor.quantity}) - +${price.toFixed(2)} EGP each\n`;
-          return flavorTotal;
-        });
-
-        total = flavorTotals.reduce((sum: number, price: number) => sum + price, 0) + (item.base_price || 0) * item.quantity;
-      } else {
-        total = (item.base_price || 0) * item.quantity;
+    const total = processedItems.reduce((sum, item) => {
+      let itemTotal = item.basePrice * item.quantity;
+      if (item.flavors && item.flavors.length > 0) {
+        itemTotal += item.flavors.reduce((flavorSum, flavor) => {
+          return flavorSum + (flavor.price * flavor.quantity);
+        }, 0);
       }
+      return sum + itemTotal;
+    }, 0);
 
-      return {
-        ...item,
-        total,
-        flavorDetails,
-        packSize: item.is_pack ? `${item.count} pieces` : undefined
-      };
-    });
-
-    const cartTotal = items.reduce((sum: number, item: { total: number }) => sum + item.total, 0);
-    console.log('Final cart total:', cartTotal);
+    const itemCount = processedItems.reduce((sum, item) => sum + item.quantity, 0);
 
     return NextResponse.json({
-      items: items.map(item => ({
-        id: item.id,
-        name: item.product_name,
-        basePrice: item.base_price,
-        quantity: item.quantity,
-        isPack: item.is_pack,
-        packSize: item.packSize,
-        flavorDetails: item.flavorDetails,
-        total: item.total,
-        imageUrl: item.image_url,
-        flavors: item.flavors?.map((flavor: { [key: string]: any }) => ({
-          id: flavor.flavor_id,
-          name: flavor.flavor_name,
-          quantity: flavor.quantity,
-          price: flavor[`${item.size?.toLowerCase()}_price`] || 0,
-          size: flavor.size
-        }))
-      })),
-      total: cartTotal
+      items: processedItems,
+      total,
+      itemCount
     });
+
   } catch (error) {
     console.error('Error in GET /api/cart:', error);
     return NextResponse.json(
@@ -233,156 +268,105 @@ export async function POST(request: Request) {
     const body = await request.json();
     console.log('POST /api/cart - Request body:', body);
     
-    let cartId = await getCartId();
+    const cartId = await getOrCreateCart();
     console.log('Cart ID:', cartId);
 
-    // Verify cart exists and is active
-    const cartResult = await databaseService.query<Cart[]>(
-      'SELECT * FROM carts WHERE id = ?',
-      [cartId]
-    );
-
-    if (cartResult.length === 0 || cartResult[0].status !== 'active') {
-      console.log('Cart not found or inactive:', cartId);
-      // Create a new cart
-      const sessionId = uuidv4();
-      const result = await databaseService.query<{ insertId: number }>(
-        'INSERT INTO carts (session_id, status, created_at) VALUES (?, "active", NOW())',
-        [sessionId]
-      );
-      
-      if (!result.insertId) {
-        throw new Error('Failed to create cart');
-      }
-      
-      cartId = result.insertId.toString();
-      console.log('Created new cart:', cartId);
-      
-      // Update the cookie
-      const cookieStore = cookies();
-      cookieStore.set('cart_id', cartId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 // 7 days
-      });
+    if (!body.productId) {
+      console.log('Missing productId, returning 400');
+      return NextResponse.json({ success: false, error: 'Product ID is required' }, { status: 400 });
     }
 
-    // Get the product
-    const productResult = await databaseService.query<Product[]>(
+    console.log('Looking for product with ID:', body.productId);
+    const [productResult] = await databaseService.query<Product[]>(
       'SELECT * FROM products WHERE id = ? AND is_active = true',
       [body.productId]
     );
 
-    if (productResult.length === 0) {
-      console.log('Product not found:', body.productId);
+    console.log('Product query result:', productResult);
+    console.log('Product result type:', typeof productResult);
+    console.log('Product result is array:', Array.isArray(productResult));
+    console.log('Product result length:', Array.isArray(productResult) ? productResult.length : 'not array');
+    
+    // Handle both single object and array responses
+    let product: Product | null = null;
+    if (Array.isArray(productResult)) {
+      product = productResult.length > 0 ? productResult[0] : null;
+    } else if (productResult && typeof productResult === 'object') {
+      product = productResult as Product;
+    }
+
+    if (!product) {
+      console.log('Product not found, returning 404');
       return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
     }
 
-    const product = productResult[0];
     console.log('Found product:', product);
 
-    // Check if item already exists in cart
-    const existingItemResult = await databaseService.query<CartItem[]>(
-      'SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?',
-      [cartId, product.id]
-    );
+    if (product.is_pack) {
+      if (!body.flavors || !Array.isArray(body.flavors) || body.flavors.length === 0) {
+        console.log('Flavors required for pack, returning 400');
+        return NextResponse.json({ success: false, error: 'Flavors are required for packs' }, { status: 400 });
+      }
 
-    if (existingItemResult.length > 0) {
-      // Update quantity if item exists
-      console.log('Updating existing cart item:', existingItemResult[0].id);
-      await databaseService.query(
-        'UPDATE cart_items SET quantity = quantity + ? WHERE id = ?',
-        [body.quantity || 1, existingItemResult[0].id]
-      );
-    } else {
-      // Create new cart item
-      console.log('Creating new cart item for product:', product.id);
+      const totalFlavorQuantity = body.flavors.reduce((sum: number, flavor: FlavorSelection) => sum + flavor.quantity, 0);
+      if (totalFlavorQuantity !== product.count) {
+        console.log(`Flavor quantity mismatch: ${totalFlavorQuantity} != ${product.count}, returning 400`);
+        return NextResponse.json({ 
+          success: false, 
+          error: `Please select exactly ${product.count} flavors for this pack` 
+        }, { status: 400 });
+      }
+    }
+
+    if (product.is_pack && body.flavors && body.flavors.length > 0) {
+      console.log('Creating new cart item for pack with flavors');
+      
       const createResult = await databaseService.query<{ insertId: number }>(
         'INSERT INTO cart_items (cart_id, product_id, quantity, is_pack) VALUES (?, ?, ?, ?)',
         [cartId, product.id, body.quantity || 1, product.is_pack]
       );
 
-      // If it's a pack, add the flavors
-      if (product.is_pack && body.flavors) {
-        console.log('Adding flavors to pack:', body.flavors);
-        for (const flavor of body.flavors) {
-          await databaseService.query(
-            'INSERT INTO cart_item_flavors (cart_item_id, flavor_id, quantity, size) VALUES (?, ?, ?, ?)',
-            [createResult.insertId, flavor.id, flavor.quantity, flavor.size || 'Medium']
-          );
-        }
+      const cartItemId = Array.isArray(createResult) ? createResult[0].insertId : createResult.insertId;
+      console.log('Created cart item:', cartItemId);
+      
+      for (const flavor of body.flavors) {
+        await databaseService.query(
+          'INSERT INTO cart_item_flavors (cart_item_id, flavor_id, quantity, size) VALUES (?, ?, ?, ?)',
+          [cartItemId, flavor.id, flavor.quantity, flavor.size || product.flavor_size]
+        );
       }
+
+      console.log('Successfully added pack with flavors to cart');
+      return NextResponse.json({ success: true, cartItemId });
+    } else {
+      const existingItemResult = await databaseService.query<CartItem[]>(
+        'SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?',
+        [cartId, product.id]
+      );
+
+      if (existingItemResult.length > 0) {
+        console.log('Updating existing cart item:', existingItemResult[0].id);
+        await databaseService.query(
+          'UPDATE cart_items SET quantity = quantity + ? WHERE id = ?',
+          [body.quantity || 1, existingItemResult[0].id]
+        );
+      } else {
+        console.log('Creating new cart item for product:', product.id);
+        const createResult = await databaseService.query<{ insertId: number }>(
+          'INSERT INTO cart_items (cart_id, product_id, quantity, is_pack) VALUES (?, ?, ?, ?)',
+          [cartId, product.id, body.quantity || 1, product.is_pack]
+        );
+
+        const cartItemId = Array.isArray(createResult) ? createResult[0].insertId : createResult.insertId;
+        console.log('Created cart item:', cartItemId);
+      }
+
+      console.log('Successfully added to cart');
+      return NextResponse.json({ success: true });
     }
 
-    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error adding to cart:', error);
     return NextResponse.json({ success: false, error: 'Failed to add to cart' }, { status: 500 });
-  }
-}
-
-export async function PUT(request: Request) {
-  try {
-    const { itemId, quantity } = await request.json();
-    const cookieStore = cookies();
-    const cartId = cookieStore.get('cart_id')?.value;
-
-    if (!cartId) {
-      return NextResponse.json(
-        { error: 'Cart not found' },
-        { status: 404 }
-      );
-    }
-
-    if (quantity <= 0) {
-      // Remove item
-      await databaseService.query(
-        'DELETE FROM cart_items WHERE id = ? AND cart_id = ?',
-        [itemId, cartId]
-      );
-    } else {
-      // Update quantity
-      await databaseService.query(
-        'UPDATE cart_items SET quantity = ? WHERE id = ? AND cart_id = ?',
-        [quantity, itemId, cartId]
-      );
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error in PUT /api/cart:', error);
-    return NextResponse.json(
-      { error: 'Failed to update cart' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(request: Request) {
-  try {
-    const cookieStore = cookies();
-    const cartId = cookieStore.get('cart_id')?.value;
-
-    if (!cartId) {
-      return NextResponse.json(
-        { error: 'Cart not found' },
-        { status: 404 }
-      );
-    }
-
-    // Clear cart
-    await databaseService.query(
-      'DELETE FROM cart_items WHERE cart_id = ?',
-      [cartId]
-    );
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error in DELETE /api/cart:', error);
-    return NextResponse.json(
-      { error: 'Failed to clear cart' },
-      { status: 500 }
-    );
   }
 } 

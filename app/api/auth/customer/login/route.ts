@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
-import { generateToken } from '@/lib/middleware/auth';
+import { generateToken, generateRefreshToken, generateSessionId } from '@/lib/middleware/auth';
+import { sessionManager } from '@/lib/session-manager';
+import { validatePassword } from '@/lib/auth-config';
 import { RowDataPacket } from 'mysql2';
+import { compare, hash } from 'bcryptjs';
 
 interface Customer extends RowDataPacket {
   id: number;
@@ -23,6 +26,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json(
+        { error: 'Password requirements not met', details: passwordValidation.errors },
+        { status: 400 }
+      );
+    }
+
     // Get customer from database
     const [customers] = await databaseService.query<Customer[]>(
       'SELECT id, email, password_hash, first_name, last_name, phone FROM customers WHERE email = ?',
@@ -38,23 +59,62 @@ export async function POST(req: NextRequest) {
 
     const customer = customers[0];
 
-    // Plain text password comparison (NOT recommended for production)
-    if (customer.password_hash !== password) {
+    // Check if password_hash is plain text (legacy) and migrate it
+    let isValidPassword = false;
+    
+    if (customer.password_hash.length < 60) {
+      // Legacy plain text password - compare directly and migrate
+      if (customer.password_hash === password) {
+        // Hash the password and update the database
+        const hashedPassword = await hash(password, 12);
+        await databaseService.query(
+          'UPDATE customers SET password_hash = ? WHERE id = ?',
+          [hashedPassword, customer.id]
+        );
+        isValidPassword = true;
+      }
+    } else {
+      // Modern bcrypt hash - compare properly
+      isValidPassword = await compare(password, customer.password_hash);
+    }
+
+    if (!isValidPassword) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    // Generate JWT token
-    const token = generateToken({
+    // Generate session ID
+    const sessionId = generateSessionId();
+
+    // Generate access token
+    const accessToken = generateToken({
       type: 'customer',
-      userId: customer.id.toString(),
-      email: customer.email
+      id: customer.id,
+      email: customer.email,
+      sessionId
     });
 
+    // Generate refresh token
+    const refreshToken = generateRefreshToken(customer.id.toString(), 'customer', sessionId);
+
+    // Create session
+    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+    
+    await sessionManager.createSession(
+      customer.id.toString(),
+      'customer',
+      sessionId,
+      refreshToken,
+      ipAddress,
+      userAgent
+    );
+
     return NextResponse.json({
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: customer.id,
         email: customer.email,
