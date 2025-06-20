@@ -1,0 +1,9 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/cart/route": "app/api/cart/route.js",
+  "/cart/page": "app/cart/page.js",
+  "/shop/page": "app/shop/page.js",
+  "/shop/pack/[id]/page": "app/shop/pack/[id]/page.js",
+  "/api/test-cart/route": "app/api/test-cart/route.js",
+  "/api/test-connection/route": "app/api/test-connection/route.js"
+}

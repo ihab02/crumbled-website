@@ -1,0 +1,56 @@
+CREATE TABLE IF NOT EXISTS flavors (
+  id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  category VARCHAR(100) NOT NULL,
+  mini_price DECIMAL(10, 2) NOT NULL,
+  medium_price DECIMAL(10, 2) NOT NULL,
+  large_price DECIMAL(10, 2) NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS flavor_stock (
+  id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+  flavor_id VARCHAR(36) NOT NULL,
+  size ENUM('mini', 'large') NOT NULL,
+  quantity INT NOT NULL DEFAULT 0,
+  min_threshold INT NOT NULL DEFAULT 10,
+  max_capacity INT NOT NULL DEFAULT 100,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (flavor_id) REFERENCES flavors(id) ON DELETE CASCADE
+);
+
+--
+-- Table structure for table `email_settings`
+--
+
+DROP TABLE IF EXISTS email_settings;
+CREATE TABLE email_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  smtp_host VARCHAR(255) NOT NULL,
+  smtp_port INT NOT NULL,
+  smtp_username VARCHAR(255) NOT NULL,
+  smtp_password VARCHAR(255) NOT NULL,
+  from_email VARCHAR(255) NOT NULL,
+  from_name VARCHAR(255) NOT NULL,
+  use_ssl TINYINT(1) DEFAULT 0,
+  use_tls TINYINT(1) DEFAULT 1,
+  is_active TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- OTP Verifications Table
+CREATE TABLE IF NOT EXISTS otp_verifications (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  phone VARCHAR(20) NOT NULL,
+  otp VARCHAR(6) NOT NULL,
+  is_verified BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL,
+  INDEX idx_phone_otp (phone, otp),
+  INDEX idx_expires_at (expires_at)
+); 

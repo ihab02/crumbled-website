@@ -1,0 +1,65 @@
+name: Version Control
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check VERSION file
+        run: |
+          if [ ! -f VERSION ]; then
+            echo "VERSION file is missing"
+            exit 1
+          fi
+
+      - name: Check version consistency
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/}
+          VERSION_FILE=$(grep "Current Version:" VERSION | cut -d':' -f2 | tr -d ' ')
+          
+          if [ "$TAG_VERSION" != "$VERSION_FILE" ]; then
+            echo "Version mismatch: Tag ($TAG_VERSION) != VERSION file ($VERSION_FILE)"
+            exit 1
+          fi
+
+      - name: Check schema version
+        run: |
+          SCHEMA_VERSION=$(grep "Version:" schema/current.sql | head -n1 | cut -d':' -f2 | tr -d ' ')
+          VERSION_FILE=$(grep "Current Version:" VERSION | cut -d':' -f2 | tr -d ' ')
+          
+          if [ "$SCHEMA_VERSION" != "$VERSION_FILE" ]; then
+            echo "Schema version mismatch: Schema ($SCHEMA_VERSION) != VERSION file ($VERSION_FILE)"
+            exit 1
+          fi
+
+  create-release:
+    needs: version-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          body: |
+            Release ${{ github.ref_name }}
+            
+            Changes in this release:
+            ${{ github.event.head_commit.message }}
+            
+            See VERSION file for detailed version information.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

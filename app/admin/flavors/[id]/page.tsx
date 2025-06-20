@@ -1,0 +1,439 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import { ArrowLeft, Trash2, Plus } from 'lucide-react';
+
+interface Flavor {
+  id: number;
+  name: string;
+  description: string;
+  mini_price: number;
+  medium_price: number;
+  large_price: number;
+  is_active: boolean;
+  images: {
+    id: number;
+    image_url: string;
+    is_cover: boolean;
+  }[];
+}
+
+export default function EditFlavorPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState<Flavor>({
+    id: 0,
+    name: '',
+    description: '',
+    mini_price: 0,
+    medium_price: 0,
+    large_price: 0,
+    is_active: true,
+    images: []
+  });
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [originalImages, setOriginalImages] = useState<Flavor['images']>([]);
+
+  useEffect(() => {
+    fetchFlavor();
+  }, [params.id]);
+
+  const fetchFlavor = async () => {
+    try {
+      const response = await fetch(`/api/flavors/${params.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch flavor');
+      }
+      const data = await response.json();
+      setFormData({
+        ...data,
+        is_active: data.is_active === 1,
+        images: data.images || []
+      });
+      if (data.images) {
+        setImagePreviews(data.images.map((img: any) => img.image_url));
+        setOriginalImages(data.images);
+      }
+    } catch (error) {
+      console.error('Error fetching flavor:', error);
+      toast.error('Failed to fetch flavor');
+      router.push('/admin/flavors');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setImages(files);
+    
+    // Create previews for new images
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setImagePreviews(prev => [...prev, ...newPreviews]);
+  };
+
+  const handleCoverChange = (index: number, checked: boolean) => {
+    const newImages = formData.images.map((img, i) => ({
+      ...img,
+      is_cover: i === index ? checked : false
+    }));
+    setFormData({ ...formData, images: newImages });
+  };
+
+  const handleRemoveImage = async (index: number) => {
+    try {
+      const imageToRemove = formData.images[index];
+      
+      // Delete the image from the database
+      const response = await fetch(`/api/flavors/${params.id}/images/${imageToRemove.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete image');
+      }
+
+      // Update the local state
+      const newImages = formData.images.filter((_, i) => i !== index);
+      setFormData({ ...formData, images: newImages });
+      setImagePreviews(prev => prev.filter((_, i) => i !== index));
+
+      toast.success('Image removed successfully');
+    } catch (error) {
+      console.error('Error removing image:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to remove image');
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newImages = [...formData.images];
+    let hasNewCover = false;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to upload image');
+        }
+
+        const data = await response.json();
+        // Set as cover if it's the first image or if no other images are set as cover
+        const shouldBeCover = newImages.length === 0 || !newImages.some(img => img.is_cover);
+        newImages.push({
+          image_url: data.url,
+          is_cover: shouldBeCover
+        });
+        hasNewCover = hasNewCover || shouldBeCover;
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        toast.error('Failed to upload image');
+      }
+    }
+
+    setFormData(prev => ({ ...prev, images: newImages }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      // First update the flavor data
+      const response = await fetch(`/api/flavors/${params.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description,
+          mini_price: formData.mini_price,
+          medium_price: formData.medium_price,
+          large_price: formData.large_price,
+          is_active: formData.is_active
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update flavor');
+      }
+
+      // Then handle image updates
+      if (images.length > 0) {
+        const formData = new FormData();
+        images.forEach((image, index) => {
+          formData.append('images', image);
+          formData.append(`is_cover_${index}`, image.is_cover ? 'true' : 'false');
+        });
+
+        const imageResponse = await fetch(`/api/flavors/${params.id}/images`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!imageResponse.ok) {
+          throw new Error('Failed to update images');
+        }
+      }
+
+      // Delete removed images
+      const removedImages = originalImages.filter(
+        originalImage => !formData.images.some(
+          currentImage => currentImage.id === originalImage.id
+        )
+      );
+
+      if (removedImages.length > 0) {
+        const deletePromises = removedImages.map(image =>
+          fetch(`/api/flavors/${params.id}/images/${image.id}`, {
+            method: 'DELETE',
+          })
+        );
+
+        await Promise.all(deletePromises);
+      }
+
+      toast.success('Flavor updated successfully');
+      router.push('/admin/flavors');
+    } catch (error) {
+      console.error('Error updating flavor:', error);
+      toast.error('Failed to update flavor');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
+        <aside className="w-64 bg-white dark:bg-gray-800 shadow-lg flex flex-col py-8 px-4 min-h-screen">
+          <nav className="flex flex-col space-y-4">
+            <Link href="/admin/flavors">
+              <span className="block py-2 px-4 rounded-lg text-lg font-semibold text-gray-800 dark:text-gray-100 hover:bg-pink-100 dark:hover:bg-pink-900 transition">🍪 Flavors</span>
+            </Link>
+          </nav>
+        </aside>
+        <main className="flex-1 p-8">
+          <div className="container mx-auto">
+            <div className="animate-pulse">
+              <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
+              <div className="space-y-4">
+                <div className="h-10 bg-gray-200 rounded"></div>
+                <div className="h-10 bg-gray-200 rounded"></div>
+                <div className="h-10 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
+      <aside className="w-64 bg-white dark:bg-gray-800 shadow-lg flex flex-col py-8 px-4 min-h-screen">
+        <nav className="flex flex-col space-y-4">
+          <Link href="/admin/flavors">
+            <span className="block py-2 px-4 rounded-lg text-lg font-semibold text-gray-800 dark:text-gray-100 hover:bg-pink-100 dark:hover:bg-pink-900 transition">🍪 Flavors</span>
+          </Link>
+        </nav>
+      </aside>
+      <main className="flex-1 p-8">
+        <div className="container mx-auto">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center mb-8">
+              <Button
+                variant="ghost"
+                className="mr-4"
+                onClick={() => router.push('/admin/flavors')}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back
+              </Button>
+              <h1 className="text-3xl font-bold">Edit Flavor</h1>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                    rows={4}
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="enabled"
+                    checked={formData.is_active}
+                    onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                  />
+                  <Label htmlFor="enabled">Enabled</Label>
+                </div>
+
+                <div>
+                  <Label htmlFor="images">Images</Label>
+                  <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {formData.images.map((image, index) => (
+                      <div key={index} className="relative group">
+                        <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
+                          <img
+                            src={image.image_url}
+                            alt={`Flavor image ${index + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(index)}
+                              className="text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="h-6 w-6" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 p-2 rounded-lg">
+                          <Switch
+                            id={`cover-${index}`}
+                            checked={image.is_cover}
+                            onCheckedChange={(checked) => {
+                              // Count how many images are currently set as cover
+                              const currentCoverCount = formData.images.filter(img => img.is_cover).length;
+                              
+                              // If trying to uncheck the last cover image, prevent it
+                              if (!checked && currentCoverCount <= 1) {
+                                toast.error('At least one image must be set as cover');
+                                return;
+                              }
+
+                              const newImages = formData.images.map((img, i) => ({
+                                ...img,
+                                is_cover: i === index ? checked : false
+                              }));
+                              setFormData({ ...formData, images: newImages });
+                            }}
+                          />
+                          <Label htmlFor={`cover-${index}`} className="text-sm cursor-pointer">
+                            Cover Image
+                          </Label>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
+                      <label
+                        htmlFor="image-upload"
+                        className="w-full h-full flex items-center justify-center cursor-pointer"
+                      >
+                        <div className="text-center">
+                          <Plus className="h-8 w-8 text-gray-400 mx-auto" />
+                          <span className="mt-2 block text-sm text-gray-500">
+                            Add Image
+                          </span>
+                        </div>
+                        <input
+                          id="image-upload"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleImageUpload}
+                          multiple
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mini_price">Mini Price Addon (EGP)</Label>
+                  <Input
+                    id="mini_price"
+                    type="number"
+                    step="0.01"
+                    value={formData.mini_price}
+                    onChange={(e) => setFormData({ ...formData, mini_price: parseFloat(e.target.value) })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="medium_price">Medium Price Addon (EGP)</Label>
+                  <Input
+                    id="medium_price"
+                    type="number"
+                    step="0.01"
+                    value={formData.medium_price}
+                    onChange={(e) => setFormData({ ...formData, medium_price: parseFloat(e.target.value) })}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="large_price">Large Price Addon (EGP)</Label>
+                  <Input
+                    id="large_price"
+                    type="number"
+                    step="0.01"
+                    value={formData.large_price}
+                    onChange={(e) => setFormData({ ...formData, large_price: parseFloat(e.target.value) })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push('/admin/flavors')}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+} 
