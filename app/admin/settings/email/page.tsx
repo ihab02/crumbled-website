@@ -53,17 +53,24 @@ export default function EmailSettingsPage() {
 
   const fetchSettings = async () => {
     try {
+      console.log('🔍 Fetching email settings...');
       const response = await fetch('/api/admin/settings/email');
       const data = await response.json();
+
+      console.log('🔍 Email settings response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch email settings');
       }
 
       if (data.settings) {
+        console.log('✅ Email settings loaded:', data.settings);
         setSettings(data.settings);
+      } else {
+        console.log('⚠️ No email settings found, using defaults');
       }
     } catch (error) {
+      console.error('❌ Error fetching email settings:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to fetch email settings');
     }
   };
@@ -81,6 +88,7 @@ export default function EmailSettingsPage() {
     setLoading(true);
 
     try {
+      console.log('💾 Saving email settings:', settings);
       const response = await fetch('/api/admin/settings/email', {
         method: 'POST',
         headers: {
@@ -90,14 +98,21 @@ export default function EmailSettingsPage() {
       });
 
       const data = await response.json();
+      console.log('💾 Save response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to save email settings');
       }
 
       toast.success('Email settings saved successfully');
-      router.push('/admin/settings');
+      
+      // Refresh the settings to show the saved data
+      await fetchSettings();
+      
+      // Don't redirect immediately, let user see the saved data
+      // router.push('/admin/settings');
     } catch (error) {
+      console.error('❌ Error saving email settings:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save email settings');
     } finally {
       setLoading(false);
@@ -347,6 +362,13 @@ export default function EmailSettingsPage() {
             </Alert>
 
             <div className="flex justify-end space-x-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => router.push('/admin/settings')}
+              >
+                Back to Settings
+              </Button>
               <Button type="submit" disabled={loading || testing}>
                 {loading ? 'Saving...' : 'Save Settings'}
               </Button>

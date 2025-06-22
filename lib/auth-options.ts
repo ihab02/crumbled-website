@@ -1,5 +1,6 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { compare } from 'bcryptjs';
 import db from './db';
 import { JWT } from 'next-auth/jwt';
 
@@ -7,7 +8,9 @@ interface User {
   id: string;
   email: string;
   name: string;
-  isAdmin: boolean;
+  firstName: string;
+  lastName: string;
+  phone: string;
 }
 
 declare module 'next-auth' {
@@ -15,14 +18,18 @@ declare module 'next-auth' {
     user: User;
   }
   interface User {
-    isAdmin: boolean;
+    firstName: string;
+    lastName: string;
+    phone: string;
   }
 }
 
 declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
-    isAdmin: boolean;
+    firstName: string;
+    lastName: string;
+    phone: string;
   }
 }
 
@@ -40,7 +47,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const [rows] = await db.query(
-          'SELECT * FROM users WHERE email = ?',
+          'SELECT * FROM customers WHERE email = ?',
           [credentials.email]
         );
 
@@ -50,16 +57,20 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Plain text password comparison (NOT recommended for production)
-        if (credentials.password !== user.password) {
+        // Compare password with bcrypt
+        const isPasswordValid = await compare(credentials.password, user.password);
+        
+        if (!isPasswordValid) {
           return null;
         }
 
         return {
-          id: user.id,
+          id: user.id.toString(),
           email: user.email,
-          name: user.name,
-          isAdmin: user.is_admin
+          name: `${user.first_name} ${user.last_name}`,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          phone: user.phone
         };
       }
     })
@@ -68,22 +79,45 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.isAdmin = user.isAdmin;
+        token.firstName = user.firstName;
+        token.lastName = user.lastName;
+        token.phone = user.phone;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id;
-        session.user.isAdmin = token.isAdmin;
+        session.user.firstName = token.firstName;
+        session.user.lastName = token.lastName;
+        session.user.phone = token.phone;
       }
       return session;
     }
   },
   pages: {
-    signIn: '/login'
+    signIn: '/auth/login',
+    signOut: '/auth/signout'
   },
   session: {
-    strategy: 'jwt'
+    strategy: 'jwt',
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
+  jwt: {
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
+  secret: process.env.NEXTAUTH_SECRET || 'x+1DNU9w01MI2M7bNhUuI9F74OxrivACw4XemPMY8gE=',
+  debug: process.env.NODE_ENV === 'development',
+  useSecureCookies: process.env.NODE_ENV === 'production',
+  cookies: {
+    sessionToken: {
+      name: `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
   }
 }; 

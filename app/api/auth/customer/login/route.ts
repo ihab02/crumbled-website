@@ -1,23 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { databaseService } from '@/lib/services/databaseService';
+import { compare, hash } from 'bcryptjs';
+import pool from '@/lib/db';
+import mysql from 'mysql2/promise';
 import { generateToken, generateRefreshToken, generateSessionId } from '@/lib/middleware/auth';
 import { sessionManager } from '@/lib/session-manager';
 import { validatePassword } from '@/lib/auth-config';
 import { RowDataPacket } from 'mysql2';
-import { compare, hash } from 'bcryptjs';
 
-interface Customer extends RowDataPacket {
+interface Customer {
   id: number;
   email: string;
-  password_hash: string;
+  password: string;
   first_name: string;
   last_name: string;
   phone?: string;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  let connection;
   try {
-    const { email, password } = await req.json();
+    const { email, password } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -44,38 +46,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    connection = await pool.getConnection();
+
     // Get customer from database
-    const [customers] = await databaseService.query<Customer[]>(
-      'SELECT id, email, password_hash, first_name, last_name, phone FROM customers WHERE email = ?',
+    const [customers] = await connection.query<mysql.RowDataPacket[]>(
+      'SELECT id, email, password, first_name, last_name, phone FROM customers WHERE email = ?',
       [email]
     );
 
-    if (customers.length === 0) {
+    if (!customers || customers.length === 0) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    const customer = customers[0];
-
-    // Check if password_hash is plain text (legacy) and migrate it
+    const customer = customers[0] as Customer;
     let isValidPassword = false;
-    
-    if (customer.password_hash.length < 60) {
-      // Legacy plain text password - compare directly and migrate
-      if (customer.password_hash === password) {
-        // Hash the password and update the database
+
+    // Check if password is plain text (legacy) and migrate it
+    if (customer.password.length < 60) {
+      // Plain text password, compare directly
+      if (customer.password === password) {
+        isValidPassword = true;
+        // Hash the password for future use
         const hashedPassword = await hash(password, 12);
-        await databaseService.query(
-          'UPDATE customers SET password_hash = ? WHERE id = ?',
+        await connection.query(
+          'UPDATE customers SET password = ? WHERE id = ?',
           [hashedPassword, customer.id]
         );
-        isValidPassword = true;
       }
     } else {
-      // Modern bcrypt hash - compare properly
-      isValidPassword = await compare(password, customer.password_hash);
+      // Already hashed password
+      isValidPassword = await compare(password, customer.password);
     }
 
     if (!isValidPassword) {
@@ -100,8 +103,8 @@ export async function POST(req: NextRequest) {
     const refreshToken = generateRefreshToken(customer.id.toString(), 'customer', sessionId);
 
     // Create session
-    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const userAgent = request.headers.get('user-agent') || 'unknown';
     
     await sessionManager.createSession(
       customer.id.toString(),
@@ -112,7 +115,8 @@ export async function POST(req: NextRequest) {
       userAgent
     );
 
-    return NextResponse.json({
+    // Set session cookie
+    const response = NextResponse.json({
       accessToken,
       refreshToken,
       user: {
@@ -123,11 +127,29 @@ export async function POST(req: NextRequest) {
         phone: customer.phone
       }
     });
+
+    response.cookies.set('user_session', JSON.stringify({
+      id: customer.id,
+      email: customer.email,
+      name: `${customer.first_name} ${customer.last_name}`,
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: '/',
+    });
+
+    return response;
+
   } catch (error) {
-    console.error('Customer login error:', error);
+    console.error('Login error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 } 

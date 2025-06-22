@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -11,9 +11,12 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { EyeIcon, EyeOffIcon, Loader2, Sparkles } from "lucide-react"
+import { useSession } from "next-auth/react"
 
 export default function SignupPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { data: session, status } = useSession()
   const [showPassword, setShowPassword] = useState(false)
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
@@ -24,6 +27,14 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+
+  // Auto-redirect if already logged in
+  useEffect(() => {
+    if (status === 'authenticated' && session) {
+      const redirectUrl = searchParams.get('redirect') || '/account'
+      router.push(redirectUrl)
+    }
+  }, [status, session, router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,8 +80,12 @@ export default function SignupPage() {
 
       if (data.success) {
         setSuccess("Account created successfully! Redirecting...")
+        
+        // Get redirect URL from query param
+        const redirectUrl = searchParams.get('redirect') || '/account'
+        
         setTimeout(() => {
-          router.push("/account")
+          router.push(redirectUrl)
         }, 2000)
       } else {
         setError(data.error || "Failed to create account")
@@ -80,6 +95,23 @@ export default function SignupPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show loading while checking session
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto mb-4"></div>
+          <p className="text-pink-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't show signup form if already authenticated
+  if (status === 'authenticated') {
+    return null;
   }
 
   return (
@@ -302,7 +334,10 @@ export default function SignupPage() {
           <div className="mt-6 text-center">
             <p className="text-sm text-pink-700">
               Already have an account?{" "}
-              <Link href="/auth/login" className="font-medium text-pink-600 hover:text-pink-800">
+              <Link 
+                href={`/auth/login?redirect=${encodeURIComponent(searchParams.get('redirect') || '/account')}`} 
+                className="font-medium text-pink-600 hover:text-pink-800"
+              >
                 Sign in
               </Link>
             </p>

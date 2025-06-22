@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { databaseService } from '@/lib/services/databaseService';
-import { generateToken } from '@/lib/middleware/auth';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { hash } from 'bcryptjs';
-
-interface Customer extends RowDataPacket {
-  id: number;
-}
+import pool from '@/lib/db';
+import mysql from 'mysql2/promise';
 
 export async function POST(req: NextRequest) {
+  let connection;
   try {
     const { email, password, firstName, lastName, phone } = await req.json();
 
@@ -45,53 +41,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if email already exists
-    const [existingCustomers] = await databaseService.query<Customer[]>(
+    connection = await pool.getConnection();
+
+    // Check if user already exists
+    const [existingUsers] = await connection.query<mysql.RowDataPacket[]>(
       'SELECT id FROM customers WHERE email = ?',
       [email]
     );
 
-    if (existingCustomers.length > 0) {
+    if (existingUsers.length > 0) {
       return NextResponse.json(
         { error: 'Email already registered' },
         { status: 409 }
       );
     }
 
-    // Hash password with bcrypt
+    // Hash password
     const passwordHash = await hash(password, 12);
 
-    // Insert new customer
-    const result = await databaseService.query<ResultSetHeader>(
-      `INSERT INTO customers (email, password_hash, first_name, last_name, phone)
+    // Create new customer
+    const [result] = await connection.query<mysql.ResultSetHeader>(
+      `INSERT INTO customers (email, password, first_name, last_name, phone)
        VALUES (?, ?, ?, ?, ?)`,
       [email, passwordHash, firstName, lastName, phone || null]
     );
 
     const customerId = result.insertId;
 
-    // Generate JWT token
-    const token = generateToken({
-      type: 'customer',
-      id: customerId,
-      email
-    });
+    // Get the created customer
+    const [customers] = await connection.query<mysql.RowDataPacket[]>(
+      'SELECT id, email, first_name, last_name, phone FROM customers WHERE id = ?',
+      [customerId]
+    );
+
+    const customer = customers[0];
 
     return NextResponse.json({
-      token,
+      success: true,
       user: {
-        id: customerId,
-        email,
-        firstName,
-        lastName,
-        phone
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.first_name,
+        lastName: customer.last_name,
+        phone: customer.phone
       }
-    }, { status: 201 });
+    });
+
   } catch (error) {
-    console.error('Customer registration error:', error);
+    console.error('Registration error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 } 

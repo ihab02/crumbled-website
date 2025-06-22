@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +8,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Auto-redirect if already logged in
+  useEffect(() => {
+    if (status === 'authenticated' && session) {
+      const redirectUrl = searchParams.get('redirect') || '/account';
+      router.push(redirectUrl);
+    }
+  }, [status, session, router, searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,11 +41,17 @@ export default function LoginPage() {
         throw new Error(result.error);
       }
 
-      // Get redirect URL from query param
-      const redirectUrl = searchParams.get('redirect') || '/account';
-      
-      toast.success('Logged in successfully!');
-      router.push(redirectUrl);
+      if (result?.ok) {
+        // Get redirect URL from query param
+        const redirectUrl = searchParams.get('redirect') || '/account';
+        
+        toast.success('Logged in successfully!');
+        
+        // Small delay to ensure session is updated
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 500);
+      }
     } catch (error) {
       console.error('Login error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to login');
@@ -50,6 +65,23 @@ export default function LoginPage() {
     const redirectUrl = searchParams.get('redirect') || '/shop';
     router.push(redirectUrl);
   };
+
+  // Show loading while checking session
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto mb-4"></div>
+          <p className="text-pink-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't show login form if already authenticated
+  if (status === 'authenticated') {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center p-4">

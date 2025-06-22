@@ -28,6 +28,12 @@ const publicPaths = [
   '/api/auth/admin/login',
   '/api/auth/refresh',
   '/api/auth/logout',
+  '/api/auth/csrf',
+  '/api/auth/session',
+  '/api/auth/signin',
+  '/api/auth/signout',
+  '/api/auth/callback',
+  '/api/auth/providers',
   '/api/products',
   '/api/cart',
   '/shop',
@@ -95,6 +101,11 @@ async function verifyJWT(token: string, userType: 'customer' | 'admin'): Promise
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  
+  // Skip middleware for NextAuth.js API routes
+  if (path.startsWith('/api/auth/')) {
+    return NextResponse.next();
+  }
   
   // Validate auth configuration
   try {

@@ -509,7 +509,7 @@ export default function CartPage() {
                   className="mt-6 w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-bold"
                   asChild
                 >
-                  <Link href="/checkout">Proceed to Checkout</Link>
+                  <Link href="/checkout-new">Proceed to Checkout</Link>
                 </Button>
               </CardContent>
             </Card>

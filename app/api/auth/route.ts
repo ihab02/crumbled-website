@@ -2,6 +2,23 @@ import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import mysql from 'mysql2/promise';
 import pool from '@/lib/db';
+
+// Register
+export async function POST(request: NextRequest) {
+  let connection;
+  try {
+    const { email, password, firstName, lastName, phone } = await request.json()
+
+    if (!email || !password || !firstName || !lastName || !phone) {
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 })
+    }
+
+    connection = await pool.getConnection();
+
+    // Check if user already exists in customers table
+    const [existingUser] = await connection.query<mysql.RowDataPacket[]>(
+      "SELECT id FROM customers WHERE email = ? OR phone = ?",
+      [email, phone]
     );
 
     if (existingUser.length > 0) {
@@ -11,17 +28,17 @@ import pool from '@/lib/db';
     // Store password as plain text (NOT recommended for production)
     const passwordHash = password
 
-    // Create the user
+    // Create the customer
     const [result] = await connection.query<mysql.ResultSetHeader>(
-      "INSERT INTO users (email, password_hash, first_name, last_name, phone, is_verified) VALUES (?, ?, ?, ?, ?, true)",
+      "INSERT INTO customers (email, password, first_name, last_name, phone) VALUES (?, ?, ?, ?, ?)",
       [email, passwordHash, firstName, lastName, phone]
     );
 
     const userId = result.insertId;
 
-    // Get the created user
+    // Get the created customer
     const [userResult] = await connection.query<mysql.RowDataPacket[]>(
-      "SELECT id, email, first_name, last_name, phone FROM users WHERE id = ?",
+      "SELECT id, email, first_name, last_name, phone FROM customers WHERE id = ?",
       [userId]
     );
 
@@ -75,12 +92,10 @@ export async function PUT(request: NextRequest) {
 
     connection = await pool.getConnection();
 
-    // Compare password as plain text
+    // Find the customer by email and password
     const passwordHash = password
-
-    // Find the user
     const [result] = await connection.query<mysql.RowDataPacket[]>(
-      "SELECT id, email, first_name, last_name, phone FROM users WHERE email = ? AND password_hash = ?",
+      "SELECT id, email, first_name, last_name, phone FROM customers WHERE email = ? AND password = ?",
       [email, passwordHash]
     );
 
