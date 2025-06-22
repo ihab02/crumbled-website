@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { RowDataPacket } from 'mysql2';
 import { compare, hash } from 'bcryptjs';
+import { getJwtSecret } from '@/lib/auth-config';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60; // 15 minutes in seconds
 
@@ -37,7 +37,8 @@ async function signJWT(payload: any): Promise<string> {
   const payloadB64 = btoa(JSON.stringify(finalPayload));
   const data = encoder.encode(`${headerB64}.${payloadB64}`);
 
-  // Import the secret key
+  // Import the secret key using the same function as verification
+  const JWT_SECRET = getJwtSecret('admin');
   const key = await crypto.subtle.importKey(
     'raw',
     encoder.encode(JWT_SECRET),

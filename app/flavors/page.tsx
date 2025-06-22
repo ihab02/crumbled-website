@@ -33,9 +33,12 @@ export default function FlavorsPage() {
           throw new Error('Failed to fetch flavors');
         }
         const data = await response.json();
-        setFlavors(data);
+        // Handle the correct response structure: { success: true, data: [...] }
+        const flavorsData = data.success ? data.data : data;
+        setFlavors(Array.isArray(flavorsData) ? flavorsData : []);
       } catch (error) {
         console.error('Error fetching flavors:', error);
+        setFlavors([]);
       } finally {
         setLoading(false);
       }
@@ -128,11 +131,11 @@ export default function FlavorsPage() {
         </Button>
       </div>
       <div className="grid grid-cols-1 gap-6">
-        {flavors.map((flavor) => {
+        {Array.isArray(flavors) && flavors.map((flavor) => {
           const isHovered = hoveredFlavor === flavor.id;
           const currentIndex = currentImageIndex[flavor.id] || 0;
-          const coverImage = flavor.images.find(img => img.is_cover) || flavor.images[0];
-          const currentImage = isHovered ? flavor.images[currentIndex] : coverImage;
+          const coverImage = flavor.images?.find(img => img.is_cover) || flavor.images?.[0];
+          const currentImage = isHovered ? flavor.images?.[currentIndex] : coverImage;
 
           return (
             <Card

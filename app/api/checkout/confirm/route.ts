@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
+import { orderModeService } from '@/lib/services/orderModeService';
 
 interface CheckoutConfirmRequest {
   cartId?: string;
@@ -163,13 +164,46 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }, { status: 400 });
     }
 
-    // Check stock availability
-    const outOfStockItems = cartResult.filter((item: any) => item.quantity > item.stock_quantity);
-    if (outOfStockItems.length > 0) {
+    // Check stock availability using order mode service
+    console.log('🔍 [DEBUG] Confirm API - Checking cart availability with order mode service')
+    
+    // Prepare cart items for availability check
+    const cartItemsForCheck = await Promise.all(cartResult.map(async (item: any) => {
+      let flavors: Array<{ id: number; quantity: number }> = [];
+      
+      // Fetch flavors for pack items
+      if (item.is_pack) {
+        const [flavorResult] = await databaseService.query(
+          'SELECT f.id, cif.quantity FROM cart_item_flavors cif JOIN flavors f ON cif.flavor_id = f.id WHERE cif.cart_item_id = ?',
+          [item.id]
+        );
+        
+        if (Array.isArray(flavorResult)) {
+          flavors = flavorResult.map((flavor: any) => ({
+            id: flavor.id,
+            quantity: flavor.quantity
+          }));
+        }
+      }
+      
+      return {
+        id: item.id,
+        productId: item.product_id,
+        quantity: item.quantity,
+        isPack: item.is_pack,
+        flavors
+      };
+    }));
+
+    const availabilityCheck = await orderModeService.checkCartAvailability(cartItemsForCheck);
+    
+    console.log('🔍 [DEBUG] Confirm API - Availability check result:', availabilityCheck);
+
+    if (!availabilityCheck.isAvailable) {
       return NextResponse.json({
         success: false,
-        message: 'Some items are out of stock',
-        error: `Insufficient stock for: ${outOfStockItems.map((item: any) => item.name).join(', ')}`
+        message: 'Some items are not available for ordering',
+        error: availabilityCheck.reason || 'Items unavailable'
       }, { status: 400 });
     }
 

@@ -14,7 +14,9 @@ import {
   LogOut,
   Cookie,
   Tag,
-  Mail
+  Mail,
+  Database,
+  Warehouse
 } from 'lucide-react';
 
 const menuItems = [
@@ -29,19 +31,14 @@ const menuItems = [
     icon: ShoppingCart
   },
   {
-    title: 'Products',
-    href: '/admin/products',
-    icon: Package
+    title: 'Stock Management',
+    href: '/admin/stock',
+    icon: Warehouse
   },
   {
     title: 'Product Types',
     href: '/admin/product-types',
     icon: Tag
-  },
-  {
-    title: 'Flavors',
-    href: '/admin/flavors',
-    icon: Cookie
   },
   {
     title: 'Customers',
@@ -82,6 +79,11 @@ const menuItems = [
         title: 'Email',
         href: '/admin/settings/email',
         icon: Mail
+      },
+      {
+        title: 'Order Mode',
+        href: '/admin/order-mode',
+        icon: Database
       }
     ]
   }

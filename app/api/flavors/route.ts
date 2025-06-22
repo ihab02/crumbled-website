@@ -178,6 +178,8 @@ export async function GET() {
           mini_price: parseFloat(row.mini_price) || 0,
           medium_price: parseFloat(row.medium_price) || 0,
           large_price: parseFloat(row.large_price) || 0,
+          stock_quantity: parseInt(row.stock_quantity) || 0,
+          is_available: Boolean(row.is_available),
           is_active: Boolean(row.is_active),
           created_at: row.created_at,
           updated_at: row.updated_at,
@@ -206,10 +208,11 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json(processedFlavors);
+    return NextResponse.json({ success: true, data: processedFlavors });
   } catch (error) {
+    console.error('Error fetching flavors:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch flavors' },
+      { success: false, error: 'Failed to fetch flavors' },
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { revalidatePath } from 'next/cache';
+import { NextRequest } from 'next/server';
 
 interface Flavor {
   id: number;
@@ -65,116 +66,68 @@ export async function GET(
 }
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
+    const { id } = params;
     const data = await request.json();
-    console.log('Updating flavor:', { id, data });
 
-    // If only updating is_active status
-    if (Object.keys(data).length === 1 && 'is_active' in data) {
-      console.log('Updating is_active status:', { id, is_active: data.is_active });
-      
-      // Update the active status
-      const updateResult = await databaseService.query(
-        'UPDATE flavors SET is_active = ? WHERE id = ?',
-        [data.is_active ? 1 : 0, id]
-      );
-      console.log('Update result:', updateResult);
-
-      // Fetch the updated flavor to verify
-      const [updatedFlavor] = await databaseService.query(
-        `SELECT f.*, 
-          COALESCE(
-            JSON_ARRAYAGG(
-              JSON_OBJECT(
-                'id', fi.id,
-                'image_url', fi.image_url,
-                'is_cover', fi.is_cover
-              )
-            ),
-            JSON_ARRAY()
-          ) as images
-        FROM flavors f
-        LEFT JOIN flavor_images fi ON f.id = fi.flavor_id
-        WHERE f.id = ?
-        GROUP BY f.id`,
-        [id]
-      );
-      console.log('Updated flavor:', updatedFlavor);
-
-      if (!updatedFlavor) {
-        return NextResponse.json(
-          { error: 'Flavor not found' },
-          { status: 404 }
-        );
-      }
-
-      revalidatePath('/admin/flavors');
-      return NextResponse.json({
-        ...updatedFlavor,
-        is_enabled: updatedFlavor.is_active === 1,
-        images: updatedFlavor.images || []
-      });
-    }
-
-    // For full updates, ensure we have all required fields
-    const { name, description, mini_price, medium_price, large_price, is_active } = data;
-
-    if (!name || !description || mini_price === undefined || medium_price === undefined || large_price === undefined) {
+    // Validate required fields
+    if (!id) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { success: false, error: 'Flavor ID is required' },
         { status: 400 }
       );
     }
 
-    // Update the flavor
-    const updateResult = await databaseService.query(
-      'UPDATE flavors SET name = ?, description = ?, mini_price = ?, medium_price = ?, large_price = ?, is_active = ? WHERE id = ?',
-      [name, description, mini_price, medium_price, large_price, is_active ? 1 : 0, id]
-    );
-    console.log('Update result:', updateResult);
+    // Get old stock for logging
+    let oldStock = 0;
+    if (data.log_history) {
+      const [rows] = await databaseService.query('SELECT stock_quantity FROM flavors WHERE id = ?', [id]);
+      if (Array.isArray(rows) && rows.length > 0) {
+        oldStock = rows[0].stock_quantity;
+      }
+    }
 
-    // Fetch the updated flavor
-    const [updatedFlavor] = await databaseService.query(
-      `SELECT f.*, 
-        COALESCE(
-          JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'id', fi.id,
-              'image_url', fi.image_url,
-              'is_cover', fi.is_cover
-            )
-          ),
-          JSON_ARRAY()
-        ) as images
-      FROM flavors f
-      LEFT JOIN flavor_images fi ON f.id = fi.flavor_id
-      WHERE f.id = ?
-      GROUP BY f.id`,
-      [id]
+    // Update the flavor with stock information
+    await databaseService.query(
+      `UPDATE flavors SET 
+        stock_quantity = ?, 
+        is_available = ?,
+        updated_at = NOW()
+      WHERE id = ?`,
+      [
+        data.stock_quantity || 0,
+        data.is_available ? 1 : 0,
+        id
+      ]
     );
-    console.log('Updated flavor:', updatedFlavor);
 
-    if (!updatedFlavor) {
-      return NextResponse.json(
-        { error: 'Flavor not found' },
-        { status: 404 }
+    // Log stock change if requested
+    if (data.log_history) {
+      await databaseService.query(
+        `INSERT INTO stock_history (item_id, item_type, old_quantity, new_quantity, change_amount, change_type, notes, changed_by) VALUES (?, 'flavor', ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          data.old_quantity ?? oldStock,
+          data.stock_quantity || 0,
+          data.change_amount || ((data.stock_quantity || 0) - (data.old_quantity ?? oldStock)),
+          data.change_type || 'replacement',
+          data.notes || '',
+          data.changed_by || ''
+        ]
       );
     }
 
-    revalidatePath('/admin/flavors');
-    return NextResponse.json({
-      ...updatedFlavor,
-      is_enabled: updatedFlavor.is_active === 1,
-      images: updatedFlavor.images || []
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Flavor stock updated successfully' 
     });
   } catch (error) {
-    console.error('Error updating flavor:', error);
+    console.error('Error updating flavor stock:', error);
     return NextResponse.json(
-      { error: 'Failed to update flavor' },
+      { success: false, error: 'Failed to update flavor stock' },
       { status: 500 }
     );
   }

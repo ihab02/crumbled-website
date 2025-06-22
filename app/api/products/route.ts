@@ -17,6 +17,8 @@ interface Product {
   display_order: number;
   product_type_name: string;
   flavors_json: string | null;
+  stock_quantity: number;
+  is_available: boolean;
 }
 
 export async function GET() {
@@ -28,13 +30,15 @@ export async function GET() {
       ORDER BY p.display_order ASC
     `);
 
-    // Convert base_price to number
+    // Convert base_price to number and add stock fields
     const productsWithNumbers = products.map((p: Product) => ({
       ...p,
-      base_price: typeof p.base_price === 'string' ? parseFloat(p.base_price) : p.base_price
+      base_price: typeof p.base_price === 'string' ? parseFloat(p.base_price) : p.base_price,
+      stock_quantity: parseInt(p.stock_quantity) || 0,
+      is_available: Boolean(p.is_available)
     }));
 
-    return NextResponse.json({ success: true, products: productsWithNumbers });
+    return NextResponse.json({ success: true, data: productsWithNumbers });
   } catch (error) {
     console.error('Error fetching products:', error);
     return NextResponse.json(

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { revalidatePath } from 'next/cache';
+import { NextRequest } from 'next/server';
 
 export async function GET(
   request: Request,
@@ -91,54 +92,68 @@ export async function GET(
 }
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const body = await request.json();
-    const { name, description, product_type_id, is_pack, count, flavor_size, base_price, image_url } = body;
+    const { id } = params;
+    const data = await request.json();
 
-    if (!name || !product_type_id || !base_price || !flavor_size) {
+    // Validate required fields
+    if (!id) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Product ID is required' },
         { status: 400 }
       );
     }
 
-    // If it's a pack, validate count
-    if (is_pack && (!count || count < 1)) {
-      return NextResponse.json(
-        { success: false, error: 'Count is required for pack products' },
-        { status: 400 }
-      );
+    // Get old stock for logging
+    let oldStock = 0;
+    if (data.log_history) {
+      const [rows] = await databaseService.query('SELECT stock_quantity FROM products WHERE id = ?', [id]);
+      if (Array.isArray(rows) && rows.length > 0) {
+        oldStock = rows[0].stock_quantity;
+      }
     }
 
+    // Update the product with stock information
     await databaseService.query(
       `UPDATE products SET 
-        name = ?, 
-        description = ?, 
-        product_type_id = ?, 
-        is_pack = ?, 
-        count = ?,
-        flavor_size = ?,
-        base_price = ?, 
-        image_url = ?
+        stock_quantity = ?, 
+        is_available = ?,
+        updated_at = NOW()
       WHERE id = ?`,
-      [name, description, product_type_id, is_pack, count, flavor_size, base_price, image_url, params.id]
+      [
+        data.stock_quantity || 0,
+        data.is_available ? 1 : 0,
+        id
+      ]
     );
 
-    revalidatePath('/admin/products');
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Error updating product:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
-      return NextResponse.json(
-        { success: false, error: 'A product with this name already exists' },
-        { status: 400 }
+    // Log stock change if requested
+    if (data.log_history) {
+      await databaseService.query(
+        `INSERT INTO stock_history (item_id, item_type, old_quantity, new_quantity, change_amount, change_type, notes, changed_by) VALUES (?, 'product', ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          data.old_quantity ?? oldStock,
+          data.stock_quantity || 0,
+          data.change_amount || ((data.stock_quantity || 0) - (data.old_quantity ?? oldStock)),
+          data.change_type || 'replacement',
+          data.notes || '',
+          data.changed_by || ''
+        ]
       );
     }
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Product stock updated successfully' 
+    });
+  } catch (error) {
+    console.error('Error updating product stock:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update product' },
+      { success: false, error: 'Failed to update product stock' },
       { status: 500 }
     );
   }
