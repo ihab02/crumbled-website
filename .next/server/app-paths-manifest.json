@@ -1,11 +1,7 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
   "/api/cart/route": "app/api/cart/route.js",
-  "/api/flavors/route": "app/api/flavors/route.js",
-  "/api/flavors/[id]/route": "app/api/flavors/[id]/route.js",
-  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/stock/history/route": "app/api/stock/history/route.js",
-  "/api/products/route": "app/api/products/route.js",
-  "/admin/stock/page": "app/admin/stock/page.js",
-  "/flavors/page": "app/flavors/page.js"
+  "/api/flavors/[id]/stock/route": "app/api/flavors/[id]/stock/route.js",
+  "/cart/page": "app/cart/page.js",
+  "/checkout-new/page": "app/checkout-new/page.js",
+  "/admin/stock/page": "app/admin/stock/page.js"
 }

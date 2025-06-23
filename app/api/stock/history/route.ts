@@ -23,17 +23,23 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch stock history for the item
-    const [history] = await databaseService.query(
+    const history = await databaseService.query(
       `SELECT * FROM stock_history 
        WHERE item_id = ? AND item_type = ? 
        ORDER BY changed_at DESC 
        LIMIT 100`,
-      [itemId, itemType]
+      [parseInt(itemId), itemType]
     );
+
+    // Process the history to fix change_type based on change_amount
+    const processedHistory = Array.isArray(history) ? history.map(record => ({
+      ...record,
+      change_type: record.change_amount > 0 ? 'addition' : record.change_amount < 0 ? 'Reduction' : 'replacement'
+    })) : [];
 
     return NextResponse.json({
       success: true,
-      data: history || []
+      data: processedHistory
     });
 
   } catch (error) {

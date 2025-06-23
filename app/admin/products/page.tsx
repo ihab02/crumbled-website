@@ -225,11 +225,14 @@ export default function AdminProductsPage() {
       const response = await fetch('/api/products');
       const data = await response.json();
       if (data.success) {
-        setProducts(data.products);
+        setProducts(data.data || []);
+      } else {
+        setProducts([]);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
       toast.error('Failed to fetch products');
+      setProducts([]);
     } finally {
       setIsLoading(false);
     }
@@ -240,11 +243,14 @@ export default function AdminProductsPage() {
       const response = await fetch('/api/product-types');
       const data = await response.json();
       if (data.success) {
-        setProductTypes(data.productTypes);
+        setProductTypes(data.data || []);
+      } else {
+        setProductTypes([]);
       }
     } catch (error) {
       console.error('Error fetching product types:', error);
       toast.error('Failed to fetch product types');
+      setProductTypes([]);
     }
   };
 
@@ -467,10 +473,10 @@ export default function AdminProductsPage() {
               </TableHeader>
               <TableBody>
                 <SortableContext
-                  items={products.map(p => p.id)}
+                  items={(Array.isArray(products) ? products : []).map(p => p.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  {products.map((product) => (
+                  {(Array.isArray(products) ? products : []).map((product) => (
                     <SortableTableRow
                       key={product.id}
                       product={product}

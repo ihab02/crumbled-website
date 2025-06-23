@@ -46,9 +46,9 @@ export default function ShopPage() {
       
       if (data.success) {
         // Group products by product type
-        const groupedProducts = data.products.reduce((acc: { [key: string]: ProductType }, product: Product) => {
+        const productsArr: Product[] = data.data || [];
+        const groupedProducts: { [key: string]: ProductType } = productsArr.reduce((acc: { [key: string]: ProductType }, product: Product) => {
           if (!product.is_active) return acc;
-          
           if (!acc[product.product_type_id]) {
             acc[product.product_type_id] = {
               id: product.product_type_id,
@@ -56,17 +56,16 @@ export default function ShopPage() {
               products: []
             };
           }
-          
           acc[product.product_type_id].products.push(product);
           return acc;
         }, {});
 
         // Convert to array and sort by display order
-        const sortedProductTypes = Object.values(groupedProducts)
-          .filter(type => type.products.length > 0)
-          .sort((a, b) => {
-            const aOrder = Math.min(...a.products.map(p => p.display_order));
-            const bOrder = Math.min(...b.products.map(p => p.display_order));
+        const sortedProductTypes: ProductType[] = Object.values(groupedProducts)
+          .filter((type: ProductType) => type.products.length > 0)
+          .sort((a: ProductType, b: ProductType) => {
+            const aOrder = Math.min(...a.products.map((p: Product) => p.display_order));
+            const bOrder = Math.min(...b.products.map((p: Product) => p.display_order));
             return aOrder - bOrder;
           });
 

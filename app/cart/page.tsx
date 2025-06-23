@@ -405,13 +405,6 @@ export default function CartPage() {
                             </div>
                           )}
                           
-                          {/* Debug display - remove this after testing */}
-                          <div className="mt-2 p-2 bg-yellow-100 rounded text-xs">
-                            <strong>Debug:</strong> isPack={item.isPack.toString()}, flavorsCount={item.flavors?.length || 0}
-                            {item.flavors && item.flavors.length > 0 && (
-                              <div>Flavors: {JSON.stringify(item.flavors)}</div>
-                            )}
-                          </div>
                           <div className="mt-4 flex items-center justify-between">
                             <div className="flex items-center space-x-2">
                               <Button

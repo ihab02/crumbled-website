@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { revalidatePath } from 'next/cache';
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 
 interface Flavor {
   id: number;
@@ -60,74 +62,6 @@ export async function GET(
     console.error('Error fetching flavor:', error);
     return NextResponse.json(
       { error: 'Failed to fetch flavor' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-    const data = await request.json();
-
-    // Validate required fields
-    if (!id) {
-      return NextResponse.json(
-        { success: false, error: 'Flavor ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Get old stock for logging
-    let oldStock = 0;
-    if (data.log_history) {
-      const [rows] = await databaseService.query('SELECT stock_quantity FROM flavors WHERE id = ?', [id]);
-      if (Array.isArray(rows) && rows.length > 0) {
-        oldStock = rows[0].stock_quantity;
-      }
-    }
-
-    // Update the flavor with stock information
-    await databaseService.query(
-      `UPDATE flavors SET 
-        stock_quantity = ?, 
-        is_available = ?,
-        updated_at = NOW()
-      WHERE id = ?`,
-      [
-        data.stock_quantity || 0,
-        data.is_available ? 1 : 0,
-        id
-      ]
-    );
-
-    // Log stock change if requested
-    if (data.log_history) {
-      await databaseService.query(
-        `INSERT INTO stock_history (item_id, item_type, old_quantity, new_quantity, change_amount, change_type, notes, changed_by) VALUES (?, 'flavor', ?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          data.old_quantity ?? oldStock,
-          data.stock_quantity || 0,
-          data.change_amount || ((data.stock_quantity || 0) - (data.old_quantity ?? oldStock)),
-          data.change_type || 'replacement',
-          data.notes || '',
-          data.changed_by || ''
-        ]
-      );
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Flavor stock updated successfully' 
-    });
-  } catch (error) {
-    console.error('Error updating flavor stock:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update flavor stock' },
       { status: 500 }
     );
   }

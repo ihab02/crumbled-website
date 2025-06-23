@@ -148,7 +148,7 @@ function generateSlug(name: string): string {
 export async function GET() {
   try {
     // Get flavors with their images
-    const [flavors] = await pool.query(`
+    const [flavors] = await pool.query<mysql.RowDataPacket[]>(`
       SELECT 
         f.*,
         fi.id as image_id,
@@ -167,7 +167,7 @@ export async function GET() {
     // Convert single object to array if needed
     const flavorsArray = Array.isArray(flavors) ? flavors : [flavors];
     
-    flavorsArray.forEach(row => {
+    flavorsArray.forEach((row: mysql.RowDataPacket) => {
       if (!flavorMap.has(row.id)) {
         flavorMap.set(row.id, {
           id: row.id,
@@ -179,6 +179,9 @@ export async function GET() {
           medium_price: parseFloat(row.medium_price) || 0,
           large_price: parseFloat(row.large_price) || 0,
           stock_quantity: parseInt(row.stock_quantity) || 0,
+          stock_quantity_mini: parseInt(row.stock_quantity_mini) || 0,
+          stock_quantity_medium: parseInt(row.stock_quantity_medium) || 0,
+          stock_quantity_large: parseInt(row.stock_quantity_large) || 0,
           is_available: Boolean(row.is_available),
           is_active: Boolean(row.is_active),
           created_at: row.created_at,
@@ -200,7 +203,7 @@ export async function GET() {
 
     const processedFlavors = Array.from(flavorMap.values()).map(flavor => {
       // Find cover image or use first image
-      const coverImage = flavor.images.find(img => img.is_cover) || flavor.images[0];
+      const coverImage = flavor.images.find((img: any) => img.is_cover) || flavor.images[0];
       
       return {
         ...flavor,

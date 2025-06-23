@@ -1085,6 +1085,9 @@ video {
 .w-24 {
   width: 6rem;
 }
+.w-28 {
+  width: 7rem;
+}
 .w-3 {
   width: 0.75rem;
 }
@@ -2339,6 +2342,9 @@ video {
 }
 .uppercase {
   text-transform: uppercase;
+}
+.capitalize {
+  text-transform: capitalize;
 }
 .tabular-nums {
   --tw-numeric-spacing: tabular-nums;

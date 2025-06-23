@@ -36,6 +36,11 @@ const menuItems = [
     icon: Warehouse
   },
   {
+    title: 'Products',
+    href: '/admin/products',
+    icon: Package
+  },
+  {
     title: 'Product Types',
     href: '/admin/product-types',
     icon: Tag

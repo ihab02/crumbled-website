@@ -24,7 +24,10 @@ import {
   CheckCircle,
   TrendingUp,
   TrendingDown,
-  History
+  History,
+  Loader2,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import Image from 'next/image'
@@ -37,6 +40,9 @@ interface Flavor {
   medium_price: number
   large_price: number
   stock_quantity: number
+  stock_quantity_mini: number
+  stock_quantity_medium: number
+  stock_quantity_large: number
   is_available: boolean
   image_url?: string
 }
@@ -45,27 +51,31 @@ interface Product {
   id: number
   name: string
   description: string
-  price: number
-  stock_quantity: number
-  is_available: boolean
-  product_type_id: number
   product_type_name: string
-  image_url?: string
-  base_price?: number
+  base_price: number
+  stock_quantity: number
+  stock_quantity_mini?: number
+  stock_quantity_medium?: number
+  stock_quantity_large?: number
+  is_available: boolean
   is_pack: boolean
+  image_url?: string
 }
 
 interface StockUpdate {
-  id: number
   type: 'flavor' | 'product'
-  stock_quantity: number
-  is_available: boolean
+  id: number
+  size?: 'mini' | 'medium' | 'large'
+  quantity: number
+  change_type: 'addition' | 'subtraction' | 'replacement'
+  notes?: string
 }
 
 interface StockHistory {
   id: number
   item_id: number
   item_type: 'flavor' | 'product'
+  size: 'mini' | 'medium' | 'large'
   old_quantity: number
   new_quantity: number
   change_amount: number
@@ -89,6 +99,12 @@ export default function StockManagementPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [selectedItemHistory, setSelectedItemHistory] = useState<StockHistory[]>([])
   const [selectedItem, setSelectedItem] = useState<{ type: 'flavor' | 'product', item: Flavor | Product } | null>(null)
+  const [updatingItems, setUpdatingItems] = useState<{ [key: string]: boolean }>({})
+  const [visibleSizes, setVisibleSizes] = useState<{ [key: string]: boolean }>({
+    mini: true,
+    medium: true,
+    large: true
+  })
   const { toast } = useToast()
 
   useEffect(() => {
@@ -126,70 +142,6 @@ export default function StockManagementPage() {
     }
   }
 
-  const updateStock = async (update: StockUpdate) => {
-    try {
-      setSaving(true)
-      
-      const endpoint = update.type === 'flavor' 
-        ? `/api/flavors/${update.id}` 
-        : `/api/products/${update.id}`
-      
-      const response = await fetch(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stock_quantity: update.stock_quantity,
-          is_available: update.is_available
-        })
-      })
-      
-      const result = await response.json()
-      
-      if (result.success) {
-        toast({
-          title: 'Success',
-          description: 'Stock updated successfully',
-        })
-        
-        // Refresh data
-        await fetchStockData()
-        setShowEditDialog(false)
-        setEditingItem(null)
-      } else {
-        toast({
-          title: 'Error',
-          description: result.error || 'Failed to update stock',
-          variant: 'destructive'
-        })
-      }
-    } catch (error) {
-      console.error('Error updating stock:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to update stock',
-        variant: 'destructive'
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleEdit = (item: Flavor | Product, type: 'flavor' | 'product') => {
-    setEditingItem({
-      id: item.id,
-      type,
-      stock_quantity: item.stock_quantity,
-      is_available: item.is_available
-    })
-    setShowEditDialog(true)
-  }
-
-  const handleSave = () => {
-    if (editingItem) {
-      updateStock(editingItem)
-    }
-  }
-
   const filteredFlavors = flavors.filter(flavor =>
     flavor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     flavor.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -199,69 +151,155 @@ export default function StockManagementPage() {
     .filter(product => !product.is_pack)
     .filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.product_type_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+      product.description.toLowerCase().includes(searchTerm.toLowerCase())
     )
 
   const getStockStatus = (quantity: number, isAvailable: boolean) => {
-    if (!isAvailable) return { status: 'Unavailable', color: 'bg-red-100 text-red-800', icon: <X className="h-4 w-4" /> }
-    if (quantity === 0) return { status: 'Out of Stock', color: 'bg-orange-100 text-orange-800', icon: <AlertTriangle className="h-4 w-4" /> }
-    if (quantity <= 5) return { status: 'Low Stock', color: 'bg-yellow-100 text-yellow-800', icon: <TrendingDown className="h-4 w-4" /> }
+    if (quantity === 0) {
+      return { status: 'Out of Stock', color: 'bg-red-100 text-red-800', icon: <X className="h-4 w-4" /> }
+    }
+    if (quantity <= 5) {
+      return { status: 'Low Stock', color: 'bg-yellow-100 text-yellow-800', icon: <AlertTriangle className="h-4 w-4" /> }
+    }
+    if (!isAvailable) {
+      return { status: 'Unavailable', color: 'bg-gray-100 text-gray-800', icon: <X className="h-4 w-4" /> }
+    }
     return { status: 'In Stock', color: 'bg-green-100 text-green-800', icon: <CheckCircle className="h-4 w-4" /> }
   }
 
-  const handleStockChange = useCallback((type: 'flavor' | 'product', id: number, value: number) => {
-    setEditedStocks(prev => ({ ...prev, [`${type}-${id}`]: value }));
+  const handleStockChange = useCallback((type: 'flavor' | 'product', id: number, size: 'mini' | 'medium' | 'large', value: number) => {
+    setEditedStocks(prev => ({ ...prev, [`${type}-${id}-${size}`]: value }));
   }, []);
 
-  const handleSaveAll = async () => {
-    if (Object.keys(editedStocks).length === 0) return;
-    if (!window.confirm('Are you sure you want to add the specified amounts to the current stock quantities?')) return;
-    setSavingAll(true);
+  const handleIndividualStockUpdate = async (type: 'flavor' | 'product', id: number, size: 'mini' | 'medium' | 'large') => {
+    const key = `${type}-${id}-${size}`;
+    const quantity = editedStocks[key];
+    
+    if (!quantity || quantity <= 0) return;
+
+    setUpdatingItems(prev => ({ ...prev, [key]: true }));
+
     try {
-      const updates = Object.entries(editedStocks).map(async ([key, addAmount]) => {
-        const [type, id] = key.split('-');
-        const item = (type === 'flavor' ? flavors : products).find(i => i.id === Number(id));
-        if (!item || addAmount === 0) return;
-        const oldStock = item.stock_quantity;
-        const newStock = oldStock + addAmount;
-        // Call the API to update stock and log history
-        await fetch(`/api/${type}s/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            stock_quantity: newStock,
-            is_available: item.is_available,
-            log_history: true,
-            old_quantity: oldStock,
-            change_type: 'addition',
-            change_amount: addAmount,
-          })
-        });
+      const response = await fetch(`/api/${type}s/${id}/stock`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          size,
+          quantity,
+          change_type: 'addition',
+          notes: `Added ${quantity} units to ${size} size`
+        })
       });
-      await Promise.all(updates);
-      toast({ title: 'Success', description: 'Stock updated successfully.' });
-      setEditedStocks({});
-      await fetchStockData();
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Success',
+          description: `Stock updated for ${size} size`,
+        });
+        
+        // Clear the input
+        setEditedStocks(prev => {
+          const newState = { ...prev };
+          delete newState[key];
+          return newState;
+        });
+        
+        // Refresh data
+        fetchStockData();
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to update stock',
+          variant: 'destructive'
+        });
+      }
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to update stock.', variant: 'destructive' });
+      console.error('Error updating stock:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update stock',
+        variant: 'destructive'
+      });
+    } finally {
+      setUpdatingItems(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleSaveAll = async () => {
+    setSavingAll(true);
+    
+    try {
+      const updates = Object.entries(editedStocks).map(([key, quantity]) => {
+        const [type, id, size] = key.split('-');
+        return { type, id: parseInt(id), size, quantity };
+      });
+
+      for (const update of updates) {
+        if (update.quantity > 0) {
+          await fetch(`/api/${update.type}s/${update.id}/stock`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              size: update.size,
+              quantity: update.quantity,
+              change_type: 'addition',
+              notes: `Bulk update: Added ${update.quantity} units to ${update.size} size`
+            })
+          });
+        }
+      }
+
+      toast({
+        title: 'Success',
+        description: 'All stock updates completed',
+      });
+      
+      setEditedStocks({});
+      fetchStockData();
+    } catch (error) {
+      console.error('Error saving all updates:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save all updates',
+        variant: 'destructive'
+      });
     } finally {
       setSavingAll(false);
     }
+  };
+
+  const handleEdit = (item: Flavor | Product, type: 'flavor' | 'product') => {
+    setEditingItem({
+      type,
+      id: item.id,
+      quantity: 0,
+      change_type: 'addition'
+    });
+    setShowEditDialog(true);
   };
 
   const handleViewHistory = async (item: Flavor | Product, type: 'flavor' | 'product') => {
     try {
       const response = await fetch(`/api/stock/history?item_id=${item.id}&item_type=${type}`);
       const data = await response.json();
+      
       if (data.success) {
         setSelectedItemHistory(data.data);
         setSelectedItem({ type, item });
         setShowHistoryModal(true);
+      } else {
+        toast({ title: 'Error', description: data.error || 'Failed to fetch stock history.', variant: 'destructive' });
       }
     } catch (error) {
+      console.error('Error fetching stock history:', error);
       toast({ title: 'Error', description: 'Failed to fetch stock history.', variant: 'destructive' });
     }
+  };
+
+  const toggleSizeVisibility = (size: 'mini' | 'medium' | 'large') => {
+    setVisibleSizes(prev => ({ ...prev, [size]: !prev[size] }));
   };
 
   if (loading) {
@@ -283,7 +321,7 @@ export default function StockManagementPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Stock Management</h1>
             <p className="text-gray-600 mt-2">
-              Manage inventory for flavors and products
+              Manage inventory for flavors and products by size
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -302,8 +340,33 @@ export default function StockManagementPage() {
           </div>
         </div>
 
+        {/* Size Visibility Controls */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Size Visibility</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-4">
+              {(['mini', 'medium', 'large'] as const).map((size) => (
+                <div key={size} className="flex items-center gap-2">
+                  <Switch
+                    checked={visibleSizes[size]}
+                    onCheckedChange={() => toggleSizeVisibility(size)}
+                  />
+                  <Label className="capitalize">{size}</Label>
+                  {visibleSizes[size] ? (
+                    <Eye className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Flavors</CardTitle>
@@ -337,125 +400,165 @@ export default function StockManagementPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {[...flavors, ...filteredProducts].filter(item => item.stock_quantity <= 5 && item.stock_quantity > 0).length}
+                {flavors.filter(flavor => 
+                  (flavor.stock_quantity_mini <= 5 && flavor.stock_quantity_mini > 0) ||
+                  (flavor.stock_quantity_medium <= 5 && flavor.stock_quantity_medium > 0) ||
+                  (flavor.stock_quantity_large <= 5 && flavor.stock_quantity_large > 0)
+                ).length + filteredProducts.filter(product => 
+                  product.stock_quantity <= 5 && product.stock_quantity > 0
+                ).length}
               </div>
               <p className="text-xs text-muted-foreground">
-                Items with ≤5 quantity
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-              <X className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {[...flavors, ...filteredProducts].filter(item => item.stock_quantity === 0).length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Zero quantity items
+                Items with ≤5 quantity in any size
               </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Stock Management Tabs */}
-        <Tabs defaultValue="flavors" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+        {/* Stock Tables */}
+        <Tabs defaultValue="flavors" className="space-y-4">
+          <TabsList>
             <TabsTrigger value="flavors" className="flex items-center gap-2">
               <Cookie className="h-4 w-4" />
-              Flavors ({flavors.length})
+              Flavors
             </TabsTrigger>
             <TabsTrigger value="products" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
-              Products ({filteredProducts.length})
+              Products
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="flavors" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Flavor Inventory</CardTitle>
+                <CardTitle>Flavor Inventory by Size</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Image</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Mini Price</TableHead>
-                      <TableHead>Medium Price</TableHead>
-                      <TableHead>Large Price</TableHead>
-                      <TableHead>Current Stock</TableHead>
-                      <TableHead>Add Stock</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredFlavors.map((flavor) => {
-                      const stockStatus = getStockStatus(flavor.stock_quantity, flavor.is_available)
-                      return (
-                        <TableRow key={flavor.id}>
-                          <TableCell>
-                            <button onClick={() => setImagePreview(flavor.image_url || '/images/placeholder.png')}>
-                              <Image
-                                src={flavor.image_url || '/images/placeholder.png'}
-                                alt={flavor.name}
-                                width={48}
-                                height={48}
-                                className="rounded shadow border hover:scale-110 transition-transform"
-                              />
-                            </button>
-                          </TableCell>
-                          <TableCell className="font-medium">{flavor.name}</TableCell>
-                          <TableCell className="max-w-xs truncate">{flavor.description}</TableCell>
-                          <TableCell>${typeof flavor.mini_price === 'number' ? flavor.mini_price.toFixed(2) : '-'}</TableCell>
-                          <TableCell>${typeof flavor.medium_price === 'number' ? flavor.medium_price.toFixed(2) : '-'}</TableCell>
-                          <TableCell>${typeof flavor.large_price === 'number' ? flavor.large_price.toFixed(2) : '-'}</TableCell>
-                          <TableCell className="font-medium">{flavor.stock_quantity}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              value={editedStocks[`flavor-${flavor.id}`] ?? ''}
-                              onChange={e => handleStockChange('flavor', flavor.id, parseInt(e.target.value) || 0)}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={stockStatus.color}>
-                              {stockStatus.icon}
-                              {stockStatus.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewHistory(flavor, 'flavor')}
-                              >
-                                <History className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEdit(flavor, 'flavor')}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">Image</TableHead>
+                        <TableHead className="w-32">Name</TableHead>
+                        <TableHead className="w-24">Size</TableHead>
+                        <TableHead className="w-24">Current Stock</TableHead>
+                        <TableHead className="w-48">Adjust Stock</TableHead>
+                        <TableHead className="w-24">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredFlavors.flatMap((flavor) => {
+                        const key = `flavor-${flavor.id}`;
+                        const sizes = ['mini', 'medium', 'large'] as const;
+                        
+                        return sizes
+                          .filter(size => visibleSizes[size])
+                          .map((size, sizeIndex) => {
+                            const sizeLabel = size === 'mini' ? 'Mini' : size === 'medium' ? 'Medium' : 'Large';
+                            const stock = flavor[`stock_quantity_${size}`];
+                            const status = getStockStatus(stock, flavor.is_available);
+                            const inputKey = `${key}-${size}`;
+                            const isFirstSize = sizeIndex === 0;
+                            
+                            return (
+                              <TableRow key={`${flavor.id}-${size}`}>
+                                {isFirstSize && (
+                                  <TableCell rowSpan={sizes.filter(s => visibleSizes[s]).length}>
+                                    <button onClick={() => setImagePreview(flavor.image_url || '/images/placeholder.png')}>
+                                      <Image
+                                        src={flavor.image_url || '/images/placeholder.png'}
+                                        alt={flavor.name}
+                                        width={48}
+                                        height={48}
+                                        className="rounded shadow border hover:scale-110 transition-transform"
+                                      />
+                                    </button>
+                                  </TableCell>
+                                )}
+                                {isFirstSize && (
+                                  <TableCell className="font-medium" rowSpan={sizes.filter(s => visibleSizes[s]).length}>
+                                    {flavor.name}
+                                  </TableCell>
+                                )}
+                                <TableCell className="font-medium capitalize">{sizeLabel}</TableCell>
+                                <TableCell>
+                                  <Badge className={`${status.color} text-sm`}>
+                                    {stock}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => handleStockChange('flavor', flavor.id, size, Math.max((editedStocks[inputKey] ?? 0) - 1, 0))}
+                                      disabled={updatingItems[inputKey] || (editedStocks[inputKey] ?? 0) <= 0}
+                                    >
+                                      -
+                                    </Button>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      placeholder="0"
+                                      value={editedStocks[inputKey] ?? ''}
+                                      onChange={e => {
+                                        const value = e.target.value;
+                                        if (value === '0') {
+                                          handleStockChange('flavor', flavor.id, size, 0);
+                                        } else {
+                                          handleStockChange('flavor', flavor.id, size, parseInt(value) || 0);
+                                        }
+                                      }}
+                                      onFocus={e => {
+                                        if (e.target.value === '0') {
+                                          e.target.value = '';
+                                          handleStockChange('flavor', flavor.id, size, 0);
+                                        }
+                                      }}
+                                      className="w-20 h-8 text-sm"
+                                      disabled={updatingItems[inputKey]}
+                                    />
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="h-8 w-8 p-0"
+                                      onClick={() => handleStockChange('flavor', flavor.id, size, (editedStocks[inputKey] ?? 0) + 1)}
+                                      disabled={updatingItems[inputKey]}
+                                    >
+                                      +
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleIndividualStockUpdate('flavor', flavor.id, size)}
+                                      disabled={updatingItems[inputKey] || !editedStocks[inputKey] || editedStocks[inputKey] === 0}
+                                      className="px-3 h-8 text-sm"
+                                    >
+                                      {updatingItems[inputKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                                {isFirstSize && (
+                                  <TableCell rowSpan={sizes.filter(s => visibleSizes[s]).length}>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleViewHistory(flavor, 'flavor')}
+                                      >
+                                        <History className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            );
+                          });
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -466,80 +569,96 @@ export default function StockManagementPage() {
                 <CardTitle>Product Inventory</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Image</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Current Stock</TableHead>
-                      <TableHead>Add Stock</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProducts.map((product) => {
-                      const stockStatus = getStockStatus(product.stock_quantity, product.is_available)
-                      return (
-                        <TableRow key={product.id}>
-                          <TableCell>
-                            <button onClick={() => setImagePreview(product.image_url || '/images/placeholder.png')}>
-                              <Image
-                                src={product.image_url || '/images/placeholder.png'}
-                                alt={product.name}
-                                width={48}
-                                height={48}
-                                className="rounded shadow border hover:scale-110 transition-transform"
-                              />
-                            </button>
-                          </TableCell>
-                          <TableCell className="font-medium">{product.name}</TableCell>
-                          <TableCell>{product.product_type_name}</TableCell>
-                          <TableCell className="max-w-xs truncate">{product.description}</TableCell>
-                          <TableCell>${typeof product.base_price === 'number' ? product.base_price.toFixed(2) : '-'}</TableCell>
-                          <TableCell className="font-medium">{product.stock_quantity}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="0"
-                              value={editedStocks[`product-${product.id}`] ?? ''}
-                              onChange={e => handleStockChange('product', product.id, parseInt(e.target.value) || 0)}
-                              className="w-20"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={stockStatus.color}>
-                              {stockStatus.icon}
-                              {stockStatus.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleViewHistory(product, 'product')}
-                              >
-                                <History className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEdit(product, 'product')}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">Image</TableHead>
+                        <TableHead className="w-32">Name</TableHead>
+                        <TableHead className="w-24">Type</TableHead>
+                        <TableHead className="w-24">Current Stock</TableHead>
+                        <TableHead className="w-32">Add Stock</TableHead>
+                        <TableHead className="w-28">Status</TableHead>
+                        <TableHead className="w-24">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((product) => {
+                        const stockStatus = getStockStatus(product.stock_quantity, product.is_available)
+                        const key = `product-${product.id}`;
+                        const isUpdating = updatingItems[key];
+                        return (
+                          <TableRow key={product.id}>
+                            <TableCell>
+                              <button onClick={() => setImagePreview(product.image_url || '/images/placeholder.png')}>
+                                <Image
+                                  src={product.image_url || '/images/placeholder.png'}
+                                  alt={product.name}
+                                  width={48}
+                                  height={48}
+                                  className="rounded shadow border hover:scale-110 transition-transform"
+                                />
+                              </button>
+                            </TableCell>
+                            <TableCell className="font-medium">{product.name}</TableCell>
+                            <TableCell>{product.product_type_name}</TableCell>
+                            <TableCell className="font-medium">{product.stock_quantity}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  placeholder="0"
+                                  value={editedStocks[key] ?? ''}
+                                  onChange={e => handleStockChange('product', product.id, 'large', parseInt(e.target.value) || 0)}
+                                  className="w-20"
+                                  disabled={isUpdating}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleIndividualStockUpdate('product', product.id, 'large')}
+                                  disabled={isUpdating || !editedStocks[key] || editedStocks[key] === 0}
+                                  className="px-2"
+                                >
+                                  {isUpdating ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Plus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={`${stockStatus.color} whitespace-nowrap`}>
+                                {stockStatus.icon}
+                                {stockStatus.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleViewHistory(product, 'product')}
+                                >
+                                  <History className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEdit(product, 'product')}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -556,70 +675,58 @@ export default function StockManagementPage() {
             <DialogHeader>
               <DialogTitle>Edit Stock</DialogTitle>
             </DialogHeader>
-            {editingItem && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="stock-quantity">Stock Quantity</Label>
-                  <Input
-                    id="stock-quantity"
-                    type="number"
-                    min="0"
-                    value={editingItem.stock_quantity}
-                    onChange={(e) => setEditingItem({
-                      ...editingItem,
-                      stock_quantity: parseInt(e.target.value) || 0
-                    })}
-                  />
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is-available"
-                    checked={editingItem.is_available}
-                    onCheckedChange={(checked) => setEditingItem({
-                      ...editingItem,
-                      is_available: checked
-                    })}
-                  />
-                  <Label htmlFor="is-available">Available for purchase</Label>
-                </div>
-                
-                <div className="flex justify-end space-x-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowEditDialog(false)
-                      setEditingItem(null)
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </div>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min={0}
+                  value={editingItem?.quantity || 0}
+                  onChange={(e) => setEditingItem(prev => prev ? { ...prev, quantity: parseInt(e.target.value) || 0 } : null)}
+                />
               </div>
-            )}
+              <div>
+                <Label htmlFor="notes">Notes</Label>
+                <Input
+                  id="notes"
+                  value={editingItem?.notes || ''}
+                  onChange={(e) => setEditingItem(prev => prev ? { ...prev, notes: e.target.value } : null)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => setShowEditDialog(false)} variant="outline">
+                  Cancel
+                </Button>
+                <Button onClick={() => setShowEditDialog(false)}>
+                  Save
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
         {/* Image Preview Dialog */}
         <Dialog open={!!imagePreview} onOpenChange={() => setImagePreview(null)}>
-          <DialogContent className="flex flex-col items-center">
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Image Preview</DialogTitle>
+            </DialogHeader>
             {imagePreview && (
-              <Image
-                src={imagePreview}
-                alt="Preview"
-                width={400}
-                height={400}
-                className="rounded-lg shadow-lg border"
-                style={{ objectFit: 'contain', maxHeight: 500 }}
-              />
+              <div className="flex justify-center">
+                <Image
+                  src={imagePreview}
+                  alt="Preview"
+                  width={300}
+                  height={300}
+                  className="rounded-lg"
+                />
+              </div>
             )}
           </DialogContent>
         </Dialog>
 
-        {/* Stock History Dialog */}
+        {/* Stock History Modal */}
         <Dialog open={showHistoryModal} onOpenChange={setShowHistoryModal}>
           <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -628,38 +735,85 @@ export default function StockManagementPage() {
               </DialogTitle>
             </DialogHeader>
             {selectedItemHistory.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Old Stock</TableHead>
-                    <TableHead>New Stock</TableHead>
-                    <TableHead>Change</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Changed By</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedItemHistory.map((history) => (
-                    <TableRow key={history.id}>
-                      <TableCell>{new Date(history.changed_at).toLocaleString()}</TableCell>
-                      <TableCell>{history.old_quantity}</TableCell>
-                      <TableCell>{history.new_quantity}</TableCell>
-                      <TableCell className={history.change_amount > 0 ? 'text-green-600' : 'text-red-600'}>
-                        {history.change_amount > 0 ? '+' : ''}{history.change_amount}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={history.change_type === 'addition' ? 'default' : 'secondary'}>
-                          {history.change_type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{history.changed_by || 'System'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    Showing {selectedItemHistory.length} stock changes
+                  </p>
+                  <Badge variant="outline">
+                    Current Stock: {selectedItem?.item.stock_quantity}
+                  </Badge>
+                </div>
+                
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="font-semibold">Date & Time</TableHead>
+                        <TableHead className="font-semibold">Size</TableHead>
+                        <TableHead className="font-semibold">Old Stock</TableHead>
+                        <TableHead className="font-semibold">New Stock</TableHead>
+                        <TableHead className="font-semibold">Change</TableHead>
+                        <TableHead className="font-semibold">Type</TableHead>
+                        <TableHead className="font-semibold">Changed By</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedItemHistory.map((history, index) => {
+                        const isAddition = history.change_amount > 0;
+                        const isReduction = history.change_amount < 0;
+                        const isReplacement = history.change_amount === 0;
+                        const date = new Date(history.changed_at);
+                        const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
+                        
+                        return (
+                          <TableRow key={history.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <TableCell className="font-medium">
+                              <div className="flex flex-col">
+                                <span className="font-semibold">{dayOfWeek}</span>
+                                <span>{date.toLocaleDateString()}</span>
+                                <span className="text-xs text-gray-500">
+                                  {date.toLocaleTimeString()}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium capitalize">{history.size}</TableCell>
+                            <TableCell className="font-medium">{history.old_quantity}</TableCell>
+                            <TableCell className="font-medium">{history.new_quantity}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-1">
+                                {isAddition ? (
+                                  <TrendingUp className="h-4 w-4 text-green-600" />
+                                ) : isReduction ? (
+                                  <TrendingDown className="h-4 w-4 text-red-600" />
+                                ) : null}
+                                <span className={isAddition ? 'text-green-600' : isReduction ? 'text-red-600' : 'text-gray-600'}>
+                                  {isAddition ? '+' : ''}{history.change_amount}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={`${
+                                isAddition ? 'bg-green-100 text-green-800' :
+                                isReduction ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              } capitalize`}>
+                                {history.change_type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600">{history.changed_by}</TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
             ) : (
-              <p className="text-center text-gray-500 py-8">No stock history available</p>
+              <div className="text-center py-8">
+                <History className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No stock history available for this item.</p>
+              </div>
             )}
           </DialogContent>
         </Dialog>

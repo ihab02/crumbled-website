@@ -242,17 +242,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutS
           if (item.is_pack) {
             console.log('🍰 Fetching flavors for pack item:', item.id)
             const flavorResult = await databaseService.query(
-              `SELECT f.id, f.name, cif.quantity, cif.size,
+              `SELECT f.id, f.name, cif.quantity,
                       CASE 
-                        WHEN cif.size = 'mini' THEN f.mini_price
-                        WHEN cif.size = 'medium' THEN f.medium_price
-                        WHEN cif.size = 'large' THEN f.large_price
+                        WHEN ? = 'mini' THEN f.mini_price
+                        WHEN ? = 'medium' THEN f.medium_price
+                        WHEN ? = 'large' THEN f.large_price
                         ELSE f.medium_price
                       END as price
                FROM cart_item_flavors cif
                JOIN flavors f ON cif.flavor_id = f.id
                WHERE cif.cart_item_id = ?`,
-              [item.id]
+              [item.pack_size, item.pack_size, item.pack_size, item.id]
             );
 
             console.log('🍰 Flavor result for item', item.id, ':', flavorResult)
@@ -263,7 +263,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutS
                 name: flavor.name,
                 quantity: flavor.quantity,
                 price: flavor.price,
-                size: flavor.size
+                size: item.pack_size // Use the product's pack size
               }));
             }
           }

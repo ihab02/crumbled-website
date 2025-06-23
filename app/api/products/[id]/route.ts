@@ -141,7 +141,7 @@ export async function PUT(
           data.change_amount || ((data.stock_quantity || 0) - (data.old_quantity ?? oldStock)),
           data.change_type || 'replacement',
           data.notes || '',
-          data.changed_by || ''
+          'Admin'
         ]
       );
     }
