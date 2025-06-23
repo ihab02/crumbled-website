@@ -1,7 +1,5 @@
 {
   "/api/cart/route": "app/api/cart/route.js",
-  "/api/flavors/[id]/stock/route": "app/api/flavors/[id]/stock/route.js",
-  "/cart/page": "app/cart/page.js",
-  "/checkout-new/page": "app/checkout-new/page.js",
-  "/admin/stock/page": "app/admin/stock/page.js"
+  "/api/checkout/payment/route": "app/api/checkout/payment/route.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js"
 }

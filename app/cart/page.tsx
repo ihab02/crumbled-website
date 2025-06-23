@@ -49,6 +49,13 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [cartTotal, setCartTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [outOfStockItems, setOutOfStockItems] = useState<Array<{
+    id: number
+    name: string
+    type: 'product' | 'flavor'
+    requestedQuantity: number
+    availableQuantity: number
+  }> | null>(null)
 
   useEffect(() => {
     fetchCart()
@@ -104,6 +111,9 @@ export default function CartPage() {
         setCartItems([])
         setCartTotal(0)
       }
+      
+      // Check stock availability after loading cart
+      await checkStockAvailability()
     } catch (err) {
       console.error("❌ Error fetching cart:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch cart")
@@ -119,6 +129,34 @@ export default function CartPage() {
     setIsRefreshing(true)
     await fetchCart()
     setIsRefreshing(false)
+  }
+
+  const checkStockAvailability = async () => {
+    try {
+      const response = await fetch('/api/checkout/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guestData: undefined,
+          selectedAddressId: 1,
+          useNewAddress: false,
+          newAddress: undefined
+        })
+      })
+
+      const result = await response.json()
+      
+      if (!response.ok && result.message === 'Items out of stock' && result.outOfStockItems) {
+        setOutOfStockItems(result.outOfStockItems)
+        return true // Has out of stock items
+      } else {
+        setOutOfStockItems(null)
+        return false // No out of stock items
+      }
+    } catch (error) {
+      console.error('Error checking stock availability:', error)
+      return false
+    }
   }
 
   const handleRemoveItem = async (itemId: number) => {
@@ -347,6 +385,84 @@ export default function CartPage() {
           </div>
         </div>
         
+        {/* Out of Stock Alert */}
+        {outOfStockItems && outOfStockItems.length > 0 && (
+          <div className="mb-6">
+            <Card className="border-2 border-red-200 bg-red-50 rounded-3xl">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-red-600 text-lg">⚠️</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-red-800 mb-3">
+                      Some items in your cart are out of stock
+                    </h3>
+                    <div className="space-y-3">
+                      {outOfStockItems.filter(item => item.type === 'product').length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-red-700 mb-2">Products out of stock:</h4>
+                          <ul className="space-y-1">
+                            {outOfStockItems
+                              .filter(item => item.type === 'product')
+                              .map((item, index) => (
+                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
+                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
+                                  <span className="text-sm text-red-600">
+                                    {item.requestedQuantity} requested, {item.availableQuantity} available
+                                  </span>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {outOfStockItems.filter(item => item.type === 'flavor').length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-red-700 mb-2">Flavors out of stock:</h4>
+                          <ul className="space-y-1">
+                            {outOfStockItems
+                              .filter(item => item.type === 'flavor')
+                              .map((item, index) => (
+                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
+                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
+                                  <span className="text-sm text-red-600">
+                                    {item.requestedQuantity} requested, {item.availableQuantity} available only
+                                  </span>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                      <Button
+                        onClick={refreshCart}
+                        variant="outline"
+                        size="sm"
+                        className="border-red-300 text-red-700 hover:bg-red-100"
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Check Again
+                      </Button>
+                      <Button
+                        onClick={() => setOutOfStockItems(null)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        
         <div className="grid gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Card className="border-2 border-pink-200 rounded-3xl">
@@ -499,10 +615,16 @@ export default function CartPage() {
                   </div>
                 </div>
                 <Button
-                  className="mt-6 w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-bold"
-                  asChild
+                  className="mt-6 w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={outOfStockItems && outOfStockItems.length > 0}
+                  asChild={!(outOfStockItems && outOfStockItems.length > 0)}
+                  onClick={outOfStockItems && outOfStockItems.length > 0 ? () => toast.error('Please remove out-of-stock items before checkout') : undefined}
                 >
-                  <Link href="/checkout-new">Proceed to Checkout</Link>
+                  {outOfStockItems && outOfStockItems.length > 0 ? (
+                    <span>Cannot Checkout - Items Out of Stock</span>
+                  ) : (
+                    <Link href="/checkout-new">Proceed to Checkout</Link>
+                  )}
                 </Button>
               </CardContent>
             </Card>

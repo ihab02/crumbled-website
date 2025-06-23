@@ -35,7 +35,7 @@ import Image from 'next/image'
 interface Flavor {
   id: number
   name: string
-  description: string
+  description: string | null
   mini_price: number
   medium_price: number
   large_price: number
@@ -50,7 +50,7 @@ interface Flavor {
 interface Product {
   id: number
   name: string
-  description: string
+  description: string | null
   product_type_name: string
   base_price: number
   stock_quantity: number
@@ -144,14 +144,14 @@ export default function StockManagementPage() {
 
   const filteredFlavors = flavors.filter(flavor =>
     flavor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    flavor.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (flavor.description && flavor.description.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   const filteredProducts = products
     .filter(product => !product.is_pack)
     .filter(product =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchTerm.toLowerCase())
+      (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()))
     )
 
   const getStockStatus = (quantity: number, isAvailable: boolean) => {
@@ -175,7 +175,7 @@ export default function StockManagementPage() {
     const key = `${type}-${id}-${size}`;
     const quantity = editedStocks[key];
     
-    if (!quantity || quantity <= 0) return;
+    if (quantity === undefined || quantity === null || quantity <= 0) return;
 
     setUpdatingItems(prev => ({ ...prev, [key]: true }));
 
@@ -185,7 +185,7 @@ export default function StockManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           size,
-          quantity,
+          quantity: quantity,
           change_type: 'addition',
           notes: `Added ${quantity} units to ${size} size`
         })
@@ -196,7 +196,7 @@ export default function StockManagementPage() {
       if (data.success) {
         toast({
           title: 'Success',
-          description: `Stock updated for ${size} size`,
+          description: `Added ${quantity} units to stock`,
         });
         
         // Clear the input
@@ -227,6 +227,62 @@ export default function StockManagementPage() {
     }
   };
 
+  const handleStockReduction = async (type: 'flavor' | 'product', id: number, size: 'mini' | 'medium' | 'large') => {
+    const key = `${type}-${id}-${size}`;
+    const quantity = editedStocks[key];
+    
+    if (quantity === undefined || quantity === null || quantity <= 0) return;
+
+    setUpdatingItems(prev => ({ ...prev, [key]: true }));
+
+    try {
+      const response = await fetch(`/api/${type}s/${id}/stock`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          size,
+          quantity: quantity,
+          change_type: 'subtraction',
+          notes: `Removed ${quantity} units from ${size} size`
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Success',
+          description: `Removed ${quantity} units from stock`,
+        });
+        
+        // Clear the input
+        setEditedStocks(prev => {
+          const newState = { ...prev };
+          delete newState[key];
+          return newState;
+        });
+        
+        // Refresh data
+        fetchStockData();
+      } else {
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to reduce stock',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('Error reducing stock:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to reduce stock',
+        variant: 'destructive'
+      });
+    } finally {
+      setUpdatingItems(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
   const handleSaveAll = async () => {
     setSavingAll(true);
     
@@ -237,15 +293,17 @@ export default function StockManagementPage() {
       });
 
       for (const update of updates) {
-        if (update.quantity > 0) {
+        if (update.quantity !== undefined && update.quantity !== null) {
           await fetch(`/api/${update.type}s/${update.id}/stock`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               size: update.size,
-              quantity: update.quantity,
-              change_type: 'addition',
-              notes: `Bulk update: Added ${update.quantity} units to ${update.size} size`
+              quantity: Math.abs(update.quantity),
+              change_type: update.quantity >= 0 ? 'addition' : 'subtraction',
+              notes: update.quantity >= 0 ? 
+                `Bulk update: Added ${update.quantity} units to ${update.size} size` : 
+                `Bulk update: Removed ${Math.abs(update.quantity)} units from ${update.size} size`
             })
           });
         }
@@ -442,7 +500,7 @@ export default function StockManagementPage() {
                         <TableHead className="w-32">Name</TableHead>
                         <TableHead className="w-24">Size</TableHead>
                         <TableHead className="w-24">Current Stock</TableHead>
-                        <TableHead className="w-48">Adjust Stock</TableHead>
+                        <TableHead className="w-48">Stock Adjustment</TableHead>
                         <TableHead className="w-24">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -488,18 +546,8 @@ export default function StockManagementPage() {
                                 </TableCell>
                                 <TableCell>
                                   <div className="flex items-center gap-2">
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      className="h-8 w-8 p-0"
-                                      onClick={() => handleStockChange('flavor', flavor.id, size, Math.max((editedStocks[inputKey] ?? 0) - 1, 0))}
-                                      disabled={updatingItems[inputKey] || (editedStocks[inputKey] ?? 0) <= 0}
-                                    >
-                                      -
-                                    </Button>
                                     <Input
                                       type="number"
-                                      min={0}
                                       placeholder="0"
                                       value={editedStocks[inputKey] ?? ''}
                                       onChange={e => {
@@ -519,23 +567,23 @@ export default function StockManagementPage() {
                                       className="w-20 h-8 text-sm"
                                       disabled={updatingItems[inputKey]}
                                     />
-                                    <Button 
-                                      size="sm" 
-                                      variant="outline" 
-                                      className="h-8 w-8 p-0"
-                                      onClick={() => handleStockChange('flavor', flavor.id, size, (editedStocks[inputKey] ?? 0) + 1)}
-                                      disabled={updatingItems[inputKey]}
-                                    >
-                                      +
-                                    </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
                                       onClick={() => handleIndividualStockUpdate('flavor', flavor.id, size)}
-                                      disabled={updatingItems[inputKey] || !editedStocks[inputKey] || editedStocks[inputKey] === 0}
-                                      className="px-3 h-8 text-sm"
+                                      disabled={updatingItems[inputKey] || editedStocks[inputKey] === undefined || editedStocks[inputKey] === null || editedStocks[inputKey] === 0}
+                                      className="px-3 h-8 text-sm bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
                                     >
-                                      {updatingItems[inputKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                                      {updatingItems[inputKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleStockReduction('flavor', flavor.id, size)}
+                                      disabled={updatingItems[inputKey] || editedStocks[inputKey] === undefined || editedStocks[inputKey] === null || editedStocks[inputKey] === 0}
+                                      className="px-3 h-8 text-sm bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                                    >
+                                      {updatingItems[inputKey] ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reduce'}
                                     </Button>
                                   </div>
                                 </TableCell>
@@ -577,7 +625,7 @@ export default function StockManagementPage() {
                         <TableHead className="w-32">Name</TableHead>
                         <TableHead className="w-24">Type</TableHead>
                         <TableHead className="w-24">Current Stock</TableHead>
-                        <TableHead className="w-32">Add Stock</TableHead>
+                        <TableHead className="w-32">Stock Adjustment</TableHead>
                         <TableHead className="w-28">Status</TableHead>
                         <TableHead className="w-24">Actions</TableHead>
                       </TableRow>
@@ -607,25 +655,42 @@ export default function StockManagementPage() {
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="number"
-                                  min={0}
                                   placeholder="0"
                                   value={editedStocks[key] ?? ''}
-                                  onChange={e => handleStockChange('product', product.id, 'large', parseInt(e.target.value) || 0)}
-                                  className="w-20"
+                                  onChange={e => {
+                                    const value = e.target.value;
+                                    if (value === '0') {
+                                      handleStockChange('product', product.id, 'large', 0);
+                                    } else {
+                                      handleStockChange('product', product.id, 'large', parseInt(value) || 0);
+                                    }
+                                  }}
+                                  onFocus={e => {
+                                    if (e.target.value === '0') {
+                                      e.target.value = '';
+                                      handleStockChange('product', product.id, 'large', 0);
+                                    }
+                                  }}
+                                  className="w-20 h-8 text-sm"
                                   disabled={isUpdating}
                                 />
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleIndividualStockUpdate('product', product.id, 'large')}
-                                  disabled={isUpdating || !editedStocks[key] || editedStocks[key] === 0}
-                                  className="px-2"
+                                  disabled={isUpdating || editedStocks[key] === undefined || editedStocks[key] === null || editedStocks[key] === 0}
+                                  className="px-3 h-8 text-sm bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
                                 >
-                                  {isUpdating ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Plus className="h-4 w-4" />
-                                  )}
+                                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleStockReduction('product', product.id, 'large')}
+                                  disabled={isUpdating || editedStocks[key] === undefined || editedStocks[key] === null || editedStocks[key] === 0}
+                                  className="px-3 h-8 text-sm bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                                >
+                                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reduce'}
                                 </Button>
                               </div>
                             </TableCell>
@@ -681,7 +746,6 @@ export default function StockManagementPage() {
                 <Input
                   id="quantity"
                   type="number"
-                  min={0}
                   value={editingItem?.quantity || 0}
                   onChange={(e) => setEditingItem(prev => prev ? { ...prev, quantity: parseInt(e.target.value) || 0 } : null)}
                 />

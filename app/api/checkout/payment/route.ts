@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
+import { emailService } from '@/lib/services/emailService';
 
 interface CheckoutPaymentRequest {
   cartId?: string;
@@ -109,11 +110,12 @@ function setCartCookie(cartId: string) {
 }
 
 // Real Paymob integration
-const generatePaymobPayment = async (orderData: any, customerInfo: any) => {
+const generatePaymobPayment = async (orderData: any, customerInfo: any, orderId: number) => {
   try {
     console.log('🔍 [DEBUG] generatePaymobPayment - Starting Paymob payment generation')
     console.log('🔍 [DEBUG] generatePaymobPayment - Order Data:', orderData)
     console.log('🔍 [DEBUG] generatePaymobPayment - Customer Info:', customerInfo)
+    console.log('🔍 [DEBUG] generatePaymobPayment - Order ID:', orderId)
 
     // Create Paymob order
     console.log('🔍 [DEBUG] generatePaymobPayment - Creating Paymob order')
@@ -153,8 +155,8 @@ const generatePaymobPayment = async (orderData: any, customerInfo: any) => {
 
     console.log('🔍 [DEBUG] generatePaymobPayment - Payment key generated:', paymentKey.token)
 
-    // Get payment URL
-    const paymentUrl = paymobService.getPaymentUrl(paymentKey.token);
+    // Get payment URL with order ID in the URL parameters
+    const paymentUrl = `${paymobService.getPaymentUrl(paymentKey.token)}&order_id=${orderId}`;
     console.log('🔍 [DEBUG] generatePaymobPayment - Payment URL generated:', paymentUrl)
 
     return {
@@ -209,75 +211,104 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       const paymentStatus = paymentMethod === 'cod' ? 'Pending' : 'Unpaid';
 
       let customerId = null;
+      
       if (session?.user) {
-        const [customerResult] = await connection.query('SELECT id FROM customers WHERE email = ?', [session.user.email]);
+        // Authenticated user - handle as before
+        console.log('🔍 [DEBUG] Payment API - Processing authenticated user')
+        console.log('🔍 [DEBUG] Payment API - User email:', session.user.email)
+        
+        // First try to find customer in the customer table (for orders foreign key)
+        const customerResult = await connection.query('SELECT id FROM customer WHERE email = ?', [session.user.email]);
+        console.log('🔍 [DEBUG] Payment API - Customer lookup result:', customerResult)
+        
         if (Array.isArray(customerResult) && customerResult.length > 0) {
           customerId = (customerResult[0] as any).id;
+          console.log('🔍 [DEBUG] Payment API - Found existing customer with ID:', customerId)
+        } else {
+          console.log('🔍 [DEBUG] Payment API - Customer not found in customer table, checking customers table')
+          // Customer not found in customer table, get from customers table and create in customer table
+          const customersResult = await connection.query('SELECT first_name, last_name, email, phone FROM customers WHERE email = ?', [session.user.email]);
+          console.log('🔍 [DEBUG] Payment API - Customers table lookup result:', customersResult)
+          
+          if (Array.isArray(customersResult) && customersResult.length > 0) {
+            const customer = customersResult[0] as any;
+            console.log('🔍 [DEBUG] Payment API - Found customer in customers table:', customer)
+            
+            // Create customer record in customer table
+            const insertResult = await connection.query(
+              'INSERT INTO customer (name, email, mobile, type) VALUES (?, ?, ?, ?)',
+              [`${customer.first_name} ${customer.last_name}`, customer.email, customer.phone, 'registered']
+            );
+            
+            customerId = (insertResult as any).insertId;
+            console.log('🔍 [DEBUG] Payment API - Created customer record in customer table with ID:', customerId)
+          } else {
+            console.error('❌ [DEBUG] Payment API - Customer not found in customers table either')
+          }
         }
+      } else {
+        // Guest user - create customer record from guest data
+        console.log('🔍 [DEBUG] Payment API - Processing guest user')
+        
+        if (!orderData.customerInfo) {
+          throw new Error('Customer information is required for guest checkout');
+        }
+        
+        console.log('🔍 [DEBUG] Payment API - Guest customer info:', orderData.customerInfo)
+        
+        // Create guest customer record in customer table
+        const insertResult = await connection.query(
+          'INSERT INTO customer (name, email, mobile, type) VALUES (?, ?, ?, ?)',
+          [orderData.customerInfo.name, orderData.customerInfo.email, orderData.customerInfo.phone, 'guest']
+        );
+        
+        customerId = (insertResult as any).insertId;
+        console.log('🔍 [DEBUG] Payment API - Created guest customer record in customer table with ID:', customerId)
       }
+      
+      if (!customerId) {
+        console.error('❌ [DEBUG] Payment API - No customer ID obtained, throwing error')
+        throw new Error('Failed to create or find customer record');
+      }
+      
+      console.log('🔍 [DEBUG] Payment API - Final customer ID:', customerId)
 
-      const [orderResult] = await connection.query(
+      const orderResult = await connection.query(
         `INSERT INTO orders (
           customer_id, 
-          total_amount, 
-          delivery_fee, 
-          subtotal,
+          total, 
           status, 
-          payment_status, 
           payment_method,
-          delivery_address,
-          delivery_city,
-          delivery_zone,
-          customer_name,
-          customer_email,
-          customer_phone,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, NOW())`,
         [
           customerId,
-          orderData.cart.total,
-          orderData.cart.deliveryFee,
-          orderData.cart.subtotal,
+          Number(orderData.cart.total),
           orderStatus,
-          paymentStatus,
-          paymentMethod,
-          orderData.deliveryAddress.street_address,
-          orderData.deliveryAddress.city_name,
-          orderData.deliveryAddress.zone_name,
-          orderData.customerInfo.name,
-          orderData.customerInfo.email,
-          orderData.customerInfo.phone
+          paymentMethod === 'cod' ? 'cash' : 'card'
         ]
       );
 
       const orderId = (orderResult as any).insertId;
 
-      // Create order items
+      // Update stock for items (order items will be handled separately when we have proper schema)
       for (const item of orderData.cart.items) {
-        await connection.query(
-          `INSERT INTO order_items (
-            order_id, 
-            product_id, 
-            quantity, 
-            unit_price, 
-            total_price,
-            flavor_details
-          ) VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            orderId,
-            item.id,
-            item.quantity,
-            item.basePrice,
-            item.total,
-            item.flavorDetails
-          ]
-        );
-
-        // Update product stock
-        await connection.query(
-          'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-          [item.quantity, item.id]
-        );
+        if (item.isPack) {
+          // For packs, update flavor stock instead of product stock
+          for (const flavor of item.flavors) {
+            const stockField = `stock_quantity_${flavor.size.toLowerCase()}`;
+            await connection.query(
+              `UPDATE flavors SET ${stockField} = ${stockField} - ? WHERE id = ?`,
+              [flavor.quantity, flavor.id]
+            );
+          }
+        } else {
+          // For individual products, update product stock
+          await connection.query(
+            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+            [item.quantity, item.id]
+          );
+        }
       }
 
       // Clear cart
@@ -290,6 +321,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
 
     if (paymentMethod === 'cod') {
       // Cash on Delivery - order is complete
+      try {
+        // Send order confirmation email
+        await emailService.sendOrderConfirmationEmail(
+          orderData.customerInfo.email, 
+          orderId.toString(), 
+          {
+            items: orderData.cart.items,
+            subtotal: orderData.cart.subtotal,
+            deliveryFee: orderData.cart.deliveryFee,
+            total: orderData.cart.total,
+            status: 'Pending',
+            paymentMethod: 'cod',
+            customerInfo: orderData.customerInfo,
+            deliveryAddress: orderData.deliveryAddress
+          }
+        );
+        console.log('✅ Order confirmation email sent for COD order');
+      } catch (emailError) {
+        console.error('❌ Failed to send order confirmation email:', emailError);
+        // Don't fail the order if email fails
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Order placed successfully with Cash on Delivery',
@@ -300,7 +353,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
     } else {
       // Paymob payment - generate payment URL
       console.log('🔍 [DEBUG] Payment API - Generating Paymob payment')
-      const { paymentToken, paymentUrl } = await generatePaymobPayment(orderData, orderData.customerInfo);
+      const { paymentToken, paymentUrl } = await generatePaymobPayment(orderData, orderData.customerInfo, orderId);
 
       console.log('🔍 [DEBUG] Payment API - Paymob payment generated')
       console.log('🔍 [DEBUG] Payment API - Payment Token:', paymentToken)
@@ -333,4 +386,4 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       error: 'Internal server error'
     }, { status: 500 });
   }
-} 
+}

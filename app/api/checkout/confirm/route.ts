@@ -142,10 +142,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     }
 
     console.log('🔍 [DEBUG] Confirm API - Fetching cart items')
-    // Fetch and validate cart items
-    const [cartResult] = await databaseService.query(
-      `SELECT ci.id, ci.quantity, ci.product_id, ci.is_pack,
-              p.name, p.base_price, p.image_url, p.flavor_size as pack_size, p.count, p.stock_quantity
+    // Fetch and validate cart items - using the same query structure as cart API
+    const cartResult = await databaseService.query(
+      `SELECT 
+        ci.id,
+        ci.quantity,
+        ci.product_id,
+        p.name as product_name,
+        p.is_pack,
+        p.base_price,
+        p.flavor_size as size,
+        p.image_url,
+        p.count,
+        p.stock_quantity
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
        WHERE ci.cart_id = ? AND p.is_active = true
@@ -155,7 +164,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
     console.log('🔍 [DEBUG] Confirm API - Cart result:', cartResult)
 
-    if (!Array.isArray(cartResult) || cartResult.length === 0) {
+    // Handle both array and single object results like cart API does
+    const cartItemsArray = Array.isArray(cartResult) ? cartResult : (cartResult ? [cartResult] : []);
+
+    if (cartItemsArray.length === 0) {
       console.error('❌ [DEBUG] Confirm API - Cart is empty')
       return NextResponse.json({
         success: false,
@@ -168,19 +180,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     console.log('🔍 [DEBUG] Confirm API - Checking cart availability with order mode service')
     
     // Prepare cart items for availability check
-    const cartItemsForCheck = await Promise.all(cartResult.map(async (item: any) => {
-      let flavors: Array<{ id: number; quantity: number }> = [];
+    const cartItemsForCheck = await Promise.all(cartItemsArray.map(async (item: any) => {
+      let flavors: Array<{ id: number; quantity: number; name?: string }> = [];
       
       // Fetch flavors for pack items
       if (item.is_pack) {
-        const [flavorResult] = await databaseService.query(
-          'SELECT f.id, cif.quantity FROM cart_item_flavors cif JOIN flavors f ON cif.flavor_id = f.id WHERE cif.cart_item_id = ?',
+        const flavorResult = await databaseService.query(
+          'SELECT f.id, f.name, cif.quantity FROM cart_item_flavors cif JOIN flavors f ON cif.flavor_id = f.id WHERE cif.cart_item_id = ?',
           [item.id]
         );
         
         if (Array.isArray(flavorResult)) {
           flavors = flavorResult.map((flavor: any) => ({
             id: flavor.id,
+            name: flavor.name,
             quantity: flavor.quantity
           }));
         }
@@ -191,6 +204,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         productId: item.product_id,
         quantity: item.quantity,
         isPack: item.is_pack,
+        packSize: item.size,
+        productName: item.product_name,
         flavors
       };
     }));
@@ -200,15 +215,62 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     console.log('🔍 [DEBUG] Confirm API - Availability check result:', availabilityCheck);
 
     if (!availabilityCheck.isAvailable) {
+      // Build a detailed error message with specific item names
+      let errorMessage = 'Some items in your cart are currently out of stock:\n\n';
+      
+      if (availabilityCheck.outOfStockItems && availabilityCheck.outOfStockItems.length > 0) {
+        const productItems = availabilityCheck.outOfStockItems.filter(item => item.type === 'product');
+        const flavorItems = availabilityCheck.outOfStockItems.filter(item => item.type === 'flavor');
+        
+        if (productItems.length > 0) {
+          errorMessage += '**Products out of stock:**\n';
+          for (const item of productItems) {
+            // Find the actual product name from cart items
+            const cartItem = cartItemsArray.find(ci => ci.product_id === item.id);
+            const productName = cartItem ? cartItem.product_name : `Product ${item.id}`;
+            errorMessage += `• ${productName} (${item.requestedQuantity} requested, ${item.availableQuantity} available)\n`;
+          }
+          errorMessage += '\n';
+        }
+        
+        if (flavorItems.length > 0) {
+          errorMessage += '**Flavors out of stock:**\n';
+          // Get all flavor IDs to fetch names in batch
+          const flavorIds = flavorItems.map(item => item.id);
+          const flavorResult = await databaseService.query(
+            `SELECT id, name FROM flavors WHERE id IN (${flavorIds.join(',')})`
+          );
+          
+          if (Array.isArray(flavorResult)) {
+            for (const item of flavorItems) {
+              const flavor = flavorResult.find(f => f.id === item.id);
+              const flavorName = flavor ? flavor.name : `Flavor ${item.id}`;
+              errorMessage += `• ${flavorName} (${item.requestedQuantity} requested, ${item.availableQuantity} available)\n`;
+            }
+          } else {
+            // Fallback if batch query fails
+            for (const item of flavorItems) {
+              errorMessage += `• Flavor ${item.id} (${item.requestedQuantity} requested, ${item.availableQuantity} available)\n`;
+            }
+          }
+          errorMessage += '\n';
+        }
+        
+        errorMessage += 'Please remove these items from your cart or contact us for availability updates.';
+      } else {
+        errorMessage = 'Some items are not available for ordering. Please check your cart and try again.';
+      }
+
       return NextResponse.json({
         success: false,
-        message: 'Some items are not available for ordering',
-        error: availabilityCheck.reason || 'Items unavailable'
+        message: 'Items out of stock',
+        error: errorMessage,
+        outOfStockItems: availabilityCheck.outOfStockItems
       }, { status: 400 });
     }
 
     // Process cart items with flavors
-    const items = await Promise.all(cartResult.map(async (item: any) => {
+    const items = await Promise.all(cartItemsArray.map(async (item: any) => {
       let flavors: Array<{
         id: number;
         name: string;
@@ -219,14 +281,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
       // Fetch flavors for pack items
       if (item.is_pack) {
-        const [flavorResult] = await databaseService.query(
-          `SELECT f.id, f.name, cif.quantity, cif.size,
-                  CASE 
-                    WHEN cif.size = 'mini' THEN f.mini_price
-                    WHEN cif.size = 'medium' THEN f.medium_price
-                    WHEN cif.size = 'large' THEN f.large_price
-                    ELSE f.medium_price
-                  END as price
+        const flavorResult = await databaseService.query(
+          `SELECT 
+            f.id, 
+            f.name, 
+            cif.quantity,
+            f.mini_price,
+            f.medium_price,
+            f.large_price
            FROM cart_item_flavors cif
            JOIN flavors f ON cif.flavor_id = f.id
            WHERE cif.cart_item_id = ?`,
@@ -238,24 +300,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
             id: flavor.id,
             name: flavor.name,
             quantity: flavor.quantity,
-            price: flavor.price,
-            size: flavor.size
+            price: item.size === 'Large' ? flavor.large_price : 
+                   item.size === 'Medium' ? flavor.medium_price : flavor.mini_price,
+            size: item.size
           }));
         }
       }
 
       // Calculate total for this item
-      const baseTotal = item.base_price * item.quantity;
-      const flavorTotal = flavors.reduce((sum, flavor) => sum + (flavor.price * flavor.quantity), 0);
+      const baseTotal = Number(item.base_price) * item.quantity;
+      const flavorTotal = flavors.reduce((sum, flavor) => sum + (Number(flavor.price) * flavor.quantity), 0);
       const total = baseTotal + flavorTotal;
 
       return {
         id: item.id,
-        name: item.name,
+        name: item.product_name,
         basePrice: item.base_price,
         quantity: item.quantity,
         isPack: item.is_pack,
-        packSize: item.pack_size,
+        packSize: item.size,
         imageUrl: item.image_url,
         count: item.count,
         flavorDetails: flavors.map(f => `${f.name} (${f.quantity}x)`).join(', '),
@@ -264,7 +327,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       };
     }));
 
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+    const subtotal = items.reduce((sum, item) => sum + Number(item.total), 0);
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
     // Handle delivery address
@@ -276,20 +339,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       // Registered user
       if (useNewAddress && newAddress) {
         // Use new address
-        const [zoneResult] = await databaseService.query(
+        const zoneResult = await databaseService.query(
           'SELECT z.delivery_fee, c.name as city_name, z.name as zone_name FROM zones z JOIN cities c ON z.city_id = c.id WHERE z.id = ?',
           [newAddress.zone_id]
         );
 
         if (Array.isArray(zoneResult) && zoneResult.length > 0) {
           const zone = zoneResult[0];
-          deliveryFee = zone.delivery_fee;
+          deliveryFee = Number(zone.delivery_fee);
           deliveryAddress = {
             street_address: newAddress.street_address,
             additional_info: newAddress.additional_info,
             city_name: zone.city_name,
             zone_name: zone.zone_name,
-            delivery_fee: zone.delivery_fee
+            delivery_fee: Number(zone.delivery_fee)
           };
         }
       } else if (selectedAddressId) {
@@ -297,7 +360,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         console.log('🔍 [DEBUG] Confirm API - Looking up saved address ID:', selectedAddressId)
         console.log('🔍 [DEBUG] Confirm API - User email:', session.user.email)
         
-        const [addressResult] = await databaseService.query(
+        const addressResult = await databaseService.query(
           `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee
            FROM customer_addresses ca
            JOIN cities c ON ca.city_id = c.id
@@ -310,13 +373,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
         if (Array.isArray(addressResult) && addressResult.length > 0) {
           const address = addressResult[0];
-          deliveryFee = address.delivery_fee;
+          deliveryFee = Number(address.delivery_fee);
           deliveryAddress = {
             street_address: address.street_address,
             additional_info: address.additional_info,
             city_name: address.city_name,
             zone_name: address.zone_name,
-            delivery_fee: address.delivery_fee
+            delivery_fee: Number(address.delivery_fee)
           };
           console.log('🔍 [DEBUG] Confirm API - Delivery address set:', deliveryAddress)
         } else {
@@ -325,7 +388,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }
 
       // Get customer info
-      const [userResult] = await databaseService.query(
+      const userResult = await databaseService.query(
         'SELECT first_name, last_name, email, phone FROM customers WHERE email = ?',
         [session.user.email]
       );
@@ -349,20 +412,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }
 
       // Get delivery fee for guest address
-      const [zoneResult] = await databaseService.query(
+      const zoneResult = await databaseService.query(
         'SELECT z.delivery_fee, c.name as city_name, z.name as zone_name FROM zones z JOIN cities c ON z.city_id = c.id WHERE z.id = ?',
         [guestData.zone]
       );
 
       if (Array.isArray(zoneResult) && zoneResult.length > 0) {
         const zone = zoneResult[0];
-        deliveryFee = zone.delivery_fee;
+        deliveryFee = Number(zone.delivery_fee);
         deliveryAddress = {
           street_address: guestData.address,
           additional_info: guestData.additionalInfo,
           city_name: zone.city_name,
           zone_name: zone.zone_name,
-          delivery_fee: zone.delivery_fee
+          delivery_fee: Number(zone.delivery_fee)
         };
       }
 
@@ -390,6 +453,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     }
 
     const total = subtotal + deliveryFee;
+
+    console.log('🔍 [DEBUG] Confirm API - Total calculation:', {
+      subtotal,
+      deliveryFee,
+      total,
+      subtotalType: typeof subtotal,
+      deliveryFeeType: typeof deliveryFee,
+      totalType: typeof total
+    });
 
     return NextResponse.json({
       success: true,

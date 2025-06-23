@@ -6,11 +6,54 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  return NextResponse.json({ 
-    success: true, 
-    message: 'Stock route is working',
-    id: params.id 
-  })
+  try {
+    const { id } = params
+
+    // Get flavor stock information for all sizes
+    const [result] = await databaseService.query(
+      `SELECT 
+        id,
+        name,
+        stock_quantity_mini,
+        stock_quantity_medium,
+        stock_quantity_large,
+        allow_out_of_stock_order,
+        is_active
+      FROM flavors 
+      WHERE id = ?`,
+      [id]
+    )
+
+    if (!result || (Array.isArray(result) && result.length === 0)) {
+      return NextResponse.json(
+        { success: false, error: 'Flavor not found' },
+        { status: 404 }
+      )
+    }
+
+    const flavor = Array.isArray(result) ? result[0] : result
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: flavor.id,
+        name: flavor.name,
+        stock: {
+          mini: flavor.stock_quantity_mini || 0,
+          medium: flavor.stock_quantity_medium || 0,
+          large: flavor.stock_quantity_large || 0
+        },
+        allow_out_of_stock_order: Boolean(flavor.allow_out_of_stock_order),
+        is_active: Boolean(flavor.is_active)
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching flavor stock:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch flavor stock' },
+      { status: 500 }
+    )
+  }
 }
 
 export async function PUT(
@@ -41,7 +84,7 @@ export async function PUT(
       )
     }
 
-    if (quantity === undefined || quantity < 0) {
+    if (quantity === undefined || quantity === null) {
       return NextResponse.json(
         { success: false, error: 'Valid quantity is required' },
         { status: 400 }
@@ -56,14 +99,15 @@ export async function PUT(
 
     console.log('Current stock query result:', currentStock)
 
-    if (!Array.isArray(currentStock) || currentStock.length === 0) {
+    if (!currentStock || (Array.isArray(currentStock) && currentStock.length === 0)) {
       return NextResponse.json(
         { success: false, error: 'Flavor not found' },
         { status: 404 }
       )
     }
 
-    const oldQuantity = currentStock[0][`stock_quantity_${size}`] || 0
+    const stockRow = Array.isArray(currentStock) ? currentStock[0] : currentStock
+    const oldQuantity = stockRow[`stock_quantity_${size}`] || 0
     let newQuantity = oldQuantity
 
     // Calculate new quantity based on change type

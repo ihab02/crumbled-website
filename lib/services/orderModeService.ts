@@ -40,7 +40,7 @@ class OrderModeService {
     }
 
     try {
-      const [result] = await databaseService.query(
+      const result = await databaseService.query(
         'SELECT setting_value FROM site_settings WHERE setting_key = ?',
         ['order_mode']
       );
@@ -67,7 +67,7 @@ class OrderModeService {
     requestedQuantity: number
   ): Promise<AvailabilityInfo> {
     try {
-      const [result] = await databaseService.query(
+      const result = await databaseService.query(
         `SELECT p.id, p.name, p.stock_quantity, p.allow_out_of_stock_order, p.is_pack
          FROM products p 
          WHERE p.id = ? AND p.is_active = true`,
@@ -143,17 +143,31 @@ class OrderModeService {
    */
   async checkFlavorAvailability(
     flavorId: number, 
-    requestedQuantity: number
+    requestedQuantity: number,
+    size: 'Mini' | 'Medium' | 'Large' = 'Large'
   ): Promise<AvailabilityInfo> {
     try {
-      const [result] = await databaseService.query(
-        `SELECT f.id, f.name, f.allow_out_of_stock_order
-         FROM flavors f 
-         WHERE f.id = ? AND f.is_active = true`,
-        [flavorId]
-      );
+      const stockField = `stock_quantity_${size.toLowerCase()}`;
+      // Only allow valid stock fields
+      const validFields = ['stock_quantity_mini', 'stock_quantity_medium', 'stock_quantity_large'];
+      if (!validFields.includes(stockField)) {
+        throw new Error('Invalid stock field');
+      }
+      console.log(`🔍 [DEBUG] Checking flavor ${flavorId} availability:`, {
+        flavorId,
+        requestedQuantity,
+        size,
+        stockField
+      });
+
+      // Interpolate the column name directly into the SQL string
+      const sql = `SELECT f.id, f.name, f.allow_out_of_stock_order, f.${stockField} FROM flavors f WHERE f.id = ? AND f.is_active = true`;
+      const result = await databaseService.query(sql, [flavorId]);
+
+      console.log(`🔍 [DEBUG] Flavor ${flavorId} query result:`, result);
 
       if (!Array.isArray(result) || result.length === 0) {
+        console.log(`❌ [DEBUG] Flavor ${flavorId} not found or inactive`);
         return {
           isAvailable: false,
           status: 'out_of_stock',
@@ -165,8 +179,17 @@ class OrderModeService {
       const flavor = result[0] as any;
       const orderMode = await this.getOrderMode();
 
+      console.log(`🔍 [DEBUG] Flavor ${flavorId} data:`, {
+        id: flavor.id,
+        name: flavor.name,
+        allow_out_of_stock_order: flavor.allow_out_of_stock_order,
+        stockField: flavor[stockField],
+        orderMode
+      });
+
       // In preorder mode, everything is available
       if (orderMode === 'preorder') {
+        console.log(`✅ [DEBUG] Flavor ${flavorId} available in preorder mode`);
         return {
           isAvailable: true,
           status: 'preorder_available',
@@ -175,24 +198,46 @@ class OrderModeService {
         };
       }
 
-      // Stock-based mode - flavors don't have stock tracking, only the allow_out_of_stock_order flag
-      if (flavor.allow_out_of_stock_order) {
+      // Stock-based mode - check actual stock quantity
+      const currentStock = flavor[stockField] || 0;
+      
+      console.log(`🔍 [DEBUG] Flavor ${flavorId} stock check:`, {
+        currentStock,
+        requestedQuantity,
+        isAvailable: currentStock >= requestedQuantity
+      });
+      
+      if (currentStock >= requestedQuantity) {
+        const status = currentStock <= 5 ? 'low_stock' : 'in_stock';
+        console.log(`✅ [DEBUG] Flavor ${flavorId} available: ${status}`);
+        return {
+          isAvailable: true,
+          status: currentStock <= 5 ? 'low_stock' : 'in_stock',
+          message: currentStock <= 5 ? 'Low stock' : 'In stock',
+          stockQuantity: currentStock,
+          allowsOutOfStock: flavor.allow_out_of_stock_order
+        };
+      } else if (flavor.allow_out_of_stock_order) {
+        console.log(`⚠️ [DEBUG] Flavor ${flavorId} out of stock but allows out-of-stock orders`);
         return {
           isAvailable: true,
           status: 'out_of_stock',
           message: 'Available for order',
+          stockQuantity: currentStock,
           allowsOutOfStock: true
         };
       }
 
+      console.log(`❌ [DEBUG] Flavor ${flavorId} out of stock and doesn't allow out-of-stock orders`);
       return {
         isAvailable: false,
         status: 'out_of_stock',
         message: 'Flavor not available',
+        stockQuantity: currentStock,
         allowsOutOfStock: false
       };
     } catch (error) {
-      console.error('Error checking flavor availability:', error);
+      console.error(`❌ [DEBUG] Error checking flavor ${flavorId} availability:`, error);
       return {
         isAvailable: false,
         status: 'out_of_stock',
@@ -210,56 +255,110 @@ class OrderModeService {
     productId: number;
     quantity: number;
     isPack: boolean;
+    packSize?: string;
+    productName?: string;
     flavors?: Array<{
       id: number;
       quantity: number;
+      name?: string;
     }>;
   }>): Promise<StockCheckResult> {
+    console.log('🔍 [DEBUG] checkCartAvailability called with:', cartItems);
+    
     const orderMode = await this.getOrderMode();
     const outOfStockItems: StockCheckResult['outOfStockItems'] = [];
 
     for (const item of cartItems) {
-      // Check product availability
-      const productAvailability = await this.checkProductAvailability(
-        item.productId, 
-        item.quantity
-      );
-
-      if (!productAvailability.isAvailable) {
-        outOfStockItems.push({
-          id: item.productId,
-          name: `Product ${item.productId}`,
-          type: 'product',
-          requestedQuantity: item.quantity,
-          availableQuantity: productAvailability.stockQuantity || 0,
-          allowsOutOfStock: productAvailability.allowsOutOfStock
-        });
-      }
-
-      // For packs, check flavor availability
-      if (item.isPack && item.flavors) {
-        for (const flavor of item.flavors) {
-          const flavorAvailability = await this.checkFlavorAvailability(
-            flavor.id, 
-            flavor.quantity
-          );
-
-          if (!flavorAvailability.isAvailable) {
-            outOfStockItems.push({
-              id: flavor.id,
-              name: `Flavor ${flavor.id}`,
-              type: 'flavor',
-              requestedQuantity: flavor.quantity,
-              availableQuantity: 0,
-              allowsOutOfStock: flavorAvailability.allowsOutOfStock
+      console.log('🔍 [DEBUG] Processing cart item:', item);
+      
+      if (item.isPack) {
+        // For packs, only check flavor availability (packs don't have their own stock)
+        if (item.flavors) {
+          const packSize = (item.packSize || 'Large') as 'Mini' | 'Medium' | 'Large';
+          console.log('🔍 [DEBUG] Processing pack flavors:', {
+            packSize,
+            flavors: item.flavors,
+            packQuantity: item.quantity
+          });
+          
+          for (const flavor of item.flavors) {
+            // FIXED: Multiply flavor quantity by pack quantity to get total needed
+            const totalFlavorQuantity = flavor.quantity * item.quantity;
+            
+            console.log('🔍 [DEBUG] Checking flavor availability:', {
+              flavorId: flavor.id,
+              flavorName: flavor.name,
+              flavorQuantity: flavor.quantity,
+              packQuantity: item.quantity,
+              totalFlavorQuantity,
+              packSize
             });
+            
+            const flavorAvailability = await this.checkFlavorAvailability(
+              flavor.id, 
+              totalFlavorQuantity, // Use total quantity needed
+              packSize
+            );
+
+            console.log('🔍 [DEBUG] Flavor availability result:', {
+              flavorId: flavor.id,
+              flavorName: flavor.name,
+              isAvailable: flavorAvailability.isAvailable,
+              status: flavorAvailability.status,
+              stockQuantity: flavorAvailability.stockQuantity
+            });
+
+            if (!flavorAvailability.isAvailable) {
+              // Get flavor name if not provided
+              let flavorName = flavor.name;
+              if (!flavorName) {
+                const flavorResult = await databaseService.query(
+                  'SELECT name FROM flavors WHERE id = ?',
+                  [flavor.id]
+                );
+                if (Array.isArray(flavorResult) && flavorResult.length > 0) {
+                  flavorName = (flavorResult[0] as any).name;
+                } else {
+                  flavorName = `Flavor ${flavor.id}`;
+                }
+              }
+
+              outOfStockItems.push({
+                id: flavor.id,
+                name: flavorName,
+                type: 'flavor',
+                requestedQuantity: totalFlavorQuantity, // Show total quantity needed
+                availableQuantity: flavorAvailability.stockQuantity || 0,
+                allowsOutOfStock: flavorAvailability.allowsOutOfStock
+              });
+            }
           }
+        }
+      } else {
+        // For non-pack items, check product availability
+        const productAvailability = await this.checkProductAvailability(
+          item.productId, 
+          item.quantity
+        );
+
+        if (!productAvailability.isAvailable) {
+          outOfStockItems.push({
+            id: item.productId,
+            name: item.productName || `Product ${item.productId}`,
+            type: 'product',
+            requestedQuantity: item.quantity,
+            availableQuantity: productAvailability.stockQuantity || 0,
+            allowsOutOfStock: productAvailability.allowsOutOfStock
+          });
         }
       }
     }
 
+    console.log('🔍 [DEBUG] Final outOfStockItems:', outOfStockItems);
+
     // In preorder mode, everything is available
     if (orderMode === 'preorder') {
+      console.log('✅ [DEBUG] Preorder mode - all items available');
       return {
         isAvailable: true
       };
@@ -268,7 +367,10 @@ class OrderModeService {
     // In stock-based mode, check if any items are truly unavailable
     const trulyUnavailable = outOfStockItems.filter(item => !item.allowsOutOfStock);
 
+    console.log('🔍 [DEBUG] Truly unavailable items:', trulyUnavailable);
+
     if (trulyUnavailable.length > 0) {
+      console.log('❌ [DEBUG] Some items are truly unavailable');
       return {
         isAvailable: false,
         reason: `Some items are out of stock and don't allow out-of-stock orders`,
@@ -276,6 +378,7 @@ class OrderModeService {
       };
     }
 
+    console.log('✅ [DEBUG] All items available or allow out-of-stock orders');
     return {
       isAvailable: true,
       outOfStockItems: outOfStockItems.length > 0 ? outOfStockItems : undefined

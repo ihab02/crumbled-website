@@ -175,44 +175,279 @@ class EmailService {
   }
 
   public async sendOrderConfirmationEmail(to: string, orderId: string, orderDetails: any) {
+    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL}/images/logo-with-background.jpg`;
+    
     await this.sendEmail({
       to,
       subject: `Order Confirmation - Order #${orderId}`,
       html: `
-        <h1>Thank You for Your Order!</h1>
-        <p>Your order has been received and is being processed.</p>
-        <h2>Order Details</h2>
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr>
-            <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Item</th>
-            <th style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">Price</th>
-            <th style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">Quantity</th>
-            <th style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">Total</th>
-          </tr>
-          ${orderDetails.items.map((item: any) => `
-            <tr>
-              <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.name}</td>
-              <td style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">$${item.price.toFixed(2)}</td>
-              <td style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">${item.quantity}</td>
-              <td style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">$${(item.price * item.quantity).toFixed(2)}</td>
-            </tr>
-          `).join('')}
-          <tr>
-            <td colspan="3" style="text-align: right; padding: 8px; font-weight: bold;">Subtotal:</td>
-            <td style="text-align: right; padding: 8px;">$${orderDetails.subtotal.toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td colspan="3" style="text-align: right; padding: 8px; font-weight: bold;">Shipping:</td>
-            <td style="text-align: right; padding: 8px;">$${orderDetails.shipping.toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td colspan="3" style="text-align: right; padding: 8px; font-weight: bold;">Total:</td>
-            <td style="text-align: right; padding: 8px; font-weight: bold;">$${orderDetails.total.toFixed(2)}</td>
-          </tr>
-        </table>
-        <p>We'll notify you when your order ships.</p>
-        <hr>
-        <p><small>This is an automated message, please do not reply.</small></p>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Order Confirmation</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+              line-height: 1.6; 
+              color: #333; 
+              margin: 0; 
+              padding: 0; 
+              background-color: #fdf2f8;
+            }
+            .container { 
+              max-width: 600px; 
+              margin: 0 auto; 
+              background: white; 
+              border-radius: 12px; 
+              overflow: hidden; 
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .header { 
+              background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); 
+              padding: 30px; 
+              text-align: center; 
+              color: white;
+            }
+            .logo { 
+              max-width: 200px; 
+              height: auto; 
+              margin-bottom: 20px;
+            }
+            .content { 
+              padding: 40px 30px; 
+            }
+            .order-number { 
+              background: #fdf2f8; 
+              padding: 20px; 
+              border-radius: 8px; 
+              text-align: center; 
+              margin-bottom: 30px;
+              border-left: 4px solid #ec4899;
+            }
+            .order-number h2 { 
+              margin: 0; 
+              color: #ec4899; 
+              font-size: 24px;
+            }
+            .order-number p { 
+              margin: 5px 0 0 0; 
+              color: #666; 
+              font-size: 14px;
+            }
+            .section { 
+              margin-bottom: 30px; 
+            }
+            .section h3 { 
+              color: #ec4899; 
+              border-bottom: 2px solid #fdf2f8; 
+              padding-bottom: 10px; 
+              margin-bottom: 20px;
+            }
+            .item { 
+              display: flex; 
+              justify-content: space-between; 
+              align-items: center; 
+              padding: 15px 0; 
+              border-bottom: 1px solid #f3f4f6;
+            }
+            .item:last-child { 
+              border-bottom: none; 
+            }
+            .item-details { 
+              flex: 1; 
+            }
+            .item-name { 
+              font-weight: 600; 
+              color: #1f2937; 
+              margin-bottom: 5px;
+            }
+            .item-description { 
+              color: #6b7280; 
+              font-size: 14px; 
+              margin-bottom: 5px;
+            }
+            .item-price { 
+              font-weight: 600; 
+              color: #ec4899; 
+              text-align: right;
+            }
+            .totals { 
+              background: #fdf2f8; 
+              padding: 20px; 
+              border-radius: 8px; 
+              margin-top: 20px;
+            }
+            .total-row { 
+              display: flex; 
+              justify-content: space-between; 
+              margin-bottom: 10px; 
+            }
+            .total-row:last-child { 
+              margin-bottom: 0; 
+              padding-top: 10px; 
+              border-top: 1px solid #e5e7eb; 
+              font-weight: 600; 
+              font-size: 18px; 
+              color: #ec4899;
+            }
+            .delivery-info { 
+              background: #f0f9ff; 
+              padding: 20px; 
+              border-radius: 8px; 
+              border-left: 4px solid #0ea5e9;
+            }
+            .delivery-info h4 { 
+              margin: 0 0 10px 0; 
+              color: #0ea5e9; 
+            }
+            .delivery-info p { 
+              margin: 5px 0; 
+              color: #374151;
+            }
+            .footer { 
+              background: #f9fafb; 
+              padding: 30px; 
+              text-align: center; 
+              color: #6b7280;
+            }
+            .footer a { 
+              color: #ec4899; 
+              text-decoration: none;
+            }
+            .status-badge { 
+              display: inline-block; 
+              padding: 4px 12px; 
+              border-radius: 20px; 
+              font-size: 12px; 
+              font-weight: 600; 
+              text-transform: uppercase;
+            }
+            .status-confirmed { 
+              background: #dcfce7; 
+              color: #166534;
+            }
+            .status-pending { 
+              background: #fef3c7; 
+              color: #92400e;
+            }
+            .payment-method { 
+              display: inline-block; 
+              padding: 4px 12px; 
+              border-radius: 20px; 
+              font-size: 12px; 
+              font-weight: 600; 
+              text-transform: uppercase;
+            }
+            .payment-cod { 
+              background: #fef3c7; 
+              color: #92400e;
+            }
+            .payment-paymob { 
+              background: #dcfce7; 
+              color: #166534;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <img src="${logoUrl}" alt="Crumbled Logo" class="logo">
+              <h1 style="margin: 0; font-size: 28px;">Thank You for Your Order!</h1>
+              <p style="margin: 10px 0 0 0; opacity: 0.9;">Your order has been received and is being processed</p>
+            </div>
+            
+            <div class="content">
+              <div class="order-number">
+                <h2>Order #${orderId}</h2>
+                <p>Placed on ${new Date().toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+                <span class="status-badge status-${orderDetails.status === 'Confirmed' ? 'confirmed' : 'pending'}">
+                  ${orderDetails.status}
+                </span>
+                <span class="payment-method payment-${orderDetails.paymentMethod === 'cod' ? 'cod' : 'paymob'}">
+                  ${orderDetails.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
+                </span>
+              </div>
+
+              <div class="section">
+                <h3>Order Items</h3>
+                ${orderDetails.items.map((item: any) => `
+                  <div class="item">
+                    <div class="item-details">
+                      <div class="item-name">${item.name}</div>
+                      ${item.flavorDetails ? `<div class="item-description">${item.flavorDetails}</div>` : ''}
+                      <div class="item-description">Quantity: ${item.quantity}</div>
+                    </div>
+                    <div class="item-price">$${item.total.toFixed(2)}</div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div class="totals">
+                <div class="total-row">
+                  <span>Subtotal:</span>
+                  <span>$${orderDetails.subtotal.toFixed(2)}</span>
+                </div>
+                <div class="total-row">
+                  <span>Delivery Fee:</span>
+                  <span>$${orderDetails.deliveryFee.toFixed(2)}</span>
+                </div>
+                <div class="total-row">
+                  <span>Total:</span>
+                  <span>$${orderDetails.total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div class="section">
+                <h3>Delivery Information</h3>
+                <div class="delivery-info">
+                  <h4>${orderDetails.customerInfo.name}</h4>
+                  <p>${orderDetails.deliveryAddress.street_address}</p>
+                  ${orderDetails.deliveryAddress.additional_info ? `<p>${orderDetails.deliveryAddress.additional_info}</p>` : ''}
+                  <p>${orderDetails.deliveryAddress.city_name}, ${orderDetails.deliveryAddress.zone_name}</p>
+                  <p>Phone: ${orderDetails.customerInfo.phone}</p>
+                  <p>Email: ${orderDetails.customerInfo.email}</p>
+                </div>
+              </div>
+
+              ${orderDetails.paymentMethod === 'cod' ? `
+                <div class="section">
+                  <h3>Payment Information</h3>
+                  <p>You have chosen <strong>Cash on Delivery</strong> as your payment method. Please have the exact amount ready when your order arrives.</p>
+                  <p><strong>Total Amount Due:</strong> $${orderDetails.total.toFixed(2)}</p>
+                </div>
+              ` : `
+                <div class="section">
+                  <h3>Payment Information</h3>
+                  <p>Your payment has been processed successfully through our secure payment gateway.</p>
+                  <p><strong>Payment Status:</strong> <span class="status-badge status-confirmed">Paid</span></p>
+                </div>
+              `}
+
+              <div class="section">
+                <h3>What's Next?</h3>
+                <p>We'll notify you when your order is being prepared and when it's out for delivery. You can track your order status by contacting our customer service.</p>
+                <p>If you have any questions about your order, please don't hesitate to contact us.</p>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>Thank you for choosing Crumbled!</p>
+              <p>For support, contact us at <a href="mailto:support@crumbled.com">support@crumbled.com</a></p>
+              <p style="font-size: 12px; margin-top: 20px;">
+                This is an automated message, please do not reply to this email.
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
       `
     });
   }

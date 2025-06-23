@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import {
@@ -37,6 +37,12 @@ interface Flavor {
   image_url: string | null;
   category?: string;
   is_active?: boolean;
+  stock?: {
+    mini: number;
+    medium: number;
+    large: number;
+  };
+  allow_out_of_stock_order?: boolean;
 }
 
 interface SelectedFlavor {
@@ -47,6 +53,8 @@ interface SelectedFlavor {
   size: string;
 }
 
+type OrderMode = 'stock_based' | 'preorder';
+
 export default function PackProductPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -56,10 +64,64 @@ export default function PackProductPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [quantity, setQuantity] = useState(1);
+  const [orderMode, setOrderMode] = useState<OrderMode>('stock_based');
 
   useEffect(() => {
     fetchProduct();
+    fetchOrderMode();
   }, [id]);
+
+  useEffect(() => {
+    if (product && orderMode) {
+      fetchFlavorsWithStock();
+    }
+  }, [orderMode, product]);
+
+  const fetchOrderMode = async () => {
+    try {
+      const response = await fetch('/api/order-mode');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setOrderMode(data.data.orderMode);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching order mode:', error);
+    }
+  };
+
+  const fetchFlavorStock = async (flavorId: number): Promise<Flavor['stock']> => {
+    try {
+      const response = await fetch(`/api/flavors/${flavorId}/stock`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          return data.data.stock;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching flavor stock:', error);
+    }
+    return { mini: 0, medium: 0, large: 0 };
+  };
+
+  const fetchFlavorsWithStock = async () => {
+    if (!product?.flavors) return;
+
+    // If in stock-based mode, fetch stock information for each flavor
+    if (orderMode === 'stock_based') {
+      const flavorsWithStock = await Promise.all(
+        product.flavors.map(async (flavor: Flavor) => {
+          const stock = await fetchFlavorStock(flavor.id);
+          return { ...flavor, stock };
+        })
+      );
+      setAvailableFlavors(flavorsWithStock);
+    } else {
+      setAvailableFlavors(product.flavors);
+    }
+  };
 
   const fetchProduct = async () => {
     try {
@@ -93,6 +155,30 @@ export default function PackProductPage() {
     return flavor.price || 0;
   };
 
+  const getFlavorStock = (flavor: Flavor, size: string): number => {
+    if (!flavor.stock) return 0;
+    const sizeKey = size.toLowerCase() as keyof typeof flavor.stock;
+    return flavor.stock[sizeKey] || 0;
+  };
+
+  const isFlavorAvailable = (flavor: Flavor, size: string): boolean => {
+    if (orderMode === 'preorder') return true;
+    
+    const stock = getFlavorStock(flavor, size);
+    if (stock > 0) return true;
+    
+    return flavor.allow_out_of_stock_order || false;
+  };
+
+  const getMaxSelectableQuantity = (flavor: Flavor, size: string): number => {
+    if (orderMode === 'preorder') return 999; // No limit in preorder mode
+    
+    const stock = getFlavorStock(flavor, size);
+    if (stock > 0) return stock;
+    
+    return flavor.allow_out_of_stock_order ? 999 : 0;
+  };
+
   const handleFlavorSelect = (flavor: Flavor, action: 'add' | 'remove') => {
     if (!product) return;
 
@@ -103,6 +189,21 @@ export default function PackProductPage() {
       if (totalSelectedCount >= product.count) {
         toast.error(`You need to select exactly ${product.count} flavors for this pack`);
         return;
+      }
+
+      // Check stock availability in stock-based mode
+      if (orderMode === 'stock_based') {
+        const currentSelected = selectedFlavors.find(f => f.id === flavor.id)?.quantity || 0;
+        const maxSelectable = getMaxSelectableQuantity(flavor, flavorSize);
+        
+        if (currentSelected >= maxSelectable) {
+          if (maxSelectable === 0) {
+            toast.error(`${flavor.name} is out of stock`);
+          } else {
+            toast.error(`Maximum ${maxSelectable} of ${flavor.name} available`);
+          }
+          return;
+        }
       }
       
       const existingFlavor = selectedFlavors.find(f => f.id === flavor.id);
@@ -365,7 +466,10 @@ export default function PackProductPage() {
                 Choose {product.count} flavors for your {product.name}. You can select multiple quantities of the same flavor.
               </p>
               <p className="text-sm text-pink-500 mt-2">
-                💡 Use the + and - buttons to adjust quantities. You can select the same flavor multiple times!
+                {orderMode === 'stock_based' 
+                  ? '💡 Stock levels are shown when less than 3 items are available. Out-of-stock items are disabled unless available for preorder.'
+                  : '💡 Use the + and - buttons to adjust quantities. You can select the same flavor multiple times!'
+                }
               </p>
             </div>
 
@@ -377,19 +481,24 @@ export default function PackProductPage() {
                   const flavorPrice = getFlavorPrice(flavor, flavorSize) || 0;
                   const isSelected = selectedCount > 0;
                   const canAddMore = totalSelectedCount < product.count;
+                  const isAvailable = isFlavorAvailable(flavor, flavorSize);
+                  const maxSelectable = getMaxSelectableQuantity(flavor, flavorSize);
+                  const currentStock = getFlavorStock(flavor, flavorSize);
                   
                   return (
                     <Card
                       key={flavor.id}
                       className={`overflow-hidden border-2 transition-all hover:shadow-lg rounded-2xl group ${
-                        isSelected
+                        !isAvailable
+                          ? "border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed"
+                          : isSelected
                           ? "border-pink-400 bg-gradient-to-br from-pink-50 to-rose-50 shadow-md"
                           : "border-pink-200 bg-white hover:border-pink-300"
                       }`}
                     >
-                      <div className="flex items-center p-6">
+                      <div className="flex items-center p-6 gap-6">
                         {/* Flavor Image */}
-                        <div className="w-20 h-20 overflow-hidden rounded-xl mr-6 flex-shrink-0">
+                        <div className="w-20 h-20 overflow-hidden rounded-xl flex-shrink-0">
                           {flavor.image_url ? (
                             <Image
                               src={flavor.image_url}
@@ -407,70 +516,86 @@ export default function PackProductPage() {
 
                         {/* Flavor Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h3 className="font-bold text-xl text-pink-800 group-hover:text-pink-600 transition-colors">
-                                {flavor.name}
-                              </h3>
-                              {flavor.description && (
-                                <p className="text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
-                              )}
-                            </div>
-                            <div className="text-right ml-4">
-                              <div className="text-lg font-bold text-pink-700">+{Number(flavorPrice).toFixed(2)} EGP</div>
-                              {isSelected && (
-                                <div className="text-sm text-pink-600 mt-1">
-                                  {selectedCount} selected
-                                </div>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-xl text-pink-800 group-hover:text-pink-600 transition-colors">
+                              {flavor.name}
+                            </h3>
+                            {orderMode === 'stock_based' && currentStock > 0 && currentStock < 3 && (
+                              <Badge 
+                                variant="secondary"
+                                className="text-xs bg-orange-100 text-orange-800 border-orange-200 hover:bg-orange-200"
+                              >
+                                Only {currentStock} left
+                              </Badge>
+                            )}
+                            {orderMode === 'stock_based' && currentStock === 0 && (
+                              <Badge 
+                                variant="destructive"
+                                className="text-xs bg-red-100 text-red-800 border-red-200 hover:bg-red-200"
+                              >
+                                Out of Stock
+                              </Badge>
+                            )}
                           </div>
+                          {flavor.description && (
+                            <p className="text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
+                          )}
+                          <div className="text-lg font-bold text-pink-700 mt-1">+{Number(flavorPrice).toFixed(2)} EGP</div>
+                        </div>
 
-                          {/* Selection Controls */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              {/* Quantity Controls */}
-                              <div className="flex items-center space-x-2 bg-white rounded-full border-2 border-pink-300 p-1 shadow-md">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
-                                  onClick={() => handleFlavorSelect(flavor, 'remove')}
-                                  disabled={selectedCount === 0}
-                                >
-                                  <Minus className="h-4 w-4" />
-                                </Button>
-                                
-                                <span className="w-8 text-center font-bold text-pink-800 text-sm">
-                                  {selectedCount}
-                                </span>
-                                
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
-                                  onClick={() => handleFlavorSelect(flavor, 'add')}
-                                  disabled={!canAddMore}
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </div>
-
-                              {/* Selection Status */}
-                              {isSelected && (
+                        {/* Selection Controls */}
+                        <div className="flex-shrink-0">
+                          <div className="flex items-center space-x-2 bg-white rounded-full border-2 border-pink-300 p-1 shadow-md">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
+                              onClick={() => handleFlavorSelect(flavor, 'remove')}
+                              disabled={selectedCount === 0}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            
+                            <span className="w-8 text-center font-bold text-pink-800 text-sm">
+                              {selectedCount}
+                            </span>
+                            
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
+                              onClick={() => handleFlavorSelect(flavor, 'add')}
+                              disabled={!canAddMore || !isAvailable || selectedCount >= maxSelectable}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="flex flex-col items-center gap-1 mt-2">
+                            {isSelected && (
                                 <Badge className="bg-green-500 text-white border-0 px-3 py-1">
-                                  <Check className="h-3 w-3 mr-1" />
-                                  {selectedCount} selected
+                                <Check className="h-3 w-3 mr-1" />
+                                {selectedCount} selected
                                 </Badge>
-                              )}
-                            </div>
-
-                            {/* Max Reached Status */}
+                            )}
                             {!canAddMore && !isSelected && (
                               <Badge className="bg-gray-300 text-gray-600 border-0 px-3 py-1">
                                 Max reached
                               </Badge>
                             )}
+                            {orderMode === 'stock_based' && selectedCount >= maxSelectable && maxSelectable > 0 && (
+                              <Badge className="bg-orange-100 text-orange-800 border-orange-200 px-3 py-1">
+                                Stock limit
+                              </Badge>
+                            )}
+                             {orderMode === 'stock_based' && !isAvailable && (
+                                <Badge 
+                                  variant="destructive" 
+                                  className="px-3 py-1 bg-red-100 text-red-800 border-red-200 hover:bg-red-200"
+                                >
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  Unavailable
+                                </Badge>
+                              )}
                           </div>
                         </div>
                       </div>

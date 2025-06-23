@@ -130,6 +130,13 @@ export default function NewCheckoutPage() {
   const [orderData, setOrderData] = useState<any>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'paymob'>('cod')
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [outOfStockItems, setOutOfStockItems] = useState<Array<{
+    id: number
+    name: string
+    type: 'product' | 'flavor'
+    requestedQuantity: number
+    availableQuantity: number
+  }> | null>(null)
   
   // Add step state
   const [step, setStep] = useState(1)
@@ -361,7 +368,16 @@ export default function NewCheckoutPage() {
         toast.success('Order confirmed!')
       } else {
         console.error('❌ [DEBUG] Confirm API Error:', result.error)
-        toast.error(result.error || 'Failed to confirm order')
+        
+        // Handle stock availability errors with better UX
+        if (result.message === 'Items out of stock' && result.outOfStockItems) {
+          setOutOfStockItems(result.outOfStockItems)
+          // Also show a toast for immediate feedback
+          toast.error('Some items are out of stock. Please review the details below.')
+        } else {
+          setOutOfStockItems(null)
+          toast.error(result.error || 'Failed to confirm order')
+        }
       }
     } catch (error) {
       console.error('❌ [DEBUG] Error confirming order:', error)
@@ -570,6 +586,84 @@ export default function NewCheckoutPage() {
       
       <div className="container mx-auto p-4">
         <Stepper step={step} />
+        
+        {/* Out of Stock Alert */}
+        {outOfStockItems && outOfStockItems.length > 0 && (
+          <div className="mb-6">
+            <Card className="border-2 border-red-200 bg-red-50 rounded-3xl">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-red-600 text-lg">⚠️</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-red-800 mb-3">
+                      Some items in your cart are out of stock
+                    </h3>
+                    <div className="space-y-3">
+                      {outOfStockItems.filter(item => item.type === 'product').length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-red-700 mb-2">Products out of stock:</h4>
+                          <ul className="space-y-1">
+                            {outOfStockItems
+                              .filter(item => item.type === 'product')
+                              .map((item, index) => (
+                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
+                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
+                                  <span className="text-sm text-red-600">
+                                    {item.requestedQuantity} requested, {item.availableQuantity} available
+                                  </span>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {outOfStockItems.filter(item => item.type === 'flavor').length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-red-700 mb-2">Flavors out of stock:</h4>
+                          <ul className="space-y-1">
+                            {outOfStockItems
+                              .filter(item => item.type === 'flavor')
+                              .map((item, index) => (
+                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
+                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
+                                  <span className="text-sm text-red-600">
+                                    {item.requestedQuantity} requested, {item.availableQuantity} available only
+                                  </span>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                      <Button
+                        onClick={() => router.push('/cart')}
+                        variant="outline"
+                        size="sm"
+                        className="border-red-300 text-red-700 hover:bg-red-100"
+                      >
+                        ← Back to Cart
+                      </Button>
+                      <Button
+                        onClick={() => setOutOfStockItems(null)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        
         {/* Step 1: Delivery Info */}
         {step === 1 && (
           <div className="grid gap-8 lg:grid-cols-3">

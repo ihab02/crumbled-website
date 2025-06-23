@@ -215,6 +215,7 @@ class PaymobService {
   }): Promise<PaymobPaymentKeyResponse> {
     try {
       const authToken = await this.getAuthToken();
+      const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/callback`;
 
       const paymentKeyRequest: PaymobPaymentKeyRequest = {
         auth_token: authToken,
