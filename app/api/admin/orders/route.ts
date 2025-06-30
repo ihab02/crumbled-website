@@ -32,26 +32,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch all orders with customer information
-    const ordersResult = await db.query(`
+    const sql = `
       SELECT 
         o.id,
         o.total,
         o.status,
         o.created_at,
-        o.updated_at,
         o.payment_method,
-        o.payment_status,
-        o.transaction_id,
         o.guest_otp,
         o.otp_verified,
+        c.id as customer_id,
         CONCAT(c.first_name, ' ', c.last_name) as customer_name,
         c.email as customer_email,
-        c.phone as customer_phone,
-        c.id as customer_id
+        c.phone as customer_phone
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       ORDER BY o.created_at DESC
-    `)
+    `;
+
+    const ordersResult = await db.query(sql)
 
     console.log('Orders query result:', ordersResult)
     console.log('Orders result type:', typeof ordersResult)

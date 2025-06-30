@@ -5,38 +5,18 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
 
-interface OrderItem {
-  id: number;
-  quantity: number;
-  unit_price: string;
-  product_type: string;
-  product_id: number;
-  size_id: number;
-  size_label: string;
-  product_name: string;
-  flavors?: Array<{
-    flavor_name: string;
-    flavor_quantity: number;
-    size_label: string;
-  }>;
-}
-
 interface Order {
   id: number;
-  total: string;
+  total: number;
   status: string;
   created_at: string;
-  updated_at: string;
   payment_method: string;
-  payment_status: string;
-  transaction_id: string | null;
   guest_otp: string | null;
   otp_verified: boolean;
+  customer_id: number | null;
   customer_name: string | null;
   customer_email: string | null;
   customer_phone: string | null;
-  customer_id: number | null;
-  items: OrderItem[];
 }
 
 const ORDER_STATUSES = [
@@ -53,6 +33,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -122,6 +103,19 @@ export default function AdminOrdersPage() {
     ? orders 
     : orders.filter(order => order.status === filterStatus);
 
+  // Filter orders based on search term
+  const searchFilteredOrders = filteredOrders.filter((order) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      order.id.toString().includes(searchLower) ||
+      (order.customer_name && order.customer_name.toLowerCase().includes(searchLower)) ||
+      (order.customer_email && order.customer_email.toLowerCase().includes(searchLower)) ||
+      (order.customer_phone && order.customer_phone.toLowerCase().includes(searchLower)) ||
+      order.status.toLowerCase().includes(searchLower) ||
+      order.payment_method.toLowerCase().includes(searchLower)
+    );
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -136,26 +130,35 @@ export default function AdminOrdersPage() {
         <div className="bg-white rounded-lg shadow">
           <div className="px-4 py-5 sm:p-6">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-semibold text-gray-900">Order Management</h1>
+              <h1 className="text-2xl font-semibold text-gray-900">Orders</h1>
               <div className="flex items-center space-x-4">
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="all">All Orders</option>
-                  {ORDER_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={fetchOrders}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  Refresh
-                </button>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Search orders..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="all">All Status</option>
+                    {ORDER_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={fetchOrders}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -167,7 +170,7 @@ export default function AdminOrdersPage() {
                       Order ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer
+                      Customer Info
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
@@ -187,21 +190,32 @@ export default function AdminOrdersPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredOrders.map((order) => (
+                  {searchFilteredOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         #{order.id}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.customer_name || 'Guest User'}
-                        <br />
-                        <span className="text-xs">{order.customer_phone}</span>
-                        {order.customer_email && (
-                          <>
-                            <br />
-                            <span className="text-xs">{order.customer_email}</span>
-                          </>
-                        )}
+                        <div className="space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-sm text-gray-600">Customer:</span>
+                            <span className="text-sm font-medium">
+                              {order.customer_name || 'Guest'}
+                            </span>
+                          </div>
+                          {order.customer_email && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">Email:</span>
+                              <span className="text-sm font-medium">{order.customer_email}</span>
+                            </div>
+                          )}
+                          {order.customer_phone && (
+                            <div className="flex justify-between">
+                              <span className="text-sm text-gray-600">Phone:</span>
+                              <span className="text-sm font-medium">{order.customer_phone}</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         EGP {Number(order.total).toFixed(2)}
@@ -250,7 +264,7 @@ export default function AdminOrdersPage() {
               </table>
             </div>
 
-            {filteredOrders.length === 0 && (
+            {searchFilteredOrders.length === 0 && (
               <div className="text-center py-8">
                 <p className="text-gray-500">No orders found</p>
               </div>
@@ -301,14 +315,6 @@ export default function AdminOrdersPage() {
                       {selectedOrder.customer_email && (
                         <p className="text-sm text-gray-500">{selectedOrder.customer_email}</p>
                       )}
-                      {selectedOrder.guest_otp && (
-                        <p className="text-sm text-gray-500">
-                          Guest OTP: {selectedOrder.guest_otp} 
-                          {selectedOrder.otp_verified && (
-                            <span className="text-green-600 ml-2">✓ Verified</span>
-                          )}
-                        </p>
-                      )}
                     </div>
                   </div>
 
@@ -324,63 +330,18 @@ export default function AdminOrdersPage() {
                       <p className="text-sm text-gray-500">
                         <span className="font-medium">Date:</span> {new Date(selectedOrder.created_at).toLocaleString()}
                       </p>
+                      <p className="text-sm text-gray-900 font-medium">
+                        <span className="font-medium">Total:</span> EGP {Number(selectedOrder.total).toFixed(2)}
+                      </p>
+                      {selectedOrder.guest_otp && (
+                        <p className="text-sm text-gray-500">
+                          <span className="font-medium">Guest OTP:</span> {selectedOrder.guest_otp} 
+                          {selectedOrder.otp_verified && (
+                            <span className="text-green-600 ml-2">✓ Verified</span>
+                          )}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <h3 className="text-sm font-medium text-gray-500 mb-3">Order Items</h3>
-                  <div className="space-y-4">
-                    {selectedOrder.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="border border-gray-200 rounded-md p-4"
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">
-                              {item.product_name}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Type: {item.product_type}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Size: {item.size_label}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Quantity: {item.quantity}
-                            </p>
-                            {item.flavors && item.flavors.length > 0 && (
-                              <div className="mt-2">
-                                <p className="text-sm font-medium text-gray-700">Flavors:</p>
-                                <div className="ml-2">
-                                  {item.flavors.map((flavor, index) => (
-                                    <p key={index} className="text-sm text-gray-500">
-                                      • {flavor.flavor_name} ({flavor.flavor_quantity}x {flavor.size_label})
-                                    </p>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-gray-900">
-                              EGP {(Number(item.unit_price) * item.quantity).toFixed(2)}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              EGP {Number(item.unit_price).toFixed(2)} each
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-6 border-t border-gray-200 pt-4">
-                  <div className="flex justify-between text-base font-medium">
-                    <p>Total</p>
-                    <p>EGP {Number(selectedOrder.total).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
@@ -391,3 +352,7 @@ export default function AdminOrdersPage() {
     </div>
   );
 } 
+
+
+
+

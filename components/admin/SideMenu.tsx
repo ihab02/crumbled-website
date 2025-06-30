@@ -20,7 +20,8 @@ import {
   Mail,
   Database,
   Warehouse,
-  User
+  User,
+  Truck
 } from 'lucide-react';
 
 const menuItems = [
@@ -33,6 +34,11 @@ const menuItems = [
     title: 'Orders',
     href: '/admin/orders',
     icon: ShoppingCart
+  },
+  {
+    title: 'Delivery Management',
+    href: '/admin/delivery-management',
+    icon: Truck
   },
   {
     title: 'Stock Management',

@@ -1,11 +1,16 @@
 {
-  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/admin/orders/route": "app/api/admin/orders/route.js",
-  "/api/auth/admin/login/route": "app/api/auth/admin/login/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/admin/zones/route": "app/api/admin/zones/route.js",
   "/api/cart/route": "app/api/cart/route.js",
+  "/api/admin/cities/route": "app/api/admin/cities/route.js",
+  "/api/admin/delivery-time-slots/route": "app/api/admin/delivery-time-slots/route.js",
+  "/api/admin/zones/[id]/route": "app/api/admin/zones/[id]/route.js",
+  "/api/admin/flavors/route": "app/api/admin/flavors/route.js",
+  "/api/auth/admin/login/route": "app/api/auth/admin/login/route.js",
   "/api/admin/auth/check/route": "app/api/admin/auth/check/route.js",
-  "/admin/page": "app/admin/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
   "/admin/login/page": "app/admin/login/page.js",
+  "/admin/delivery-management/page": "app/admin/delivery-management/page.js",
   "/admin/dashboard/page": "app/admin/dashboard/page.js",
-  "/admin/orders/page": "app/admin/orders/page.js"
+  "/admin/flavors/page": "app/admin/flavors/page.js"
 }
