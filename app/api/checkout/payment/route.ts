@@ -207,44 +207,26 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
     // Start database transaction
     const result = await databaseService.transaction(async (connection) => {
       // Create order
-      const orderStatus = paymentMethod === 'cod' ? 'Pending' : 'Unpaid';
-      const paymentStatus = paymentMethod === 'cod' ? 'Pending' : 'Unpaid';
+      const orderStatus = 'pending'; // Use 'pending' for both COD and Paymob initially
+      const paymentStatus = paymentMethod === 'cod' ? 'pending' : 'pending';
 
       let customerId = null;
       
       if (session?.user) {
-        // Authenticated user - handle as before
+        // Authenticated user - find in customers table
         console.log('🔍 [DEBUG] Payment API - Processing authenticated user')
         console.log('🔍 [DEBUG] Payment API - User email:', session.user.email)
         
-        // First try to find customer in the customer table (for orders foreign key)
-        const customerResult = await connection.query('SELECT id FROM customer WHERE email = ?', [session.user.email]);
-        console.log('🔍 [DEBUG] Payment API - Customer lookup result:', customerResult)
+        // Find customer in customers table
+        const [customerRows] = await connection.query('SELECT id FROM customers WHERE email = ?', [session.user.email]);
+        console.log('🔍 [DEBUG] Payment API - Customer lookup result:', customerRows)
         
-        if (Array.isArray(customerResult) && customerResult.length > 0) {
-          customerId = (customerResult[0] as any).id;
+        if (Array.isArray(customerRows) && customerRows.length > 0) {
+          customerId = (customerRows[0] as any).id;
           console.log('🔍 [DEBUG] Payment API - Found existing customer with ID:', customerId)
         } else {
-          console.log('🔍 [DEBUG] Payment API - Customer not found in customer table, checking customers table')
-          // Customer not found in customer table, get from customers table and create in customer table
-          const customersResult = await connection.query('SELECT first_name, last_name, email, phone FROM customers WHERE email = ?', [session.user.email]);
-          console.log('🔍 [DEBUG] Payment API - Customers table lookup result:', customersResult)
-          
-          if (Array.isArray(customersResult) && customersResult.length > 0) {
-            const customer = customersResult[0] as any;
-            console.log('🔍 [DEBUG] Payment API - Found customer in customers table:', customer)
-            
-            // Create customer record in customer table
-            const insertResult = await connection.query(
-              'INSERT INTO customer (name, email, mobile, type) VALUES (?, ?, ?, ?)',
-              [`${customer.first_name} ${customer.last_name}`, customer.email, customer.phone, 'registered']
-            );
-            
-            customerId = (insertResult as any).insertId;
-            console.log('🔍 [DEBUG] Payment API - Created customer record in customer table with ID:', customerId)
-          } else {
-            console.error('❌ [DEBUG] Payment API - Customer not found in customers table either')
-          }
+          console.error('❌ [DEBUG] Payment API - Customer not found in customers table')
+          throw new Error('Customer not found in database');
         }
       } else {
         // Guest user - create customer record from guest data
@@ -256,14 +238,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         
         console.log('🔍 [DEBUG] Payment API - Guest customer info:', orderData.customerInfo)
         
-        // Create guest customer record in customer table
-        const insertResult = await connection.query(
-          'INSERT INTO customer (name, email, mobile, type) VALUES (?, ?, ?, ?)',
-          [orderData.customerInfo.name, orderData.customerInfo.email, orderData.customerInfo.phone, 'guest']
+        // Create guest customer record in customers table
+        const [insertResult] = await connection.query(
+          'INSERT INTO customers (first_name, last_name, email, phone, type) VALUES (?, ?, ?, ?, ?)',
+          [
+            orderData.customerInfo.name.split(' ')[0] || orderData.customerInfo.name, // first_name
+            orderData.customerInfo.name.split(' ').slice(1).join(' ') || '', // last_name
+            orderData.customerInfo.email, 
+            orderData.customerInfo.phone, 
+            'guest'
+          ]
         );
         
         customerId = (insertResult as any).insertId;
-        console.log('🔍 [DEBUG] Payment API - Created guest customer record in customer table with ID:', customerId)
+        console.log('🔍 [DEBUG] Payment API - Created guest customer record in customers table with ID:', customerId)
       }
       
       if (!customerId) {
@@ -273,7 +261,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       
       console.log('🔍 [DEBUG] Payment API - Final customer ID:', customerId)
 
-      const orderResult = await connection.query(
+      const [orderResult] = await connection.query(
         `INSERT INTO orders (
           customer_id, 
           total, 
@@ -331,7 +319,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
             subtotal: orderData.cart.subtotal,
             deliveryFee: orderData.cart.deliveryFee,
             total: orderData.cart.total,
-            status: 'Pending',
+            status: 'pending',
             paymentMethod: 'cod',
             customerInfo: orderData.customerInfo,
             deliveryAddress: orderData.deliveryAddress
@@ -367,7 +355,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
 
       console.log('🔍 [DEBUG] Payment API - Payment token stored in database')
 
-      return NextResponse.json({
+      const responseData = {
         success: true,
         message: 'Payment URL generated successfully',
         data: {
@@ -375,7 +363,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           paymentUrl,
           paymentToken
         }
-      });
+      };
+
+      console.log('🔍 [DEBUG] Payment API - Final Response Data:', responseData)
+      console.log('🔍 [DEBUG] Payment API - Payment URL in response:', responseData.data.paymentUrl)
+      console.log('🔍 [DEBUG] Payment API - Payment Token in response:', responseData.data.paymentToken)
+
+      return NextResponse.json(responseData);
     }
 
   } catch (error) {

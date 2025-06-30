@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { RowDataPacket } from 'mysql2';
 import { compare, hash } from 'bcryptjs';
-import { getJwtSecret } from '@/lib/auth-config';
+import { generateToken, generateSessionId } from '@/lib/middleware/auth';
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60; // 15 minutes in seconds
@@ -14,44 +14,6 @@ interface AdminUser extends RowDataPacket {
   password: string;
   login_attempts?: number;
   locked_until?: Date;
-}
-
-// Sign JWT using Web Crypto API
-async function signJWT(payload: any): Promise<string> {
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
-
-  const now = Math.floor(Date.now() / 1000);
-  const exp = now + (7 * 24 * 60 * 60); // 7 days
-
-  const finalPayload = {
-    ...payload,
-    iat: now,
-    exp
-  };
-
-  const encoder = new TextEncoder();
-  const headerB64 = btoa(JSON.stringify(header));
-  const payloadB64 = btoa(JSON.stringify(finalPayload));
-  const data = encoder.encode(`${headerB64}.${payloadB64}`);
-
-  // Import the secret key using the same function as verification
-  const JWT_SECRET = getJwtSecret('admin');
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(JWT_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-
-  // Sign the data
-  const signature = await crypto.subtle.sign('HMAC', key, data);
-  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-
-  return `${headerB64}.${payloadB64}.${signatureB64}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -135,10 +97,12 @@ export async function POST(request: NextRequest) {
     );
 
     // Generate JWT token
-    const token = await signJWT({
+    const sessionId = generateSessionId();
+    const token = generateToken({
+      type: 'admin',
       id: admin.id,
       username: admin.username,
-      role: 'admin'
+      sessionId
     });
 
     // Create the response with the cookie

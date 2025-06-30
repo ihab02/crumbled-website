@@ -5,9 +5,10 @@ import { getJwtSecret, authConfig } from '@/lib/auth-config';
 // Types for JWT payload
 interface AdminPayload {
   type: 'admin';
+  id: number;
   username: string;
-  email: string;
-  sessionId: string;
+  email?: string;
+  sessionId?: string;
 }
 
 interface CustomerPayload {

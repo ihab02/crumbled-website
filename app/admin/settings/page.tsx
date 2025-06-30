@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { Mail, ShoppingCart } from 'lucide-react';
+import { Mail, ShoppingCart, CreditCard } from 'lucide-react';
 
 export default function SettingsPage() {
   const [cartLifetime, setCartLifetime] = useState(2);
@@ -111,6 +111,27 @@ export default function SettingsPage() {
               >
                 {isSaving ? 'Saving...' : 'Save Settings'}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Payment Methods
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Configure which payment methods are available to customers during checkout.
+              </p>
+              <Link href="/admin/settings/payment-methods">
+                <Button className="bg-pink-600 hover:bg-pink-700">
+                  Manage Payment Methods
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>

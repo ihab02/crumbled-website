@@ -49,7 +49,9 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
 
   const fetchFlavor = async () => {
     try {
-      const response = await fetch(`/api/flavors/${params.id}`);
+      const response = await fetch(`/api/admin/flavors/${params.id}`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch flavor');
       }
@@ -94,8 +96,9 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
       const imageToRemove = formData.images[index];
       
       // Delete the image from the database
-      const response = await fetch(`/api/flavors/${params.id}/images/${imageToRemove.id}`, {
+      const response = await fetch(`/api/admin/flavors/${params.id}/images/${imageToRemove.id}`, {
         method: 'DELETE',
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -141,6 +144,7 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
         // Set as cover if it's the first image or if no other images are set as cover
         const shouldBeCover = newImages.length === 0 || !newImages.some(img => img.is_cover);
         newImages.push({
+          id: Date.now() + i, // Temporary ID for new images
           image_url: data.url,
           is_cover: shouldBeCover
         });
@@ -156,15 +160,16 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSaving(true);
 
     try {
       // First update the flavor data
-      const response = await fetch(`/api/flavors/${params.id}`, {
+      const response = await fetch(`/api/admin/flavors/${params.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: formData.name,
           description: formData.description,
@@ -181,15 +186,15 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
 
       // Then handle image updates
       if (images.length > 0) {
-        const formData = new FormData();
+        const imageFormData = new FormData();
         images.forEach((image, index) => {
-          formData.append('images', image);
-          formData.append(`is_cover_${index}`, image.is_cover ? 'true' : 'false');
+          imageFormData.append('images', image);
         });
 
-        const imageResponse = await fetch(`/api/flavors/${params.id}/images`, {
+        const imageResponse = await fetch(`/api/admin/flavors/${params.id}/images`, {
           method: 'POST',
-          body: formData,
+          body: imageFormData,
+          credentials: 'include'
         });
 
         if (!imageResponse.ok) {
@@ -206,8 +211,9 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
 
       if (removedImages.length > 0) {
         const deletePromises = removedImages.map(image =>
-          fetch(`/api/flavors/${params.id}/images/${image.id}`, {
+          fetch(`/api/admin/flavors/${params.id}/images/${image.id}`, {
             method: 'DELETE',
+            credentials: 'include'
           })
         );
 
@@ -220,7 +226,7 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
       console.error('Error updating flavor:', error);
       toast.error('Failed to update flavor');
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 

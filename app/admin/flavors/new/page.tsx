@@ -75,9 +75,10 @@ export default function NewFlavorPage() {
         }
       })
 
-      const response = await fetch('/api/flavors', {
+      const response = await fetch('/api/admin/flavors', {
         method: 'POST',
         body: formData,
+        credentials: 'include'
       })
 
       if (!response.ok) {

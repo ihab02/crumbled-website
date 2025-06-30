@@ -45,16 +45,16 @@ export async function POST(request: NextRequest) {
       
       // Update order status
       await databaseService.query(
-        'UPDATE orders SET status = ?, payment_status = ?, paymob_transaction_id = ?, updated_at = NOW() WHERE id = ?',
-        ['Confirmed', 'Paid', transactionId, orderId]
+        'UPDATE orders SET status = ?, payment_status = ?, transaction_id = ? WHERE id = ?',
+        ['confirmed', 'paid', transactionId, orderId]
       );
     } else if (transaction.is_canceled || transaction.is_voided) {
       message = 'Payment was cancelled';
       
       // Update order status
       await databaseService.query(
-        'UPDATE orders SET status = ?, payment_status = ?, paymob_transaction_id = ?, updated_at = NOW() WHERE id = ?',
-        ['Cancelled', 'Failed', transactionId, orderId]
+        'UPDATE orders SET status = ?, payment_status = ?, transaction_id = ? WHERE id = ?',
+        ['cancelled', 'failed', transactionId, orderId]
       );
       
       // Restore stock
@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
       
       // Update order status
       await databaseService.query(
-        'UPDATE orders SET status = ?, payment_status = ?, paymob_transaction_id = ?, updated_at = NOW() WHERE id = ?',
-        ['Failed', 'Failed', transactionId, orderId]
+        'UPDATE orders SET status = ?, payment_status = ?, transaction_id = ? WHERE id = ?',
+        ['failed', 'failed', transactionId, orderId]
       );
       
       // Restore stock

@@ -25,6 +25,7 @@ interface CheckoutConfirmRequest {
     city_id: number;
     zone_id: number;
   };
+  saveNewAddress?: boolean;
 }
 
 interface CheckoutConfirmResponse {
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
   try {
     console.log('🔍 [DEBUG] Confirm API called')
     const session = await getServerSession(authOptions);
-    const { guestData, selectedAddressId, useNewAddress, newAddress } = await request.json() as CheckoutConfirmRequest;
+    const { guestData, selectedAddressId, useNewAddress, newAddress, saveNewAddress } = await request.json() as CheckoutConfirmRequest;
     const cartId = await getOrCreateCart();
 
     console.log('🔍 [DEBUG] Confirm API - Session:', session?.user?.email)
@@ -354,6 +355,32 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
             zone_name: zone.zone_name,
             delivery_fee: Number(zone.delivery_fee)
           };
+
+          // Save new address if requested
+          if (saveNewAddress) {
+            try {
+              const customerResult = await databaseService.query(
+                'SELECT id FROM customers WHERE email = ?',
+                [session.user.email]
+              );
+
+              if (Array.isArray(customerResult) && customerResult.length > 0) {
+                const customerId = customerResult[0].id;
+                
+                await databaseService.query(
+                  `INSERT INTO customer_addresses 
+                   (customer_id, street_address, additional_info, city_id, zone_id, is_default, created_at) 
+                   VALUES (?, ?, ?, ?, ?, 0, NOW())`,
+                  [customerId, newAddress.street_address, newAddress.additional_info, newAddress.city_id, newAddress.zone_id]
+                );
+                
+                console.log('🔍 [DEBUG] Confirm API - New address saved for customer:', customerId);
+              }
+            } catch (error) {
+              console.error('❌ [DEBUG] Confirm API - Error saving new address:', error);
+              // Don't fail the order if address saving fails
+            }
+          }
         }
       } else if (selectedAddressId) {
         // Use selected saved address

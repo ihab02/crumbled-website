@@ -39,11 +39,11 @@ class EmailService {
   private async loadSettings() {
     if (this.settings) return;
 
-    const [settings] = await databaseService.query<EmailSettings[]>(
+    const settings = await databaseService.query<EmailSettings[]>(
       'SELECT * FROM email_settings WHERE is_active = true ORDER BY id DESC LIMIT 1'
     );
 
-    if (settings.length === 0) {
+    if (!Array.isArray(settings) || settings.length === 0) {
       throw new Error('No active email settings found');
     }
 
@@ -175,7 +175,7 @@ class EmailService {
   }
 
   public async sendOrderConfirmationEmail(to: string, orderId: string, orderDetails: any) {
-    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL}/images/logo-with-background.jpg`;
+    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/images/logo-with-background.jpg`;
     
     await this.sendEmail({
       to,
@@ -368,7 +368,7 @@ class EmailService {
                   hour: '2-digit',
                   minute: '2-digit'
                 })}</p>
-                <span class="status-badge status-${orderDetails.status === 'Confirmed' ? 'confirmed' : 'pending'}">
+                <span class="status-badge status-${orderDetails.status === 'confirmed' ? 'confirmed' : 'pending'}">
                   ${orderDetails.status}
                 </span>
                 <span class="payment-method payment-${orderDetails.paymentMethod === 'cod' ? 'cod' : 'paymob'}">
@@ -385,7 +385,7 @@ class EmailService {
                       ${item.flavorDetails ? `<div class="item-description">${item.flavorDetails}</div>` : ''}
                       <div class="item-description">Quantity: ${item.quantity}</div>
                     </div>
-                    <div class="item-price">$${item.total.toFixed(2)}</div>
+                    <div class="item-price">${item.total.toFixed(2)} EGP</div>
                   </div>
                 `).join('')}
               </div>
@@ -393,15 +393,15 @@ class EmailService {
               <div class="totals">
                 <div class="total-row">
                   <span>Subtotal:</span>
-                  <span>$${orderDetails.subtotal.toFixed(2)}</span>
+                  <span>${orderDetails.subtotal.toFixed(2)} EGP</span>
                 </div>
                 <div class="total-row">
                   <span>Delivery Fee:</span>
-                  <span>$${orderDetails.deliveryFee.toFixed(2)}</span>
+                  <span>${orderDetails.deliveryFee.toFixed(2)} EGP</span>
                 </div>
                 <div class="total-row">
                   <span>Total:</span>
-                  <span>$${orderDetails.total.toFixed(2)}</span>
+                  <span>${orderDetails.total.toFixed(2)} EGP</span>
                 </div>
               </div>
 
@@ -421,7 +421,7 @@ class EmailService {
                 <div class="section">
                   <h3>Payment Information</h3>
                   <p>You have chosen <strong>Cash on Delivery</strong> as your payment method. Please have the exact amount ready when your order arrives.</p>
-                  <p><strong>Total Amount Due:</strong> $${orderDetails.total.toFixed(2)}</p>
+                  <p><strong>Total Amount Due:</strong> ${orderDetails.total.toFixed(2)} EGP</p>
                 </div>
               ` : `
                 <div class="section">
@@ -433,7 +433,26 @@ class EmailService {
 
               <div class="section">
                 <h3>What's Next?</h3>
-                <p>We'll notify you when your order is being prepared and when it's out for delivery. You can track your order status by contacting our customer service.</p>
+                <p>We'll notify you when your order is being prepared and when it's out for delivery. You can track your order status by clicking the button below or contacting our customer service.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/track-order?email=${encodeURIComponent(orderDetails.customerInfo.email)}&tracking=${orderId}" 
+                     style="
+                       display: inline-block;
+                       padding: 15px 30px;
+                       background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
+                       color: white;
+                       text-decoration: none;
+                       border-radius: 8px;
+                       font-weight: 600;
+                       font-size: 16px;
+                       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                       transition: all 0.3s ease;
+                     "
+                     onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px rgba(0,0,0,0.15)'"
+                     onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 6px rgba(0,0,0,0.1)'">
+                    📦 Track My Order
+                  </a>
+                </div>
                 <p>If you have any questions about your order, please don't hesitate to contact us.</p>
               </div>
             </div>

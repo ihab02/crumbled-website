@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { 
   ArrowLeft, 
@@ -26,7 +27,8 @@ import {
   LogIn,
   Mail,
   Lock,
-  AlertTriangle
+  AlertTriangle,
+  Save
 } from "lucide-react"
 
 interface CheckoutData {
@@ -93,6 +95,12 @@ interface GuestData {
   additionalInfo?: string;
 }
 
+interface PaymentMethod {
+  enabled: boolean;
+  name: string;
+  description: string;
+}
+
 export default function NewCheckoutPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -114,6 +122,7 @@ export default function NewCheckoutPage() {
     city_id: 1,
     zone_id: 1
   })
+  const [saveNewAddress, setSaveNewAddress] = useState(false)
   const [selectedCity, setSelectedCity] = useState<string>('1')
   const [selectedZone, setSelectedZone] = useState<string>('')
   const [deliveryFee, setDeliveryFee] = useState(50)
@@ -130,6 +139,7 @@ export default function NewCheckoutPage() {
   const [orderData, setOrderData] = useState<any>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'paymob'>('cod')
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState<Record<string, PaymentMethod>>({})
   const [outOfStockItems, setOutOfStockItems] = useState<Array<{
     id: number
     name: string
@@ -151,7 +161,26 @@ export default function NewCheckoutPage() {
     console.log('🔍 Session data:', session)
     console.log('🔍 Is logged in:', isLoggedIn)
     startCheckout()
+    fetchPaymentMethods()
   }, [isSessionLoading])
+
+  const fetchPaymentMethods = async () => {
+    try {
+      const response = await fetch('/api/payment-methods')
+      const data = await response.json()
+      
+      if (data.success) {
+        setEnabledPaymentMethods(data.paymentMethods)
+        // Set default payment method to first available one
+        const methodKeys = Object.keys(data.paymentMethods)
+        if (methodKeys.length > 0) {
+          setPaymentMethod(methodKeys[0] as 'cod' | 'paymob')
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching payment methods:', error)
+    }
+  }
 
   const startCheckout = async () => {
     try {
@@ -339,7 +368,8 @@ export default function NewCheckoutPage() {
         guestData: checkoutData?.userType === 'guest' ? guestData : undefined,
         selectedAddressId: checkoutData?.userType === 'registered' ? selectedAddressId : undefined,
         useNewAddress: checkoutData?.userType === 'registered' ? useNewAddress : undefined,
-        newAddress: checkoutData?.userType === 'registered' && useNewAddress ? newAddress : undefined
+        newAddress: checkoutData?.userType === 'registered' && useNewAddress ? newAddress : undefined,
+        saveNewAddress: checkoutData?.userType === 'registered' && useNewAddress ? saveNewAddress : undefined
       }
 
       console.log('🔍 [DEBUG] Confirm Order Request Data:', requestData)
@@ -348,6 +378,7 @@ export default function NewCheckoutPage() {
       console.log('🔍 [DEBUG] Selected Address ID:', selectedAddressId)
       console.log('🔍 [DEBUG] Use New Address:', useNewAddress)
       console.log('🔍 [DEBUG] New Address:', newAddress)
+      console.log('🔍 [DEBUG] Save New Address:', saveNewAddress)
 
       const response = await fetch('/api/checkout/confirm', {
         method: 'POST',
@@ -416,6 +447,11 @@ export default function NewCheckoutPage() {
 
       const result = await response.json()
       console.log('🔍 [DEBUG] Payment API Response Data:', result)
+      console.log('🔍 [DEBUG] Payment API Response Data Type:', typeof result)
+      console.log('🔍 [DEBUG] Payment API Response Data Keys:', Object.keys(result))
+      console.log('🔍 [DEBUG] Payment API Response Data.data:', result.data)
+      console.log('🔍 [DEBUG] Payment API Response Data.data Type:', typeof result.data)
+      console.log('🔍 [DEBUG] Payment API Response Data.data Keys:', result.data ? Object.keys(result.data) : 'No data object')
       
       if (response.ok) {
         if (paymentMethod === 'cod') {
@@ -423,8 +459,18 @@ export default function NewCheckoutPage() {
           toast.success('Order placed successfully!')
           router.push('/checkout/success')
         } else {
-          console.log('✅ [DEBUG] Paymob payment URL generated:', result.data.paymentUrl)
-          window.location.href = result.data.paymentUrl
+          console.log('✅ [DEBUG] Paymob payment URL generated:', result.data?.paymentUrl)
+          console.log('✅ [DEBUG] Paymob payment URL type:', typeof result.data?.paymentUrl)
+          console.log('✅ [DEBUG] Full result.data object:', result.data)
+          
+          if (result.data?.paymentUrl) {
+            console.log('✅ [DEBUG] Redirecting to Paymob URL:', result.data.paymentUrl)
+            window.location.href = result.data.paymentUrl
+          } else {
+            console.error('❌ [DEBUG] No payment URL in response')
+            console.error('❌ [DEBUG] Response data:', result.data)
+            toast.error('Payment URL not received from server')
+          }
         }
       } else {
         console.error('❌ [DEBUG] Payment API Error:', result.error)
@@ -790,6 +836,22 @@ export default function NewCheckoutPage() {
                                   </Select>
                                 </div>
                               </div>
+                              
+                              {/* Save Address Option */}
+                              <div className="flex items-center space-x-2 mt-4">
+                                <Checkbox
+                                  id="save-new-address"
+                                  checked={saveNewAddress}
+                                  onCheckedChange={(checked) => setSaveNewAddress(checked as boolean)}
+                                  className="text-pink-600 focus:ring-pink-500"
+                                />
+                                <Label htmlFor="save-new-address" className="cursor-pointer text-sm text-gray-700">
+                                  <div className="flex items-center gap-2">
+                                    <Save className="h-4 w-4" />
+                                    Save this address to my account for future orders
+                                  </div>
+                                </Label>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1039,57 +1101,46 @@ export default function NewCheckoutPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
                     <Label className="text-base font-medium">Payment Method</Label>
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          id="payment-cod"
-                          name="paymentMethod"
-                          value="cod"
-                          checked={paymentMethod === 'cod'}
-                          onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
-                          className="text-pink-600 focus:ring-pink-500"
-                        />
-                        <Label htmlFor="payment-cod" className="flex-1 cursor-pointer">
-                          <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                                <span className="text-green-600 font-bold text-sm">$</span>
-                              </div>
-                              <div>
-                                <p className="font-medium">Cash on Delivery</p>
-                                <p className="text-sm text-gray-600">Pay when you receive your order</p>
-                              </div>
-                            </div>
-                          </div>
-                        </Label>
+                    {Object.keys(enabledPaymentMethods).length === 0 ? (
+                      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+                        <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>
                       </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          id="payment-paymob"
-                          name="paymentMethod"
-                          value="paymob"
-                          checked={paymentMethod === 'paymob'}
-                          onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
-                          className="text-pink-600 focus:ring-pink-500"
-                        />
-                        <Label htmlFor="payment-paymob" className="flex-1 cursor-pointer">
-                          <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                <CreditCard className="h-4 w-4 text-blue-600" />
+                    ) : (
+                      <div className="space-y-3">
+                        {Object.entries(enabledPaymentMethods).map(([methodKey, method]) => (
+                          <div key={methodKey} className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              id={`payment-${methodKey}`}
+                              name="paymentMethod"
+                              value={methodKey}
+                              checked={paymentMethod === methodKey}
+                              onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
+                              className="text-pink-600 focus:ring-pink-500"
+                            />
+                            <Label htmlFor={`payment-${methodKey}`} className="flex-1 cursor-pointer">
+                              <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                    methodKey === 'cod' ? 'bg-green-100' : 'bg-blue-100'
+                                  }`}>
+                                    {methodKey === 'cod' ? (
+                                      <span className="text-green-600 font-bold text-sm">$</span>
+                                    ) : (
+                                      <CreditCard className="h-4 w-4 text-blue-600" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">{method.name}</p>
+                                    <p className="text-sm text-gray-600">{method.description}</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium">Pay with Paymob</p>
-                                <p className="text-sm text-gray-600">Secure online payment</p>
-                              </div>
-                            </div>
+                            </Label>
                           </div>
-                        </Label>
+                        ))}
                       </div>
-                    </div>
+                    )}
                   </div>
                   <div className="flex justify-between mt-8">
                     <Button variant="outline" onClick={() => setStep(1)}>

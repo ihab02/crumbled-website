@@ -44,18 +44,18 @@ export async function POST(request: NextRequest) {
 
     if (type === 'TRANSACTION') {
       // Update order status based on payment result
-      let orderStatus = 'Pending';
-      let paymentStatus = 'Pending';
+      let orderStatus = 'pending';
+      let paymentStatus = 'pending';
 
       if (success && !error_occured && !is_canceled && !is_voided) {
-        orderStatus = 'Confirmed';
-        paymentStatus = 'Paid';
+        orderStatus = 'confirmed';
+        paymentStatus = 'paid';
       } else if (is_canceled || is_voided) {
-        orderStatus = 'Cancelled';
-        paymentStatus = 'Failed';
+        orderStatus = 'cancelled';
+        paymentStatus = 'failed';
       } else if (error_occured) {
-        orderStatus = 'Failed';
-        paymentStatus = 'Failed';
+        orderStatus = 'failed';
+        paymentStatus = 'failed';
       }
 
       // Update order in database
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Order ${ourOrderId} updated: ${orderStatus} / ${paymentStatus}`);
 
       // If payment failed, restore stock
-      if (paymentStatus === 'Failed') {
+      if (paymentStatus === 'failed') {
         // Get order items to determine what stock to restore
         const [orderItemsResult] = await databaseService.query(
           `SELECT oi.product_id, oi.quantity, oi.flavor_details, p.is_pack, p.flavor_size
@@ -115,53 +115,43 @@ export async function POST(request: NextRequest) {
       }
 
       // Send email notification for successful payments
-      if (paymentStatus === 'Paid') {
+      if (paymentStatus === 'paid') {
         try {
           // Get order details for email
-          const [orderResult] = await databaseService.query(
-            `SELECT o.*, 
-                    GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.flavor_details) SEPARATOR ', ') as items_summary
-             FROM orders o
-             LEFT JOIN order_items oi ON o.id = oi.order_id
-             WHERE o.id = ?
-             GROUP BY o.id`,
+          const [orderDetailsResult] = await databaseService.query(
+            `SELECT o.*, c.first_name, c.last_name, c.email, c.phone 
+             FROM orders o 
+             JOIN customers c ON o.customer_id = c.id 
+             WHERE o.id = ?`,
             [ourOrderId]
           );
 
-          if (Array.isArray(orderResult) && orderResult.length > 0) {
-            const order = orderResult[0];
+          if (Array.isArray(orderDetailsResult) && orderDetailsResult.length > 0) {
+            const orderDetails = orderDetailsResult[0] as any;
             
-            // Send order confirmation email
             await emailService.sendOrderConfirmationEmail(
-              order.customer_email,
+              orderDetails.email,
               ourOrderId.toString(),
               {
-                items: [{ 
-                  name: 'Order Items', 
-                  total: order.total_amount,
-                  flavorDetails: order.items_summary || 'Various items'
-                }],
-                subtotal: order.subtotal,
-                deliveryFee: order.delivery_fee,
-                total: order.total_amount,
-                status: 'Confirmed',
+                items: [], // TODO: Get actual order items
+                subtotal: orderDetails.total,
+                deliveryFee: 0, // TODO: Get actual delivery fee
+                total: orderDetails.total,
+                status: 'confirmed',
                 paymentMethod: 'paymob',
                 customerInfo: {
-                  name: order.customer_name,
-                  email: order.customer_email,
-                  phone: order.customer_phone
+                  name: `${orderDetails.first_name} ${orderDetails.last_name}`,
+                  email: orderDetails.email,
+                  phone: orderDetails.phone
                 },
-                deliveryAddress: {
-                  street_address: order.delivery_address,
-                  city_name: order.delivery_city,
-                  zone_name: order.delivery_zone
-                }
+                deliveryAddress: {} // TODO: Get actual delivery address
               }
             );
-            console.log(`✉️ Order confirmation email sent for order ${ourOrderId}`);
+            
+            console.log('✅ Order confirmation email sent for successful Paymob payment');
           }
         } catch (emailError) {
-          console.error(`❌ Failed to send order confirmation email for order ${ourOrderId}:`, emailError);
+          console.error('❌ Failed to send order confirmation email:', emailError);
           // Don't fail the webhook if email fails
         }
       }

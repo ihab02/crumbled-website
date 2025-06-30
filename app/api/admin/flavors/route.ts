@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { cookies } from 'next/headers';
+import { writeFile } from 'fs/promises';
+import { join } from 'path';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -51,6 +53,14 @@ async function verifyJWT(token: string): Promise<any> {
   }
 }
 
+// Helper function to generate slug
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
 export async function GET() {
   try {
     const cookieStore = cookies();
@@ -85,8 +95,8 @@ export async function GET() {
     // Group flavors and their images
     const flavorMap = new Map();
     
-    // Convert single object to array if needed
-    const flavorsArray = Array.isArray(flavors) ? flavors : [flavors];
+    // Ensure flavors is always an array
+    const flavorsArray = Array.isArray(flavors) ? flavors : (flavors ? [flavors] : []);
     
     flavorsArray.forEach(row => {
       if (!flavorMap.has(row.id)) {
@@ -124,6 +134,80 @@ export async function GET() {
     console.error('Error fetching flavors:', error);
     return NextResponse.json(
       { error: 'Failed to fetch flavors' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const cookieStore = cookies();
+    const adminToken = cookieStore.get('adminToken')?.value;
+
+    if (!adminToken) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    try {
+      const decoded = await verifyJWT(adminToken);
+      if (decoded.role !== 'admin') {
+        return new NextResponse('Unauthorized', { status: 401 });
+      }
+    } catch (error) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    const formData = await request.formData();
+    const name = formData.get('name') as string;
+    const description = formData.get('description') as string;
+    const miniPrice = formData.get('miniPrice') as string;
+    const mediumPrice = formData.get('mediumPrice') as string;
+    const largePrice = formData.get('largePrice') as string;
+    const enabled = formData.get('enabled') === 'true';
+    const images = formData.getAll('images') as File[];
+    const coverImageIndex = formData.get('coverImageIndex') as string;
+
+    // Generate slug from name
+    const slug = generateSlug(name);
+
+    // Insert the flavor first
+    const [result] = await databaseService.query(
+      'INSERT INTO flavors (name, description, mini_price, medium_price, large_price, is_active, slug, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, description, miniPrice, mediumPrice, largePrice, enabled, slug, 'Classic']
+    ) as any;
+
+    const flavorId = result.insertId;
+
+    // Handle image uploads
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      const isCover = i === parseInt(coverImageIndex);
+      
+      // Generate a unique filename
+      const timestamp = Date.now();
+      const uniqueFilename = `${timestamp}-${image.name}`;
+      
+      // Save the file to the filesystem
+      const bytes = await image.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const uploadDir = join(process.cwd(), 'public', 'uploads', 'flavors');
+      const filePath = join(uploadDir, uniqueFilename);
+      await writeFile(filePath, buffer);
+      
+      // Store the relative URL in the database
+      const imageUrl = `/uploads/flavors/${uniqueFilename}`;
+      
+      await databaseService.query(
+        'INSERT INTO flavor_images (flavor_id, image_url, is_cover) VALUES (?, ?, ?)',
+        [flavorId, imageUrl, isCover]
+      );
+    }
+
+    return NextResponse.json({ success: true, id: flavorId });
+  } catch (error) {
+    console.error('Error creating flavor:', error);
+    return NextResponse.json(
+      { error: 'Failed to create flavor' },
       { status: 500 }
     );
   }
