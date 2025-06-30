@@ -17,6 +17,15 @@ interface CheckoutConfirmRequest {
     zone: string;
     additionalInfo?: string;
   };
+  guest?: {
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    zone: string;
+    additionalInfo?: string;
+  };
   selectedAddressId?: number;
   useNewAddress?: boolean;
   newAddress?: {
@@ -124,7 +133,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
   try {
     console.log('🔍 [DEBUG] Confirm API called')
     const session = await getServerSession(authOptions);
-    const { guestData, selectedAddressId, useNewAddress, newAddress, saveNewAddress } = await request.json() as CheckoutConfirmRequest;
+    const requestBody = await request.json() as CheckoutConfirmRequest;
+    
+    // Handle both field names for backward compatibility
+    const guestData = requestBody.guestData || requestBody.guest;
+    const { selectedAddressId, useNewAddress, newAddress, saveNewAddress } = requestBody;
+    
+    console.log('🔍 [DEBUG] Confirm API - Request body:', JSON.stringify(requestBody, null, 2))
+    console.log('🔍 [DEBUG] Confirm API - Guest data:', JSON.stringify(guestData, null, 2))
+    
     const cartId = await getOrCreateCart();
 
     console.log('🔍 [DEBUG] Confirm API - Session:', session?.user?.email)
@@ -309,9 +326,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }
 
       // Calculate total for this item
-      const baseTotal = Number(item.base_price) * item.quantity;
-      const flavorTotal = flavors.reduce((sum, flavor) => sum + (Number(flavor.price) * flavor.quantity), 0);
+      const baseTotal = item.base_price * item.quantity;
+      const flavorTotal = flavors.reduce((sum, flavor) => sum + (flavor.price * flavor.quantity), 0);
       const total = baseTotal + flavorTotal;
+
+      console.log(`🔍 [DEBUG] Confirm API - Item ${item.id} total calculation:`)
+      console.log(`  - Base price: ${item.base_price}`)
+      console.log(`  - Quantity: ${item.quantity}`)
+      console.log(`  - Base total: ${baseTotal}`)
+      console.log(`  - Flavors:`, flavors.map(f => `${f.name} (${f.price} x ${f.quantity} = ${f.price * f.quantity})`))
+      console.log(`  - Flavor total: ${flavorTotal}`)
+      console.log(`  - Final total: ${total}`)
 
       return {
         id: item.id,
@@ -328,8 +353,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       };
     }));
 
-    const subtotal = items.reduce((sum, item) => sum + Number(item.total), 0);
+    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+    console.log(`🔍 [DEBUG] Confirm API - Final calculations:`)
+    console.log(`  - Subtotal: ${subtotal}`)
+    console.log(`  - Delivery fee: ${deliveryFee}`)
+    console.log(`  - Total: ${subtotal + deliveryFee}`)
 
     // Handle delivery address
     let deliveryAddress;
@@ -340,54 +370,28 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       // Registered user
       if (useNewAddress && newAddress) {
         // Use new address
-        const zoneResult = await databaseService.query(
+        const [zoneResult] = await databaseService.query(
           'SELECT z.delivery_fee, c.name as city_name, z.name as zone_name FROM zones z JOIN cities c ON z.city_id = c.id WHERE z.id = ?',
           [newAddress.zone_id]
         );
 
         if (Array.isArray(zoneResult) && zoneResult.length > 0) {
           const zone = zoneResult[0];
-          deliveryFee = Number(zone.delivery_fee);
+          deliveryFee = zone.delivery_fee;
           deliveryAddress = {
             street_address: newAddress.street_address,
             additional_info: newAddress.additional_info,
             city_name: zone.city_name,
             zone_name: zone.zone_name,
-            delivery_fee: Number(zone.delivery_fee)
+            delivery_fee: zone.delivery_fee
           };
-
-          // Save new address if requested
-          if (saveNewAddress) {
-            try {
-              const customerResult = await databaseService.query(
-                'SELECT id FROM customers WHERE email = ?',
-                [session.user.email]
-              );
-
-              if (Array.isArray(customerResult) && customerResult.length > 0) {
-                const customerId = customerResult[0].id;
-                
-                await databaseService.query(
-                  `INSERT INTO customer_addresses 
-                   (customer_id, street_address, additional_info, city_id, zone_id, is_default, created_at) 
-                   VALUES (?, ?, ?, ?, ?, 0, NOW())`,
-                  [customerId, newAddress.street_address, newAddress.additional_info, newAddress.city_id, newAddress.zone_id]
-                );
-                
-                console.log('🔍 [DEBUG] Confirm API - New address saved for customer:', customerId);
-              }
-            } catch (error) {
-              console.error('❌ [DEBUG] Confirm API - Error saving new address:', error);
-              // Don't fail the order if address saving fails
-            }
-          }
         }
       } else if (selectedAddressId) {
         // Use selected saved address
         console.log('🔍 [DEBUG] Confirm API - Looking up saved address ID:', selectedAddressId)
         console.log('🔍 [DEBUG] Confirm API - User email:', session.user.email)
         
-        const addressResult = await databaseService.query(
+        const [addressResult] = await databaseService.query(
           `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee
            FROM customer_addresses ca
            JOIN cities c ON ca.city_id = c.id
@@ -400,13 +404,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
         if (Array.isArray(addressResult) && addressResult.length > 0) {
           const address = addressResult[0];
-          deliveryFee = Number(address.delivery_fee);
+          deliveryFee = address.delivery_fee;
           deliveryAddress = {
             street_address: address.street_address,
             additional_info: address.additional_info,
             city_name: address.city_name,
             zone_name: address.zone_name,
-            delivery_fee: Number(address.delivery_fee)
+            delivery_fee: address.delivery_fee
           };
           console.log('🔍 [DEBUG] Confirm API - Delivery address set:', deliveryAddress)
         } else {
@@ -415,7 +419,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }
 
       // Get customer info
-      const userResult = await databaseService.query(
+      const [userResult] = await databaseService.query(
         'SELECT first_name, last_name, email, phone FROM customers WHERE email = ?',
         [session.user.email]
       );
@@ -430,7 +434,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }
     } else {
       // Guest user
+      console.log('🔍 [DEBUG] Confirm API - Processing guest user')
       if (!guestData) {
+        console.error('❌ [DEBUG] Confirm API - No guest data provided')
         return NextResponse.json({
           success: false,
           message: 'Guest data is required',
@@ -438,22 +444,53 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         }, { status: 400 });
       }
 
+      console.log('🔍 [DEBUG] Confirm API - Guest data received:', JSON.stringify(guestData, null, 2))
+
+      // Convert zone to number if it's a string
+      const zoneId = typeof guestData.zone === 'string' ? parseInt(guestData.zone, 10) : guestData.zone;
+      
+      console.log('🔍 [DEBUG] Confirm API - Zone ID (original):', guestData.zone)
+      console.log('🔍 [DEBUG] Confirm API - Zone ID (converted):', zoneId)
+      
+      if (isNaN(zoneId)) {
+        console.error('❌ [DEBUG] Confirm API - Invalid zone ID:', guestData.zone)
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid zone ID',
+          error: 'Zone ID must be a valid number'
+        }, { status: 400 });
+      }
+
       // Get delivery fee for guest address
+      console.log('🔍 [DEBUG] Confirm API - Querying zone with ID:', zoneId)
       const zoneResult = await databaseService.query(
         'SELECT z.delivery_fee, c.name as city_name, z.name as zone_name FROM zones z JOIN cities c ON z.city_id = c.id WHERE z.id = ?',
-        [guestData.zone]
+        [zoneId]
       );
 
-      if (Array.isArray(zoneResult) && zoneResult.length > 0) {
-        const zone = zoneResult[0];
-        deliveryFee = Number(zone.delivery_fee);
+      console.log('🔍 [DEBUG] Confirm API - Zone query result:', zoneResult)
+
+      // Handle both array and single object results
+      const zoneArray = Array.isArray(zoneResult) ? zoneResult : (zoneResult ? [zoneResult] : []);
+
+      if (zoneArray.length > 0) {
+        const zone = zoneArray[0];
+        deliveryFee = zone.delivery_fee;
         deliveryAddress = {
           street_address: guestData.address,
           additional_info: guestData.additionalInfo,
           city_name: zone.city_name,
           zone_name: zone.zone_name,
-          delivery_fee: Number(zone.delivery_fee)
+          delivery_fee: zone.delivery_fee
         };
+        console.log('🔍 [DEBUG] Confirm API - Delivery address set:', deliveryAddress)
+      } else {
+        console.error('❌ [DEBUG] Confirm API - Zone not found for ID:', zoneId)
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid zone selected',
+          error: 'Zone not found in database'
+        }, { status: 400 });
       }
 
       customerInfo = {
@@ -461,6 +498,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         email: guestData.email,
         phone: guestData.phone
       };
+      console.log('🔍 [DEBUG] Confirm API - Customer info set:', customerInfo)
     }
 
     if (!deliveryAddress) {
@@ -480,15 +518,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     }
 
     const total = subtotal + deliveryFee;
-
-    console.log('🔍 [DEBUG] Confirm API - Total calculation:', {
-      subtotal,
-      deliveryFee,
-      total,
-      subtotalType: typeof subtotal,
-      deliveryFeeType: typeof deliveryFee,
-      totalType: typeof total
-    });
 
     return NextResponse.json({
       success: true,

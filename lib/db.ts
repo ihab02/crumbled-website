@@ -20,7 +20,7 @@ export async function testConnection() {
   let connection;
   try {
     connection = await pool.getConnection();
-    const [result] = await connection.query<mysql.RowDataPacket[]>('SELECT NOW() as current_time, VERSION() as mysql_version');
+    const [result] = await connection.query('SELECT NOW() as `current_time`, VERSION() as mysql_version');
     return {
       success: true,
       message: "Database connected successfully",
@@ -46,7 +46,7 @@ export async function saveOrder(orderData: any) {
     connection = await pool.getConnection();
 
     // Check if orders table exists
-    const [tableCheck] = await connection.query<mysql.RowDataPacket[]>(
+    const [tableCheck] = await connection.query(
       "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'crumbled_nextDB' AND table_name = 'orders'"
     );
 
@@ -60,7 +60,7 @@ export async function saveOrder(orderData: any) {
     }
 
     // Start transaction by inserting order first
-    const [orderResult] = await connection.query<mysql.ResultSetHeader>(
+    const [orderResult] = await connection.query(
       `INSERT INTO orders (
         customer_name, 
         customer_email, 
@@ -117,7 +117,7 @@ export async function saveOrder(orderData: any) {
       // Update stock for individual items
       if (!item.isBundle) {
         // For regular items, reduce stock directly
-        const [stockUpdate] = await connection.query<mysql.RowDataPacket[]>(
+        const [stockUpdate] = await connection.query(
           `UPDATE stock 
            SET quantity = quantity - ?, updated_at = CURRENT_TIMESTAMP
            WHERE product_id = ?
@@ -135,7 +135,7 @@ export async function saveOrder(orderData: any) {
         // For bundles, reduce stock for each bundled item
         if (item.bundleItems && Array.isArray(item.bundleItems)) {
           for (const bundleItem of item.bundleItems) {
-            const [stockUpdate] = await connection.query<mysql.RowDataPacket[]>(
+            const [stockUpdate] = await connection.query(
               `UPDATE stock 
                SET quantity = quantity - ?, updated_at = CURRENT_TIMESTAMP
                WHERE product_id = ?
@@ -170,7 +170,7 @@ export async function getOrders() {
     connection = await pool.getConnection();
 
     // Check if orders table exists
-    const [tableCheck] = await connection.query<mysql.RowDataPacket[]>(
+    const [tableCheck] = await connection.query(
       "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'crumbled_nextDB' AND table_name = 'orders'"
     );
 
@@ -178,7 +178,7 @@ export async function getOrders() {
       return { success: false, error: "Orders table does not exist. Please set up the database first." }
     }
 
-    const [orders] = await connection.query<mysql.RowDataPacket[]>(
+    const [orders] = await connection.query(
       "SELECT * FROM orders ORDER BY created_at DESC"
     );
     return { success: true, orders }
@@ -197,7 +197,7 @@ export async function getOrderDetails(orderId: number) {
   try {
     connection = await pool.getConnection();
 
-    const [order] = await connection.query<mysql.RowDataPacket[]>(
+    const [order] = await connection.query(
       "SELECT * FROM orders WHERE id = ?",
       [orderId]
     );
@@ -206,7 +206,7 @@ export async function getOrderDetails(orderId: number) {
       return { success: false, error: "Order not found" }
     }
 
-    const [items] = await connection.query<mysql.RowDataPacket[]>(
+    const [items] = await connection.query(
       "SELECT * FROM order_items WHERE order_id = ?",
       [orderId]
     );
@@ -227,16 +227,16 @@ export async function getOrderByTracking(trackingId: string, email: string) {
   try {
     connection = await pool.getConnection();
 
-    const [order] = await connection.query<mysql.RowDataPacket[]>(
+    const [order] = await connection.query(
       "SELECT * FROM orders WHERE tracking_id = ? AND customer_email = ?",
       [trackingId, email]
     );
 
     if (order.length === 0) {
-      return { success: false, error: "Order not found" }
+      return { success: false, error: "Order not found or email doesn't match" }
     }
 
-    const [items] = await connection.query<mysql.RowDataPacket[]>(
+    const [items] = await connection.query(
       "SELECT * FROM order_items WHERE order_id = ?",
       [order[0].id]
     );
@@ -256,13 +256,11 @@ export async function updateOrderStatus(orderId: number, status: string) {
   let connection;
   try {
     connection = await pool.getConnection();
-
-    await connection.query(
+    const [result] = await connection.query(
       "UPDATE orders SET order_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
       [status, orderId]
     );
-
-    return { success: true }
+    return { success: true, message: "Order status updated successfully" }
   } catch (error) {
     console.error("Error updating order status:", error)
     return { success: false, error: error instanceof Error ? error.message : "Database operation failed" }

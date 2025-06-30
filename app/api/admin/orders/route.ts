@@ -70,11 +70,15 @@ export async function GET(request: NextRequest) {
       orders.map(async (order) => {
         try {
           // Fetch order items
-          const orderItemsResult = await db.query(`
+          console.log(`🔍 [DEBUG] Fetching order items for order ${order.id}`)
+          
+          // Try the new schema first (product_instance based)
+          let orderItemsResult = await db.query(`
             SELECT 
               oi.id,
               oi.quantity,
               oi.unit_price,
+              oi.product_instance_id,
               pi.product_type,
               pi.product_id,
               pi.size_id,
@@ -93,7 +97,31 @@ export async function GET(request: NextRequest) {
             WHERE oi.order_id = ?
           `, [order.id])
 
-          const orderItems = safeExtractArray(orderItemsResult)
+          let orderItems = safeExtractArray(orderItemsResult)
+          console.log(`🔍 [DEBUG] New schema order items result for order ${order.id}:`, orderItems)
+          
+          // If no items found with new schema, try old schema
+          if (orderItems.length === 0) {
+            console.log(`🔍 [DEBUG] No items found with new schema, trying old schema for order ${order.id}`)
+            orderItemsResult = await db.query(`
+              SELECT 
+                oi.id,
+                oi.quantity,
+                oi.unit_price,
+                'legacy' as product_type,
+                oi.product_instance_id as product_id,
+                1 as size_id,
+                'Standard' as size_label,
+                'Legacy Product' as product_name
+              FROM order_items oi
+              WHERE oi.order_id = ?
+            `, [order.id])
+            
+            orderItems = safeExtractArray(orderItemsResult)
+            console.log(`🔍 [DEBUG] Old schema order items result for order ${order.id}:`, orderItems)
+          }
+          
+          console.log(`🔍 [DEBUG] Final order items for order ${order.id}:`, orderItems)
 
           // Get flavors for cookie packs
           const itemsWithFlavors = await Promise.all(
@@ -102,14 +130,14 @@ export async function GET(request: NextRequest) {
                 if (item.product_type === 'cookie_pack') {
                   const flavorsResult = await db.query(`
                     SELECT 
-                      cf.name as flavor_name,
+                      f.name as flavor_name,
                       pif.quantity as flavor_quantity,
                       cs.label as size_label
                     FROM product_instance_flavor pif
-                    LEFT JOIN cookie_flavor cf ON pif.flavor_id = cf.id
+                    LEFT JOIN flavors f ON pif.flavor_id = f.id
                     LEFT JOIN cookie_size cs ON pif.size_id = cs.id
                     WHERE pif.product_instance_id = ?
-                  `, [item.product_id])
+                  `, [item.product_instance_id])
                   
                   const flavors = safeExtractArray(flavorsResult)
                   

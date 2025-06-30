@@ -1,7 +1,11 @@
 {
-  "/page": "app/page.js",
-  "/api/cart/route": "app/api/cart/route.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/api/flavors/route": "app/api/flavors/route.js",
-  "/flavors/page": "app/flavors/page.js"
+  "/api/admin/orders/route": "app/api/admin/orders/route.js",
+  "/api/auth/admin/login/route": "app/api/auth/admin/login/route.js",
+  "/api/cart/route": "app/api/cart/route.js",
+  "/api/admin/auth/check/route": "app/api/admin/auth/check/route.js",
+  "/admin/page": "app/admin/page.js",
+  "/admin/login/page": "app/admin/login/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/admin/orders/page": "app/admin/orders/page.js"
 }

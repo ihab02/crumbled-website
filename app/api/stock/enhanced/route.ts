@@ -1,17 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { databaseService } from '@/lib/services/databaseService'
 
 export async function GET() {
   try {
     // Check if enhanced_stock table exists
-    const tableCheck = await sql`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'enhanced_stock'
-      );
-    `
+    const tableCheck = await databaseService.query(`
+      SELECT COUNT(*) as count
+      FROM information_schema.tables 
+      WHERE table_schema = 'crumbled_nextDB' 
+      AND table_name = 'enhanced_stock'
+    `)
 
-    if (!tableCheck[0].exists) {
+    if (tableCheck[0].count === 0) {
       return NextResponse.json({
         success: false,
         error: "Enhanced stock table does not exist. Please run database setup first.",
@@ -21,7 +21,7 @@ export async function GET() {
     }
 
     // Get enhanced stock data with proper type casting
-    const stockData = await sql`
+    const stockData = await databaseService.query(`
       SELECT 
         es.id,
         es.flavor_id,
@@ -45,7 +45,7 @@ export async function GET() {
       FROM enhanced_stock es
       JOIN flavors f ON es.flavor_id = f.id
       ORDER BY f.name, es.size_type
-    `
+    `)
 
     // Group by flavor for easier frontend consumption
     const groupedStock = stockData.reduce((acc: any, item: any) => {
@@ -129,7 +129,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Get current stock data
-    const currentStock = await sql`
+    const currentStock = await databaseService.query(`
       SELECT 
         es.id,
         es.quantity,
@@ -137,9 +137,9 @@ export async function PUT(request: NextRequest) {
         f.name as flavor_name
       FROM enhanced_stock es
       JOIN flavors f ON es.flavor_id = f.id
-      WHERE es.flavor_id = ${flavorId}
-      AND es.size_type = ${sizeType}
-    `
+      WHERE es.flavor_id = ?
+      AND es.size_type = ?
+    `, [flavorId, sizeType])
 
     if (currentStock.length === 0) {
       return NextResponse.json(
@@ -163,17 +163,17 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update stock
-    await sql`
+    await databaseService.query(`
       UPDATE enhanced_stock
       SET 
-        quantity = ${quantity},
+        quantity = ?,
         updated_at = CURRENT_TIMESTAMP
-      WHERE flavor_id = ${flavorId}
-      AND size_type = ${sizeType}
-    `
+      WHERE flavor_id = ?
+      AND size_type = ?
+    `, [quantity, flavorId, sizeType])
 
     // Record stock movement
-    await sql`
+    await databaseService.query(`
       INSERT INTO stock_movements (
         stock_inventory_id,
         movement_type,
@@ -183,16 +183,8 @@ export async function PUT(request: NextRequest) {
         reason,
         created_by
       )
-      VALUES (
-        ${currentStock[0].id},
-        'adjustment',
-        ${quantity - currentStock[0].quantity},
-        ${currentStock[0].quantity},
-        ${quantity},
-        'Manual stock adjustment',
-        'admin'
-      )
-    `
+      VALUES (?, 'adjustment', ?, ?, ?, 'Manual stock adjustment', 'admin')
+    `, [currentStock[0].id, quantity - currentStock[0].quantity, currentStock[0].quantity, quantity])
 
     return NextResponse.json({
       success: true,
@@ -201,11 +193,11 @@ export async function PUT(request: NextRequest) {
       newQuantity: quantity,
     })
   } catch (error) {
-    console.error("Error updating stock:", error)
+    console.error("Error updating enhanced stock:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to update stock",
+        error: error instanceof Error ? error.message : "Failed to update enhanced stock",
       },
       { status: 500 },
     )

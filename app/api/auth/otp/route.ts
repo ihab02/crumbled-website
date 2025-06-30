@@ -110,26 +110,19 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Check if phone is already verified in session
-    const cookieStore = cookies();
-    const verifiedPhones = cookieStore.get('verified_phones');
-    if (verifiedPhones) {
-      const phones = JSON.parse(verifiedPhones.value);
-      if (phones.includes(phone)) {
-        console.log('✅ Phone already verified in session');
-        return NextResponse.json({ message: 'Phone number already verified' });
-      }
-    }
-
     // Check if phone belongs to a registered customer
     const [customerResult] = await databaseService.query(
-      'SELECT id FROM customers WHERE phone = ?',
+      'SELECT id, type FROM customers WHERE phone = ?',
       [phone]
     );
 
-    if (Array.isArray(customerResult) && customerResult.length > 0) {
-      console.log('✅ Phone belongs to registered customer');
+    const isRegisteredCustomer = Array.isArray(customerResult) && customerResult.length > 0 && customerResult[0].type === 'registered';
+
+    if (isRegisteredCustomer) {
+      console.log('✅ Phone belongs to registered customer - skipping OTP verification');
       // Phone belongs to a registered customer, no need for OTP
+      const cookieStore = cookies();
+      const verifiedPhones = cookieStore.get('verified_phones');
       const phones = verifiedPhones ? JSON.parse(verifiedPhones.value) : [];
       phones.push(phone);
       cookieStore.set('verified_phones', JSON.stringify(phones), {
@@ -141,6 +134,9 @@ export async function PUT(request: Request) {
       return NextResponse.json({ message: 'Phone number verified (registered customer)' });
     }
 
+    // For guest users, always verify the OTP regardless of previous verification
+    console.log('🔍 Guest user - always verifying OTP');
+    
     // Verify OTP
     console.log('🔍 Checking OTP in database...');
     console.log('📱 Phone:', phone);
@@ -219,6 +215,8 @@ export async function PUT(request: Request) {
     }
 
     // Add phone to verified phones in session
+    const cookieStore = cookies();
+    const verifiedPhones = cookieStore.get('verified_phones');
     const phones = verifiedPhones ? JSON.parse(verifiedPhones.value) : [];
     phones.push(phone);
     cookieStore.set('verified_phones', JSON.stringify(phones), {

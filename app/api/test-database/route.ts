@@ -2,18 +2,18 @@ import { NextResponse } from "next/server"
 import { databaseService } from '@/lib/services/databaseService'
 
 export async function GET() {
-  try {
-    // Check environment variables
-    const envCheck = {
-      DATABASE_URL: !!process.env.DATABASE_URL,
-      DB_HOST: !!process.env.DB_HOST,
-      DB_USER: !!process.env.DB_USER,
-      DB_PASSWORD: !!process.env.DB_PASSWORD,
-      DB_NAME: !!process.env.DB_NAME
-    }
+  // Check environment variables
+  const envCheck = {
+    DATABASE_URL: !!process.env.DATABASE_URL,
+    DB_HOST: !!process.env.DB_HOST,
+    DB_USER: !!process.env.DB_USER,
+    DB_PASSWORD: !!process.env.DB_PASSWORD,
+    DB_NAME: !!process.env.DB_NAME
+  }
 
+  try {
     // Test database connection
-    const result = await databaseService.query('SELECT NOW() as current_time, VERSION() as mysql_version')
+    const result = await databaseService.query('SELECT NOW() as `current_time`, VERSION() as mysql_version')
 
     return NextResponse.json({
       success: true,

@@ -135,6 +135,7 @@ export default function NewCheckoutPage() {
   const [verifyingOtp, setVerifyingOtp] = useState(false)
   const [otpCountdown, setOtpCountdown] = useState(0)
   const [phoneToVerify, setPhoneToVerify] = useState('')
+  const [verifiedPhone, setVerifiedPhone] = useState('')
   const [orderConfirmed, setOrderConfirmed] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'paymob'>('cod')
@@ -155,11 +156,40 @@ export default function NewCheckoutPage() {
   const isLoggedIn = status === 'authenticated' && session?.user
   const isSessionLoading = status === 'loading'
 
+  // Validation function for step 1
+  const isStep1Valid = () => {
+    if (isLoggedIn && checkoutData?.userType === 'registered') {
+      // For logged-in users: must have an address selected
+      if (useNewAddress) {
+        // If using new address, all required fields must be filled
+        return newAddress.street_address.trim() !== '' && 
+               newAddress.city_id > 0 && 
+               newAddress.zone_id > 0
+      } else {
+        // Must have an existing address selected
+        return selectedAddressId !== null
+      }
+    } else {
+      // For guest users: all fields must be filled and phone must be verified if provided
+      const basicFieldsValid = guestData.name.trim() !== '' && 
+                              guestData.email.trim() !== '' && 
+                              guestData.phone.trim() !== '' && 
+                              guestData.address.trim() !== '' && 
+                              selectedCity !== '' && 
+                              selectedZone !== '' &&
+                              !emailError && 
+                              !phoneError
+      
+      // If phone is provided, it must be verified and match the current phone number
+      const phoneVerificationValid = guestData.phone.trim() === '' || 
+                                    (otpVerified && guestData.phone === verifiedPhone)
+      
+      return basicFieldsValid && phoneVerificationValid
+    }
+  }
+
   useEffect(() => {
     if (isSessionLoading) return
-    console.log('🔍 Session status:', status)
-    console.log('🔍 Session data:', session)
-    console.log('🔍 Is logged in:', isLoggedIn)
     startCheckout()
     fetchPaymentMethods()
   }, [isSessionLoading])
@@ -185,18 +215,12 @@ export default function NewCheckoutPage() {
   const startCheckout = async () => {
     try {
       setLoading(true)
-      console.log('🚀 Starting checkout with session:', session?.user?.email)
-      console.log('🚀 Session status:', status)
-      console.log('🚀 Session data:', session)
       
       const response = await fetch('/api/checkout/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       })
-
-      console.log('📡 Response status:', response.status)
-      console.log('📡 Response ok:', response.ok)
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -205,11 +229,9 @@ export default function NewCheckoutPage() {
       }
 
       const result = await response.json()
-      console.log('📦 Checkout API response:', result)
       
       if (result.success) {
         setCheckoutData(result.data)
-        console.log('✅ Checkout data set:', result.data)
         
         if (result.data.userType === 'guest' && result.data.cities.length > 0) {
           const defaultCity = result.data.cities.find((city: any) => city.id === 1)
@@ -241,11 +263,17 @@ export default function NewCheckoutPage() {
   }
 
   const handlePhoneChange = (phone: string) => {
+    // Format phone number - remove non-digits and limit to 11 characters
     const numbersOnly = phone.replace(/\D/g, '')
     const limitedPhone = numbersOnly.slice(0, 11)
     
     setGuestData({ ...guestData, phone: limitedPhone })
-    setOtpVerified(false)
+    
+    // Reset verification if phone number changes
+    if (limitedPhone !== verifiedPhone) {
+      setOtpVerified(false)
+      setVerifiedPhone('')
+    }
     
     if (!limitedPhone) {
       setPhoneError('')
@@ -286,12 +314,6 @@ export default function NewCheckoutPage() {
       const result = await response.json()
       
       if (response.ok) {
-        if (result.debug && result.debug.otp) {
-          console.log('🔑 [DEV MODE] OTP Code:', result.debug.otp)
-          console.log('📱 [DEV MODE] Phone:', phone)
-          console.log('⏰ [DEV MODE] Valid for 10 minutes')
-        }
-        
         toast.success('OTP sent successfully!')
         setOtpCountdown(60)
         setPhoneToVerify(phone)
@@ -327,6 +349,7 @@ export default function NewCheckoutPage() {
         setOtpVerified(true)
         setOtpModalOpen(false)
         setOtpCode('')
+        setVerifiedPhone(phoneToVerify)
       } else {
         let errorMessage = 'Invalid OTP'
         
@@ -363,124 +386,77 @@ export default function NewCheckoutPage() {
   }
 
   const confirmOrder = async () => {
+    if (!checkoutData) return
+
+    const requestData = {
+      userType: checkoutData.userType,
+      user: checkoutData.userType === 'registered' ? checkoutData.user : null,
+      guest: checkoutData.userType === 'guest' ? guestData : null,
+      selectedAddressId,
+      useNewAddress,
+      newAddress: useNewAddress ? newAddress : null,
+      saveNewAddress
+    }
+
     try {
-      const requestData = {
-        guestData: checkoutData?.userType === 'guest' ? guestData : undefined,
-        selectedAddressId: checkoutData?.userType === 'registered' ? selectedAddressId : undefined,
-        useNewAddress: checkoutData?.userType === 'registered' ? useNewAddress : undefined,
-        newAddress: checkoutData?.userType === 'registered' && useNewAddress ? newAddress : undefined,
-        saveNewAddress: checkoutData?.userType === 'registered' && useNewAddress ? saveNewAddress : undefined
-      }
-
-      console.log('🔍 [DEBUG] Confirm Order Request Data:', requestData)
-      console.log('🔍 [DEBUG] Checkout Data User Type:', checkoutData?.userType)
-      console.log('🔍 [DEBUG] Guest Data:', guestData)
-      console.log('🔍 [DEBUG] Selected Address ID:', selectedAddressId)
-      console.log('🔍 [DEBUG] Use New Address:', useNewAddress)
-      console.log('🔍 [DEBUG] New Address:', newAddress)
-      console.log('🔍 [DEBUG] Save New Address:', saveNewAddress)
-
       const response = await fetch('/api/checkout/confirm', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(requestData)
       })
 
-      console.log('🔍 [DEBUG] Confirm API Response Status:', response.status)
-      console.log('🔍 [DEBUG] Confirm API Response OK:', response.ok)
-
       const result = await response.json()
-      console.log('🔍 [DEBUG] Confirm API Response Data:', result)
-      
-      if (response.ok) {
-        setOrderConfirmed(true)
+
+      if (response.ok && result.success) {
         setOrderData(result.data)
-        console.log('✅ [DEBUG] Order confirmed, orderData set:', result.data)
-        toast.success('Order confirmed!')
+        setOrderConfirmed(true)
+        setStep(3)
       } else {
-        console.error('❌ [DEBUG] Confirm API Error:', result.error)
-        
-        // Handle stock availability errors with better UX
-        if (result.message === 'Items out of stock' && result.outOfStockItems) {
-          setOutOfStockItems(result.outOfStockItems)
-          // Also show a toast for immediate feedback
-          toast.error('Some items are out of stock. Please review the details below.')
-        } else {
-          setOutOfStockItems(null)
-          toast.error(result.error || 'Failed to confirm order')
-        }
+        toast.error(result.error || 'Failed to confirm order')
       }
     } catch (error) {
-      console.error('❌ [DEBUG] Error confirming order:', error)
-      toast.error('Failed to confirm order')
+      toast.error('Error confirming order')
     }
   }
 
   const processPayment = async () => {
-    console.log('🔍 [DEBUG] Process Payment called')
-    console.log('🔍 [DEBUG] Order Data:', orderData)
-    console.log('🔍 [DEBUG] Payment Method:', paymentMethod)
-    
     if (!orderData) {
-      console.error('❌ [DEBUG] No order data available')
-      toast.error('Order data not found. Please confirm your order first.')
+      toast.error('No order data available')
       return
     }
 
-    setProcessingPayment(true)
-    try {
-      const paymentRequest = {
-        paymentMethod,
-        orderData
-      }
-      
-      console.log('🔍 [DEBUG] Payment Request Data:', paymentRequest)
+    const paymentRequest = {
+      paymentMethod,
+      orderData
+    }
 
+    try {
       const response = await fetch('/api/checkout/payment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(paymentRequest)
       })
 
-      console.log('🔍 [DEBUG] Payment API Response Status:', response.status)
-      console.log('🔍 [DEBUG] Payment API Response OK:', response.ok)
-
       const result = await response.json()
-      console.log('🔍 [DEBUG] Payment API Response Data:', result)
-      console.log('🔍 [DEBUG] Payment API Response Data Type:', typeof result)
-      console.log('🔍 [DEBUG] Payment API Response Data Keys:', Object.keys(result))
-      console.log('🔍 [DEBUG] Payment API Response Data.data:', result.data)
-      console.log('🔍 [DEBUG] Payment API Response Data.data Type:', typeof result.data)
-      console.log('🔍 [DEBUG] Payment API Response Data.data Keys:', result.data ? Object.keys(result.data) : 'No data object')
-      
-      if (response.ok) {
+
+      if (response.ok && result.success) {
         if (paymentMethod === 'cod') {
-          console.log('✅ [DEBUG] COD order placed successfully')
           toast.success('Order placed successfully!')
           router.push('/checkout/success')
+        } else if (paymentMethod === 'paymob' && result.data?.paymentUrl) {
+          window.location.href = result.data.paymentUrl
         } else {
-          console.log('✅ [DEBUG] Paymob payment URL generated:', result.data?.paymentUrl)
-          console.log('✅ [DEBUG] Paymob payment URL type:', typeof result.data?.paymentUrl)
-          console.log('✅ [DEBUG] Full result.data object:', result.data)
-          
-          if (result.data?.paymentUrl) {
-            console.log('✅ [DEBUG] Redirecting to Paymob URL:', result.data.paymentUrl)
-            window.location.href = result.data.paymentUrl
-          } else {
-            console.error('❌ [DEBUG] No payment URL in response')
-            console.error('❌ [DEBUG] Response data:', result.data)
-            toast.error('Payment URL not received from server')
-          }
+          toast.error('No payment URL in response')
         }
       } else {
-        console.error('❌ [DEBUG] Payment API Error:', result.error)
-        toast.error(result.error || 'Failed to process payment')
+        toast.error(result.error || 'Payment failed')
       }
     } catch (error) {
-      console.error('❌ [DEBUG] Error processing payment:', error)
-      toast.error('Failed to process payment')
-    } finally {
-      setProcessingPayment(false)
+      toast.error('Error processing payment')
     }
   }
 
@@ -588,48 +564,11 @@ export default function NewCheckoutPage() {
     )
   }
 
-  // Debug session info (remove in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 Debug - Session Status:', status)
-    console.log('🔍 Debug - Is Logged In:', isLoggedIn)
-    console.log('🔍 Debug - Session User:', session?.user)
-    console.log('🔍 Debug - Checkout Data User Type:', checkoutData.userType)
-    console.log('🔍 Debug - Checkout Data User:', checkoutData.user)
-  }
-
   const subtotal = checkoutData.cart?.total || 0
   const total = subtotal + deliveryFee
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-      {/* Debug Section - Remove in production */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-2 text-sm">
-          <p><strong>Debug Info:</strong></p>
-          <p>Session Status: {status}</p>
-          <p>Is Logged In: {isLoggedIn ? 'Yes' : 'No'}</p>
-          <p>User Email: {session?.user?.email || 'None'}</p>
-          <p>Checkout User Type: {checkoutData.userType}</p>
-          <p>Has User Data: {checkoutData.user ? 'Yes' : 'No'}</p>
-          <div className="mt-2 space-x-2">
-            <Button 
-              size="sm" 
-              onClick={() => window.location.reload()}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white"
-            >
-              Force Refresh
-            </Button>
-            <Button 
-              size="sm" 
-              onClick={() => startCheckout()}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Retry Checkout
-            </Button>
-          </div>
-        </div>
-      )}
-      
       <div className="container mx-auto p-4">
         <Stepper step={step} />
         
@@ -921,14 +860,20 @@ export default function NewCheckoutPage() {
                             className={`mt-1 ${phoneError ? 'border-red-500' : ''}`}
                           />
                           {phoneError && <p className="text-red-500 text-sm mt-1">{phoneError}</p>}
+                          {guestData.phone && !phoneError && otpVerified && guestData.phone !== verifiedPhone && (
+                            <p className="text-orange-600 text-sm mt-1 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Phone number changed - please verify again
+                            </p>
+                          )}
                           {guestData.phone && !phoneError && (
                             <Button
                               onClick={() => sendOtp(guestData.phone)}
-                              disabled={sendingOtp || otpVerified}
+                              disabled={sendingOtp || (otpVerified && guestData.phone === verifiedPhone)}
                               size="sm"
                               className="mt-2 bg-green-600 hover:bg-green-700"
                             >
-                              {otpVerified ? (
+                              {otpVerified && guestData.phone === verifiedPhone ? (
                                 <>
                                   <CheckCircle className="h-4 w-4 mr-2" />
                                   Verified
@@ -957,7 +902,10 @@ export default function NewCheckoutPage() {
                         <div className="grid gap-4 md:grid-cols-2">
                           <div>
                             <Label htmlFor="city">City *</Label>
-                            <Select value={selectedCity} onValueChange={setSelectedCity}>
+                            <Select value={selectedCity} onValueChange={(value) => {
+                              setSelectedCity(value);
+                              setGuestData({ ...guestData, city: value });
+                            }}>
                               <SelectTrigger className="mt-1">
                                 <SelectValue placeholder="Select a city" />
                               </SelectTrigger>
@@ -972,7 +920,10 @@ export default function NewCheckoutPage() {
                           </div>
                           <div>
                             <Label htmlFor="zone">Zone *</Label>
-                            <Select value={selectedZone} onValueChange={setSelectedZone}>
+                            <Select value={selectedZone} onValueChange={(value) => {
+                              setSelectedZone(value);
+                              setGuestData({ ...guestData, zone: value });
+                            }}>
                               <SelectTrigger className="mt-1">
                                 <SelectValue placeholder="Select a zone" />
                               </SelectTrigger>
@@ -1002,10 +953,84 @@ export default function NewCheckoutPage() {
                       </div>
                     </div>
                   )}
+                  {/* Validation Messages */}
+                  {!isStep1Valid() && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-yellow-800">
+                          <p className="font-medium mb-1">Please complete the following:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            {isLoggedIn && checkoutData?.userType === 'registered' ? (
+                              <>
+                                {useNewAddress ? (
+                                  <>
+                                    {newAddress.street_address.trim() === '' && (
+                                      <li>Enter street address</li>
+                                    )}
+                                    {newAddress.city_id <= 0 && (
+                                      <li>Select a city</li>
+                                    )}
+                                    {newAddress.zone_id <= 0 && (
+                                      <li>Select a zone</li>
+                                    )}
+                                  </>
+                                ) : (
+                                  selectedAddressId === null && (
+                                    <li>Select a delivery address</li>
+                                  )
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {guestData.name.trim() === '' && (
+                                  <li>Enter your full name</li>
+                                )}
+                                {guestData.email.trim() === '' && (
+                                  <li>Enter your email address</li>
+                                )}
+                                {emailError && (
+                                  <li>Enter a valid email address</li>
+                                )}
+                                {guestData.phone.trim() === '' && (
+                                  <li>Enter your phone number</li>
+                                )}
+                                {phoneError && (
+                                  <li>Enter a valid Egyptian phone number</li>
+                                )}
+                                {guestData.phone.trim() !== '' && !otpVerified && (
+                                  <li>Verify your phone number</li>
+                                )}
+                                {guestData.phone.trim() !== '' && otpVerified && guestData.phone !== verifiedPhone && (
+                                  <li>Phone number changed - please verify again</li>
+                                )}
+                                {guestData.address.trim() === '' && (
+                                  <li>Enter your delivery address</li>
+                                )}
+                                {selectedCity === '' && (
+                                  <li>Select a city</li>
+                                )}
+                                {selectedZone === '' && (
+                                  <li>Select a zone</li>
+                                )}
+                              </>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-end mt-6">
                     <Button
-                      onClick={() => setStep(2)}
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
+                      onClick={() => {
+                        if (!selectedCity || !selectedZone) {
+                          toast.error('Please select both city and zone');
+                          return;
+                        }
+                        setStep(2);
+                      }}
+                      disabled={!isStep1Valid()}
+                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next: Payment
                     </Button>
@@ -1148,78 +1173,21 @@ export default function NewCheckoutPage() {
                     </Button>
                     <Button
                       onClick={() => {
-                        // Validate that payment method is selected
-                        if (!paymentMethod) {
-                          toast.error('Please select a payment method')
-                          return
-                        }
-                        
-                        // Validate delivery information based on user type
-                        if (checkoutData?.userType === 'registered') {
-                          if (!selectedAddressId && !useNewAddress) {
-                            toast.error('Please select a delivery address')
-                            return
-                          }
-                          if (useNewAddress && (!newAddress.street_address || !newAddress.city_id || !newAddress.zone_id)) {
-                            toast.error('Please complete the new address information')
-                            return
-                          }
+                        if (orderConfirmed) {
+                          processPayment()
                         } else {
-                          // Guest user validation
-                          if (!guestData.name || !guestData.email || !guestData.phone || !guestData.address || !guestData.city || !guestData.zone) {
-                            toast.error('Please complete all delivery information')
-                            return
-                          }
-                          if (!validateEgyptianPhone(guestData.phone)) {
-                            toast.error('Please enter a valid Egyptian phone number')
-                            return
-                          }
-                          if (!validateEmail(guestData.email)) {
-                            toast.error('Please enter a valid email address')
-                            return
-                          }
+                          confirmOrder()
                         }
-                        
-                        console.log('🔍 [DEBUG] Proceeding to step 3 with payment method:', paymentMethod)
-                        setStep(3)
                       }}
+                      disabled={processingPayment}
                       className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
                     >
-                      Next: Confirmation
+                      {processingPayment ? 'Processing...' : 
+                       orderConfirmed ? 
+                         (paymentMethod === 'cod' ? 'Place Order' : 'Pay Now') : 
+                         'Confirm Order'}
                     </Button>
                   </div>
-
-                  {/* Debug Section - Remove in production */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h4 className="font-medium text-blue-900 mb-2">Debug Info (Step 2)</h4>
-                      <div className="text-xs text-blue-800 space-y-1">
-                        <p><strong>Payment Method:</strong> {paymentMethod}</p>
-                        <p><strong>User Type:</strong> {checkoutData?.userType}</p>
-                        {checkoutData?.userType === 'registered' ? (
-                          <>
-                            <p><strong>Selected Address ID:</strong> {selectedAddressId || 'None'}</p>
-                            <p><strong>Use New Address:</strong> {useNewAddress ? 'Yes' : 'No'}</p>
-                            {useNewAddress && (
-                              <div>
-                                <p><strong>New Address:</strong></p>
-                                <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32">
-                                  {JSON.stringify(newAddress, null, 2)}
-                                </pre>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div>
-                            <p><strong>Guest Data:</strong></p>
-                            <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32">
-                              {JSON.stringify(guestData, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1420,7 +1388,13 @@ export default function NewCheckoutPage() {
                       Back
                     </Button>
                     <Button
-                      onClick={orderConfirmed ? processPayment : confirmOrder}
+                      onClick={() => {
+                        if (orderConfirmed) {
+                          processPayment()
+                        } else {
+                          confirmOrder()
+                        }
+                      }}
                       disabled={processingPayment}
                       className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
                     >
@@ -1430,27 +1404,6 @@ export default function NewCheckoutPage() {
                          'Confirm Order'}
                     </Button>
                   </div>
-
-                  {/* Debug Section - Remove in production */}
-                  {process.env.NODE_ENV === 'development' && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h4 className="font-medium text-blue-900 mb-2">Debug Info (Step 3)</h4>
-                      <div className="text-xs text-blue-800 space-y-1">
-                        <p><strong>Order Confirmed:</strong> {orderConfirmed ? 'Yes' : 'No'}</p>
-                        <p><strong>Order Data:</strong> {orderData ? 'Available' : 'Not Available'}</p>
-                        <p><strong>Payment Method:</strong> {paymentMethod}</p>
-                        <p><strong>Processing Payment:</strong> {processingPayment ? 'Yes' : 'No'}</p>
-                        {orderData && (
-                          <div className="mt-2">
-                            <p><strong>Order Data Structure:</strong></p>
-                            <pre className="text-xs bg-white p-2 rounded border overflow-auto max-h-32">
-                              {JSON.stringify(orderData, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             </div>

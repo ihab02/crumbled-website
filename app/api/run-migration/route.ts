@@ -64,6 +64,36 @@ export async function POST(request: Request) {
       })
     }
 
+    if (migration === 'site_settings') {
+      console.log('Running site settings migration...')
+
+      // Create site_settings table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS site_settings (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          setting_key VARCHAR(255) NOT NULL UNIQUE,
+          setting_value TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_setting_key (setting_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+      `)
+
+      // Insert default payment methods settings
+      await connection.query(`
+        INSERT INTO site_settings (setting_key, setting_value) VALUES
+        ('payment_methods', '{"cod": {"enabled": true, "name": "Cash on Delivery", "description": "Pay when you receive your order"}, "paymob": {"enabled": true, "name": "Paymob", "description": "Secure online payment"}}')
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+      `)
+
+      console.log('Site settings migration completed successfully')
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Site settings migration completed successfully'
+      })
+    }
+
     return NextResponse.json({
       success: false,
       error: 'Invalid migration specified'

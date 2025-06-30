@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signOut } from "next-auth/react"
 import Link from "next/link"
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LogOut, Home, ShoppingBag, User } from "lucide-react"
 
-export default function SignOutPage() {
+function SignOutContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSigningOut, setIsSigningOut] = useState(false)
@@ -166,5 +166,13 @@ export default function SignOutPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function SignOutPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignOutContent />
+    </Suspense>
   )
 } 

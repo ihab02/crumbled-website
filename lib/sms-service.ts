@@ -239,7 +239,7 @@ class CustomSMSService {
 }
 
 // Create a singleton instance
-const smsService = new CustomSMSService();
+export const smsService = new CustomSMSService();
 
 export async function sendVerificationCode(phoneNumber: string, existingOtp?: string) {
   try {
@@ -479,5 +479,11 @@ export async function sendOrderStatusUpdate(phone: string, orderId: number, stat
 
 export async function sendOrderConfirmation(phone: string, orderId: number): Promise<SMSResponse> {
   const message = `Thank you for your order! Your order #${orderId} has been confirmed. Track your order at ${process.env.NEXT_PUBLIC_APP_URL}/orders/${orderId}`;
+  return sendSMSWithRetry(phone, message);
+}
+
+// Export the sendOrderNotification function
+export async function sendOrderNotification(phone: string, orderId: number, status: string): Promise<SMSResponse> {
+  const message = `Your order #${orderId} status has been updated to: ${status}. Thank you for choosing CrumbledCookies!`;
   return sendSMSWithRetry(phone, message);
 }

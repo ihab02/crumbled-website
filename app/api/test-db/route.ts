@@ -4,7 +4,7 @@ import { databaseService } from '@/lib/services/databaseService';
 export async function GET() {
   try {
     // Test basic database connection
-    const result = await databaseService.query('SELECT NOW() as current_time');
+    const result = await databaseService.query('SELECT NOW() as `current_time`');
     
     return NextResponse.json({
       success: true,

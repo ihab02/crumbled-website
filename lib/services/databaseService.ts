@@ -37,7 +37,7 @@ export const databaseService = {
     let connection;
     try {
       connection = await pool.getConnection();
-      const [result] = await connection.query<mysql.RowDataPacket[]>('SELECT NOW() as current_time, VERSION() as mysql_version');
+      const [result] = await connection.query('SELECT NOW() as `current_time`, VERSION() as mysql_version');
       return {
         success: true,
         data: result[0]

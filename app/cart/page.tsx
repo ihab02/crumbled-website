@@ -42,84 +42,49 @@ interface CartResponse {
 
 export default function CartPage() {
   const router = useRouter()
-  const [promoCode, setPromoCode] = useState("")
+  const [promoCode, setPromoCode] = useState('')
   const [discount, setDiscount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [cartTotal, setCartTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [outOfStockItems, setOutOfStockItems] = useState<Array<{
-    id: number
-    name: string
-    type: 'product' | 'flavor'
-    requestedQuantity: number
-    availableQuantity: number
-  }> | null>(null)
 
   useEffect(() => {
     fetchCart()
   }, [])
 
   const fetchCart = async () => {
-    setIsLoading(true)
-    setError(null)
-    
     try {
-      console.log("🛒 Fetching cart data...")
-      const response = await fetch("/api/cart", {
-        method: "GET",
-        credentials: "include", // Important: include cookies
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
+      setIsLoading(true)
+      const response = await fetch('/api/cart')
+      console.log('📡 Cart API response status:', response.status)
       
-      console.log("📡 Cart API response status:", response.status)
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data: CartResponse = await response.json()
-      console.log("📦 Cart data received:", data)
-      console.log("📦 Cart items count:", data.items?.length || 0)
-      console.log("💰 Cart total:", data.total)
-      
-      if (data.items && Array.isArray(data.items)) {
-        console.log("✅ Cart items set successfully:", data.items.length, "items")
-        setCartItems(data.items)
-        setCartTotal(data.total || 0)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📦 Cart data received:', data)
+        console.log('📦 Cart items count:', data.items?.length || 0)
+        console.log('💰 Cart total:', data.total)
         
-        // Log each item for debugging
-        data.items.forEach((item: CartItem, index: number) => {
-          console.log(`📋 Item ${index + 1}:`, {
-            id: item.id,
-            name: item.name,
-            basePrice: item.basePrice,
-            quantity: item.quantity,
-            isPack: item.isPack,
-            packSize: item.packSize,
-            total: item.total,
-            imageUrl: item.imageUrl,
-            flavorsCount: item.flavors?.length || 0,
-            flavors: item.flavors
+        if (data.items && data.items.length > 0) {
+          setCartItems(data.items)
+          console.log('✅ Cart items set successfully:', data.items.length, 'items')
+          
+          // Log each item for debugging
+          data.items.forEach((item: any, index: number) => {
+            console.log(`📋 Item ${index + 1}:`, item)
           })
-        })
+        } else {
+          setCartItems([])
+          console.log('📭 Cart is empty')
+        }
       } else {
-        console.log("⚠️ No items in cart or invalid data structure")
+        console.error('❌ Failed to fetch cart:', response.status)
         setCartItems([])
-        setCartTotal(0)
       }
-      
-      // Check stock availability after loading cart
-      await checkStockAvailability()
-    } catch (err) {
-      console.error("❌ Error fetching cart:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch cart")
-      toast.error("Failed to load cart")
+    } catch (error) {
+      console.error('❌ Error fetching cart:', error)
       setCartItems([])
-      setCartTotal(0)
     } finally {
       setIsLoading(false)
     }
@@ -129,34 +94,6 @@ export default function CartPage() {
     setIsRefreshing(true)
     await fetchCart()
     setIsRefreshing(false)
-  }
-
-  const checkStockAvailability = async () => {
-    try {
-      const response = await fetch('/api/checkout/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          guestData: undefined,
-          selectedAddressId: 1,
-          useNewAddress: false,
-          newAddress: undefined
-        })
-      })
-
-      const result = await response.json()
-      
-      if (!response.ok && result.message === 'Items out of stock' && result.outOfStockItems) {
-        setOutOfStockItems(result.outOfStockItems)
-        return true // Has out of stock items
-      } else {
-        setOutOfStockItems(null)
-        return false // No out of stock items
-      }
-    } catch (error) {
-      console.error('Error checking stock availability:', error)
-      return false
-    }
   }
 
   const handleRemoveItem = async (itemId: number) => {
@@ -385,84 +322,6 @@ export default function CartPage() {
           </div>
         </div>
         
-        {/* Out of Stock Alert */}
-        {outOfStockItems && outOfStockItems.length > 0 && (
-          <div className="mb-6">
-            <Card className="border-2 border-red-200 bg-red-50 rounded-3xl">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                      <span className="text-red-600 text-lg">⚠️</span>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-red-800 mb-3">
-                      Some items in your cart are out of stock
-                    </h3>
-                    <div className="space-y-3">
-                      {outOfStockItems.filter(item => item.type === 'product').length > 0 && (
-                        <div>
-                          <h4 className="font-medium text-red-700 mb-2">Products out of stock:</h4>
-                          <ul className="space-y-1">
-                            {outOfStockItems
-                              .filter(item => item.type === 'product')
-                              .map((item, index) => (
-                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
-                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
-                                  <span className="text-sm text-red-600">
-                                    {item.requestedQuantity} requested, {item.availableQuantity} available
-                                  </span>
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      )}
-                      
-                      {outOfStockItems.filter(item => item.type === 'flavor').length > 0 && (
-                        <div>
-                          <h4 className="font-medium text-red-700 mb-2">Flavors out of stock:</h4>
-                          <ul className="space-y-1">
-                            {outOfStockItems
-                              .filter(item => item.type === 'flavor')
-                              .map((item, index) => (
-                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
-                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
-                                  <span className="text-sm text-red-600">
-                                    {item.requestedQuantity} requested, {item.availableQuantity} available only
-                                  </span>
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-4 flex items-center gap-3">
-                      <Button
-                        onClick={refreshCart}
-                        variant="outline"
-                        size="sm"
-                        className="border-red-300 text-red-700 hover:bg-red-100"
-                      >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Check Again
-                      </Button>
-                      <Button
-                        onClick={() => setOutOfStockItems(null)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-        
         <div className="grid gap-8 lg:grid-cols-3">
           <div className="lg:col-span-2">
             <Card className="border-2 border-pink-200 rounded-3xl">
@@ -616,15 +475,11 @@ export default function CartPage() {
                 </div>
                 <Button
                   className="mt-6 w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={outOfStockItems && outOfStockItems.length > 0}
-                  asChild={!(outOfStockItems && outOfStockItems.length > 0)}
-                  onClick={outOfStockItems && outOfStockItems.length > 0 ? () => toast.error('Please remove out-of-stock items before checkout') : undefined}
+                  disabled={false}
+                  asChild={true}
+                  onClick={() => router.push("/checkout-new")}
                 >
-                  {outOfStockItems && outOfStockItems.length > 0 ? (
-                    <span>Cannot Checkout - Items Out of Stock</span>
-                  ) : (
-                    <Link href="/checkout-new">Proceed to Checkout</Link>
-                  )}
+                  <Link href="/checkout-new">Proceed to Checkout</Link>
                 </Button>
               </CardContent>
             </Card>

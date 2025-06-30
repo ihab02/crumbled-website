@@ -181,6 +181,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
     console.log('🔍 [DEBUG] Payment API - Payment Method:', paymentMethod)
     console.log('🔍 [DEBUG] Payment API - Cart ID:', cartId)
     console.log('🔍 [DEBUG] Payment API - Order Data:', orderData)
+    console.log('🔍 [DEBUG] Payment API - Cart items structure:', JSON.stringify(orderData.cart.items, null, 2))
 
     // Validate request
     if (!cartId || !paymentMethod || !orderData) {
@@ -238,20 +239,40 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         
         console.log('🔍 [DEBUG] Payment API - Guest customer info:', orderData.customerInfo)
         
-        // Create guest customer record in customers table
-        const [insertResult] = await connection.query(
-          'INSERT INTO customers (first_name, last_name, email, phone, type) VALUES (?, ?, ?, ?, ?)',
-          [
-            orderData.customerInfo.name.split(' ')[0] || orderData.customerInfo.name, // first_name
-            orderData.customerInfo.name.split(' ').slice(1).join(' ') || '', // last_name
-            orderData.customerInfo.email, 
-            orderData.customerInfo.phone, 
-            'guest'
-          ]
+        // Check if guest customer already exists
+        console.log(`🔍 [DEBUG] Payment API - Checking for existing customer with email: ${orderData.customerInfo.email}`)
+        const [existingCustomerRows] = await connection.query(
+          'SELECT id, type FROM customers WHERE email = ?',
+          [orderData.customerInfo.email]
         );
         
-        customerId = (insertResult as any).insertId;
-        console.log('🔍 [DEBUG] Payment API - Created guest customer record in customers table with ID:', customerId)
+        console.log(`🔍 [DEBUG] Payment API - Existing customer query result:`, existingCustomerRows)
+        console.log(`🔍 [DEBUG] Payment API - Existing customer rows type:`, typeof existingCustomerRows)
+        console.log(`🔍 [DEBUG] Payment API - Existing customer rows is array:`, Array.isArray(existingCustomerRows))
+        console.log(`🔍 [DEBUG] Payment API - Existing customer rows length:`, Array.isArray(existingCustomerRows) ? existingCustomerRows.length : 'Not an array')
+        
+        if (Array.isArray(existingCustomerRows) && existingCustomerRows.length > 0) {
+          // Use existing customer (regardless of type)
+          customerId = (existingCustomerRows[0] as any).id;
+          console.log('🔍 [DEBUG] Payment API - Found existing customer with ID:', customerId, 'Type:', (existingCustomerRows[0] as any).type)
+        } else {
+          console.log('🔍 [DEBUG] Payment API - No existing customer found, creating new one')
+          // Create new guest customer record in customers table
+          const [insertResult] = await connection.query(
+            'INSERT INTO customers (first_name, last_name, email, phone, type, password) VALUES (?, ?, ?, ?, ?, ?)',
+            [
+              orderData.customerInfo.name.split(' ')[0] || orderData.customerInfo.name, // first_name
+              orderData.customerInfo.name.split(' ').slice(1).join(' ') || '', // last_name
+              orderData.customerInfo.email, 
+              orderData.customerInfo.phone, 
+              'guest',
+              '' // Empty password for guest users
+            ]
+          );
+          
+          customerId = (insertResult as any).insertId;
+          console.log('🔍 [DEBUG] Payment API - Created new guest customer record in customers table with ID:', customerId)
+        }
       }
       
       if (!customerId) {
@@ -278,6 +299,83 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       );
 
       const orderId = (orderResult as any).insertId;
+      console.log(`🔍 [DEBUG] Payment API - Order created with ID: ${orderId}`)
+
+      // Create order items for each cart item
+      console.log(`🔍 [DEBUG] Payment API - About to start order items creation`)
+      console.log(`🔍 [DEBUG] Payment API - Starting order items creation for ${orderData.cart.items.length} items`)
+      for (const item of orderData.cart.items) {
+        try {
+          console.log(`🔍 [DEBUG] Payment API - Processing item:`, item)
+          
+          // First, create or find product_instance
+          let productInstanceId;
+          
+          if (item.isPack) {
+            console.log(`🔍 [DEBUG] Payment API - Creating product_instance for pack`)
+            // For packs, we need to create a product_instance for the pack
+            const [packInstanceResult] = await connection.query(
+              `INSERT INTO product_instance (product_type, product_id, size_id, quantity) 
+               VALUES ('cookie_pack', ?, ?, ?)`,
+              [
+                item.id, // pack_id
+                1, // default size_id for packs
+                1 // default quantity
+              ]
+            );
+            productInstanceId = (packInstanceResult as any).insertId;
+            console.log(`🔍 [DEBUG] Payment API - Created product_instance for pack with ID: ${productInstanceId}`)
+            
+            // Create product_instance_flavor records for each flavor
+            console.log(`🔍 [DEBUG] Payment API - Creating flavor records for ${item.flavors.length} flavors`)
+            for (const flavor of item.flavors) {
+              await connection.query(
+                `INSERT INTO product_instance_flavor (product_instance_id, flavor_id, size_id, quantity) 
+                 VALUES (?, ?, ?, ?)`,
+                [
+                  productInstanceId,
+                  flavor.id,
+                  flavor.size === 'Mini' ? 1 : flavor.size === 'Medium' ? 2 : 3, // Map size to size_id
+                  flavor.quantity
+                ]
+              );
+              console.log(`🔍 [DEBUG] Payment API - Created flavor record for ${flavor.name}`)
+            }
+          } else {
+            console.log(`🔍 [DEBUG] Payment API - Creating product_instance for individual product`)
+            // For individual products, create product_instance
+            const [productInstanceResult] = await connection.query(
+              `INSERT INTO product_instance (product_type, product_id, size_id, quantity) 
+               VALUES ('beverage', ?, ?, ?)`,
+              [
+                item.id, // product_id
+                1, // default size_id
+                1 // default quantity
+              ]
+            );
+            productInstanceId = (productInstanceResult as any).insertId;
+            console.log(`🔍 [DEBUG] Payment API - Created product_instance for product with ID: ${productInstanceId}`)
+          }
+          
+          // Create order_item record with unit_price
+          console.log(`🔍 [DEBUG] Payment API - Creating order_item with productInstanceId: ${productInstanceId}, quantity: ${item.quantity}, unit_price: ${item.basePrice}`)
+          await connection.query(
+            `INSERT INTO order_items (order_id, product_instance_id, quantity, unit_price) 
+             VALUES (?, ?, ?, ?)`,
+            [
+              orderId,
+              productInstanceId,
+              item.quantity,
+              item.basePrice
+            ]
+          );
+          
+          console.log(`✅ Created order item for ${item.name} with quantity ${item.quantity}`);
+        } catch (itemError) {
+          console.error(`❌ Error creating order item for ${item.name}:`, itemError);
+          // Continue with other items even if one fails
+        }
+      }
 
       // Update stock for items (order items will be handled separately when we have proper schema)
       for (const item of orderData.cart.items) {
