@@ -285,16 +285,30 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       const [orderResult] = await connection.query(
         `INSERT INTO orders (
           customer_id, 
+          customer_phone,
           total, 
           status, 
           payment_method,
+          delivery_address,
+          delivery_city,
+          delivery_zone,
+          zone,
+          delivery_fee,
+          subtotal,
           created_at
-        ) VALUES (?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           customerId,
+          orderData.customerInfo.phone,
           Number(orderData.cart.total),
           orderStatus,
-          paymentMethod === 'cod' ? 'cash' : 'card'
+          paymentMethod === 'cod' ? 'cash' : 'card',
+          orderData.deliveryAddress.street_address,
+          orderData.deliveryAddress.city_name,
+          orderData.deliveryAddress.zone_name,
+          orderData.deliveryAddress.zone_name,
+          orderData.cart.deliveryFee,
+          orderData.cart.subtotal
         ]
       );
 

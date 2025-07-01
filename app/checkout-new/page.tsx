@@ -248,12 +248,19 @@ export default function NewCheckoutPage() {
       const response = await fetch('/api/payment-methods')
       const data = await response.json()
       
+      console.log('🔍 [DEBUG] Frontend - Payment methods response:', JSON.stringify(data, null, 2))
+      
       if (data.success) {
         setEnabledPaymentMethods(data.paymentMethods)
+        console.log('🔍 [DEBUG] Frontend - Set enabled payment methods:', JSON.stringify(data.paymentMethods, null, 2))
+        
         // Set default payment method to first available one
         const methodKeys = Object.keys(data.paymentMethods)
+        console.log('🔍 [DEBUG] Frontend - Available method keys:', methodKeys)
+        
         if (methodKeys.length > 0) {
           setPaymentMethod(methodKeys[0] as 'cod' | 'paymob')
+          console.log('🔍 [DEBUG] Frontend - Set default payment method to:', methodKeys[0])
         }
       }
     } catch (error) {
@@ -318,6 +325,11 @@ export default function NewCheckoutPage() {
             setSelectedAddressId(defaultAddress.id);
             setDeliveryFee(Number(defaultAddress.delivery_fee));
           }
+        } else if (result.data.userType === 'registered' && (!result.data.user?.addresses || result.data.user.addresses.length === 0)) {
+          // Redirect to account page to add address if user has no addresses
+          toast.error('You need to add at least one address before checkout')
+          router.push('/account?tab=addresses')
+          return
         }
       } else {
         console.error('❌ Checkout API returned error:', result.error)
@@ -474,8 +486,11 @@ export default function NewCheckoutPage() {
       selectedAddressId: checkoutData.userType === 'registered' ? selectedAddressId : undefined,
       useNewAddress: checkoutData.userType === 'registered' ? useNewAddress : undefined,
       newAddress: checkoutData.userType === 'registered' && useNewAddress ? newAddress : undefined,
-      saveNewAddress: checkoutData.userType === 'registered' ? saveNewAddress : undefined
+      saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined
     }
+
+    console.log('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
+    console.log('🔍 [DEBUG] Frontend - Save new address state:', saveNewAddress)
 
     try {
       const response = await fetch('/api/checkout/confirm', {
@@ -525,7 +540,7 @@ export default function NewCheckoutPage() {
       if (response.ok && result.success) {
         if (paymentMethod === 'cod') {
           toast.success('Order placed successfully!')
-          router.push('/checkout/success')
+          router.push(`/checkout/success?orderId=${result.data?.orderId}`)
         } else if (paymentMethod === 'paymob' && result.data?.paymentUrl) {
           window.location.href = result.data.paymentUrl
         } else {
@@ -1221,6 +1236,11 @@ export default function NewCheckoutPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
                     <Label className="text-base font-medium">Payment Method</Label>
+                    {(() => {
+                      console.log('🔍 [DEBUG] Frontend - Rendering payment methods. enabledPaymentMethods:', JSON.stringify(enabledPaymentMethods, null, 2))
+                      console.log('🔍 [DEBUG] Frontend - Number of enabled methods:', Object.keys(enabledPaymentMethods).length)
+                      return null
+                    })()}
                     {Object.keys(enabledPaymentMethods).length === 0 ? (
                       <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
                         <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>

@@ -1,18 +1,7 @@
 import { NextResponse } from 'next/server';
-import { sign } from 'jsonwebtoken';
-import { cookies } from 'next/headers';
-import db from '@/lib/db';
-import { ResultSetHeader, RowDataPacket } from 'mysql2';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-interface Customer extends RowDataPacket {
-  id: number;
-  email: string;
-  first_name: string;
-  last_name: string;
-  phone: string;
-}
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { databaseService } from '@/lib/services/databaseService';
 
 export async function POST(request: Request) {
   try {
@@ -117,9 +106,9 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    const session = await getServerSession(authOptions);
 
-    if (!token) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -127,27 +116,38 @@ export async function GET(request: Request) {
     }
 
     // Get customer profile
-    const [customers] = await db.query(
+    const customerResult = await databaseService.query(
       `SELECT 
-        c.id, c.first_name, c.last_name, c.email, c.phone,
-        a.id as address_id, a.street_address, a.additional_info, a.is_default,
-        ci.name as city_name, z.name as zone_name, z.delivery_fee
+        c.id, c.first_name, c.last_name, c.email, c.phone
       FROM customers c
-      LEFT JOIN addresses a ON c.id = a.customer_id
-      LEFT JOIN cities ci ON a.city_id = ci.id
-      LEFT JOIN zones z ON a.zone_id = z.id
-      WHERE c.id = ?`,
-      [(token as any).id]
+      WHERE c.email = ?`,
+      [session.user.email]
     );
 
-    if (!Array.isArray(customers) || customers.length === 0) {
+    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
+
+    if (customerArray.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
       );
     }
 
-    const customer = customers[0];
+    const customer = customerArray[0];
+
+    // Get customer addresses
+    const addressesResult = await databaseService.query(
+      `SELECT 
+        ca.id, ca.street_address, ca.additional_info, ca.is_default,
+        c.name as city_name, z.name as zone_name, z.delivery_fee
+      FROM customer_addresses ca
+      LEFT JOIN cities c ON ca.city_id = c.id
+      LEFT JOIN zones z ON ca.zone_id = z.id
+      WHERE ca.customer_id = ?`,
+      [customer.id]
+    );
+
+    const addressesArray = Array.isArray(addressesResult) ? addressesResult : (addressesResult ? [addressesResult] : []);
 
     return NextResponse.json({
       customer: {
@@ -156,8 +156,8 @@ export async function GET(request: Request) {
         lastName: customer.last_name,
         email: customer.email,
         phone: customer.phone,
-        addresses: customers.map(addr => ({
-          id: addr.address_id,
+        addresses: addressesArray.map(addr => ({
+          id: addr.id,
           streetAddress: addr.street_address,
           additionalInfo: addr.additional_info,
           isDefault: addr.is_default,
@@ -178,9 +178,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    const session = await getServerSession(authOptions);
 
-    if (!token) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -190,9 +190,9 @@ export async function PUT(request: Request) {
     const { firstName, lastName, phone } = await request.json();
 
     // Update customer profile
-    await db.query(
-      'UPDATE customers SET first_name = ?, last_name = ?, phone = ? WHERE id = ?',
-      [firstName, lastName, phone, (token as any).id]
+    await databaseService.query(
+      'UPDATE customers SET first_name = ?, last_name = ?, phone = ? WHERE email = ?',
+      [firstName, lastName, phone, session.user.email]
     );
 
     return NextResponse.json({

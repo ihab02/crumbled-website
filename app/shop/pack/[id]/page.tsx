@@ -299,18 +299,18 @@ export default function PackProductPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-8">
-            <div className="h-8 w-1/4 bg-gray-200 rounded"></div>
-            <div className="grid gap-8 lg:grid-cols-3">
-              <div className="lg:col-span-1">
-                <div className="h-96 bg-gray-200 rounded-3xl"></div>
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+          <div className="animate-pulse space-y-4 sm:space-y-8">
+            <div className="h-6 sm:h-8 w-1/4 bg-gray-200 rounded"></div>
+            <div className="grid gap-4 sm:gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-1 order-2 lg:order-1">
+                <div className="h-64 sm:h-96 bg-gray-200 rounded-2xl sm:rounded-3xl"></div>
               </div>
-              <div className="lg:col-span-2">
-                <div className="h-8 w-1/2 bg-gray-200 rounded mb-4"></div>
-                <div className="space-y-4">
+              <div className="lg:col-span-2 order-1 lg:order-2">
+                <div className="h-6 sm:h-8 w-1/2 bg-gray-200 rounded mb-4"></div>
+                <div className="space-y-3 sm:space-y-4">
                   {[...Array(6)].map((_, i) => (
-                    <div key={i} className="h-24 bg-gray-200 rounded-2xl"></div>
+                    <div key={i} className="h-20 sm:h-24 bg-gray-200 rounded-xl sm:rounded-2xl"></div>
                   ))}
                 </div>
               </div>
@@ -324,12 +324,12 @@ export default function PackProductPage() {
   if (!product) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center py-12">
-            <h1 className="text-2xl font-bold text-pink-800 mb-4">Product not found</h1>
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+          <div className="text-center py-8 sm:py-12">
+            <h1 className="text-xl sm:text-2xl font-bold text-pink-800 mb-4">Product not found</h1>
             <Button
               onClick={() => router.back()}
-              className="bg-pink-600 hover:bg-pink-700"
+              className="bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
             >
               Go Back
             </Button>
@@ -346,34 +346,35 @@ export default function PackProductPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div className="mb-4 sm:mb-8">
           <Button 
             variant="ghost" 
-            className="text-pink-600 hover:text-pink-800" 
+            className="text-pink-600 hover:text-pink-800 text-sm sm:text-base" 
             onClick={() => router.back()}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Shop
+            <span className="hidden sm:inline">Back to Shop</span>
+            <span className="sm:hidden">Back</span>
           </Button>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-8 lg:grid-cols-3">
           {/* Product Info */}
-          <div className="lg:col-span-1">
-            <Card className="border-2 border-pink-200 rounded-3xl sticky top-8 bg-white/80 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="text-pink-800 text-2xl">{product.name}</CardTitle>
+          <div className="lg:col-span-1 order-2 lg:order-1">
+            <Card className="border-2 border-pink-200 rounded-2xl sm:rounded-3xl sticky top-4 sm:top-8 bg-white/80 backdrop-blur-sm">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-pink-800 text-xl sm:text-2xl">{product.name}</CardTitle>
                 {product.description && (
-                  <p className="text-pink-600">{product.description}</p>
+                  <p className="text-pink-600 text-sm sm:text-base">{product.description}</p>
                 )}
               </CardHeader>
               
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-pink-700">Selected:</span>
+                  <span className="text-base sm:text-lg font-semibold text-pink-700">Selected:</span>
                   <Badge
-                    className={`${
+                    className={`text-xs sm:text-sm ${
                       totalSelectedCount === product.count
                         ? "bg-green-100 text-green-800 border-green-200"
                         : "bg-yellow-100 text-yellow-800 border-yellow-200"
@@ -384,14 +385,14 @@ export default function PackProductPage() {
                 </div>
 
                 {selectedFlavors.length > 0 && (
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-pink-800">Selected Flavors:</h4>
+                  <div className="space-y-2 sm:space-y-3">
+                    <h4 className="font-semibold text-pink-800 text-sm sm:text-base">Selected Flavors:</h4>
                     {selectedFlavors.map((flavor) => (
-                      <div key={flavor.id} className="flex justify-between items-center text-sm bg-pink-50 p-2 rounded-lg">
-                        <span className="text-pink-700">
+                      <div key={flavor.id} className="flex justify-between items-center text-xs sm:text-sm bg-pink-50 p-2 sm:p-3 rounded-lg">
+                        <span className="text-pink-700 truncate mr-2">
                           {flavor.quantity}x {flavor.name}
                         </span>
-                        <span className="font-bold text-pink-800">
+                        <span className="font-bold text-pink-800 flex-shrink-0">
                           +{(flavor.price * flavor.quantity).toFixed(2)} EGP
                         </span>
                       </div>
@@ -399,46 +400,46 @@ export default function PackProductPage() {
                   </div>
                 )}
 
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-lg text-pink-700">Base Price:</span>
-                    <span className="text-lg font-bold text-pink-800">{basePrice.toFixed(2)} EGP</span>
+                    <span className="text-sm sm:text-lg text-pink-700">Base Price:</span>
+                    <span className="text-sm sm:text-lg font-bold text-pink-800">{basePrice.toFixed(2)} EGP</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-lg text-pink-700">Flavor Add-ons:</span>
-                    <span className="text-lg font-bold text-pink-800">
+                    <span className="text-sm sm:text-lg text-pink-700">Flavor Add-ons:</span>
+                    <span className="text-sm sm:text-lg font-bold text-pink-800">
                       +{totalFlavorPrice.toFixed(2)} EGP
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-pink-800">Quantity:</span>
-                    <div className="flex items-center space-x-2">
+                    <span className="text-sm sm:text-lg font-bold text-pink-800">Quantity:</span>
+                    <div className="flex items-center space-x-1 sm:space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleQuantityChange(quantity - 1)}
                         disabled={quantity <= 1}
-                        className="border-pink-300 text-pink-600 hover:bg-pink-50"
+                        className="border-pink-300 text-pink-600 hover:bg-pink-50 h-8 w-8 sm:h-9 sm:w-9 p-0"
                       >
-                        <Minus className="h-4 w-4" />
+                        <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
                       </Button>
-                      <span className="w-12 text-center font-bold text-pink-800">{quantity}</span>
+                      <span className="w-8 sm:w-12 text-center font-bold text-pink-800 text-sm sm:text-base">{quantity}</span>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleQuantityChange(quantity + 1)}
-                        className="border-pink-300 text-pink-600 hover:bg-pink-50"
+                        className="border-pink-300 text-pink-600 hover:bg-pink-50 h-8 w-8 sm:h-9 sm:w-9 p-0"
                       >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
                   </div>
                 </div>
                 
-                <div className="border-t border-pink-200 pt-4">
+                <div className="border-t border-pink-200 pt-3 sm:pt-4">
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-bold text-pink-800">Total:</span>
-                    <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
+                    <span className="text-lg sm:text-xl font-bold text-pink-800">Total:</span>
+                    <span className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
                       {totalPrice.toFixed(2)} EGP
                     </span>
                   </div>
@@ -447,9 +448,9 @@ export default function PackProductPage() {
                 <Button
                   onClick={handleAddToBag}
                   disabled={totalSelectedCount !== product.count}
-                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-4 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all"
+                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 sm:py-4 font-bold text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-all"
                 >
-                  <ShoppingBag className="mr-2 h-5 w-5" />
+                  <ShoppingBag className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                   {totalSelectedCount === product.count 
                     ? 'Add to Bag' 
                     : `Select ${product.count - totalSelectedCount} more flavor${product.count - totalSelectedCount === 1 ? '' : 's'}`}
@@ -459,13 +460,13 @@ export default function PackProductPage() {
           </div>
 
           {/* Available Flavors */}
-          <div className="lg:col-span-2">
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold text-pink-800 mb-2">Select Your Flavors</h1>
-              <p className="text-lg text-pink-600">
+          <div className="lg:col-span-2 order-1 lg:order-2">
+            <div className="mb-4 sm:mb-8">
+              <h1 className="text-2xl sm:text-3xl font-bold text-pink-800 mb-2">Select Your Flavors</h1>
+              <p className="text-base sm:text-lg text-pink-600">
                 Choose {product.count} flavors for your {product.name}. You can select multiple quantities of the same flavor.
               </p>
-              <p className="text-sm text-pink-500 mt-2">
+              <p className="text-xs sm:text-sm text-pink-500 mt-2">
                 {orderMode === 'stock_based' 
                   ? '💡 Stock levels are shown when less than 3 items are available. Out-of-stock items are disabled unless available for preorder.'
                   : '💡 Use the + and - buttons to adjust quantities. You can select the same flavor multiple times!'
@@ -473,7 +474,7 @@ export default function PackProductPage() {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {availableFlavors.length > 0 ? (
                 availableFlavors.map((flavor) => {
                   const selectedCount = getSelectedFlavorCount(flavor.id);
@@ -488,7 +489,7 @@ export default function PackProductPage() {
                   return (
                     <Card
                       key={flavor.id}
-                      className={`overflow-hidden border-2 transition-all hover:shadow-lg rounded-2xl group ${
+                      className={`overflow-hidden border-2 transition-all hover:shadow-lg rounded-xl sm:rounded-2xl group ${
                         !isAvailable
                           ? "border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed"
                           : isSelected
@@ -496,9 +497,9 @@ export default function PackProductPage() {
                           : "border-pink-200 bg-white hover:border-pink-300"
                       }`}
                     >
-                      <div className="flex items-center p-6 gap-6">
+                      <div className="flex items-center p-4 sm:p-6 gap-3 sm:gap-6">
                         {/* Flavor Image */}
-                        <div className="w-20 h-20 overflow-hidden rounded-xl flex-shrink-0">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 overflow-hidden rounded-lg sm:rounded-xl flex-shrink-0">
                           {flavor.image_url ? (
                             <Image
                               src={flavor.image_url}
@@ -509,15 +510,15 @@ export default function PackProductPage() {
                             />
                           ) : (
                             <div className="w-full h-full bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
-                              <Package className="h-8 w-8 text-pink-400" />
+                              <Package className="h-6 w-6 sm:h-8 sm:w-8 text-pink-400" />
                             </div>
                           )}
                         </div>
 
                         {/* Flavor Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-xl text-pink-800 group-hover:text-pink-600 transition-colors">
+                          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                            <h3 className="font-bold text-base sm:text-xl text-pink-800 group-hover:text-pink-600 transition-colors">
                               {flavor.name}
                             </h3>
                             {orderMode === 'stock_based' && currentStock > 0 && currentStock < 3 && (
@@ -538,61 +539,61 @@ export default function PackProductPage() {
                             )}
                           </div>
                           {flavor.description && (
-                            <p className="text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
+                            <p className="text-xs sm:text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
                           )}
-                          <div className="text-lg font-bold text-pink-700 mt-1">+{Number(flavorPrice).toFixed(2)} EGP</div>
+                          <div className="text-base sm:text-lg font-bold text-pink-700 mt-1">+{Number(flavorPrice).toFixed(2)} EGP</div>
                         </div>
 
                         {/* Selection Controls */}
                         <div className="flex-shrink-0">
-                          <div className="flex items-center space-x-2 bg-white rounded-full border-2 border-pink-300 p-1 shadow-md">
+                          <div className="flex items-center space-x-1 sm:space-x-2 bg-white rounded-full border-2 border-pink-300 p-1 shadow-md">
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
+                              className="h-7 w-7 sm:h-8 sm:w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors p-0"
                               onClick={() => handleFlavorSelect(flavor, 'remove')}
                               disabled={selectedCount === 0}
                             >
-                              <Minus className="h-4 w-4" />
+                              <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             
-                            <span className="w-8 text-center font-bold text-pink-800 text-sm">
+                            <span className="w-6 sm:w-8 text-center font-bold text-pink-800 text-xs sm:text-sm">
                               {selectedCount}
                             </span>
                             
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors"
+                              className="h-7 w-7 sm:h-8 sm:w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors p-0"
                               onClick={() => handleFlavorSelect(flavor, 'add')}
                               disabled={!canAddMore || !isAvailable || selectedCount >= maxSelectable}
                             >
-                              <Plus className="h-4 w-4" />
+                              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           </div>
-                          <div className="flex flex-col items-center gap-1 mt-2">
+                          <div className="flex flex-col items-center gap-1 mt-1 sm:mt-2">
                             {isSelected && (
-                                <Badge className="bg-green-500 text-white border-0 px-3 py-1">
-                                <Check className="h-3 w-3 mr-1" />
+                                <Badge className="bg-green-500 text-white border-0 px-2 py-1 text-xs">
+                                <Check className="h-2 w-2 sm:h-3 sm:w-3 mr-1" />
                                 {selectedCount} selected
                                 </Badge>
                             )}
                             {!canAddMore && !isSelected && (
-                              <Badge className="bg-gray-300 text-gray-600 border-0 px-3 py-1">
+                              <Badge className="bg-gray-300 text-gray-600 border-0 px-2 py-1 text-xs">
                                 Max reached
                               </Badge>
                             )}
                             {orderMode === 'stock_based' && selectedCount >= maxSelectable && maxSelectable > 0 && (
-                              <Badge className="bg-orange-100 text-orange-800 border-orange-200 px-3 py-1">
+                              <Badge className="bg-orange-100 text-orange-800 border-orange-200 px-2 py-1 text-xs">
                                 Stock limit
                               </Badge>
                             )}
                              {orderMode === 'stock_based' && !isAvailable && (
                                 <Badge 
                                   variant="destructive" 
-                                  className="px-3 py-1 bg-red-100 text-red-800 border-red-200 hover:bg-red-200"
+                                  className="px-2 py-1 text-xs bg-red-100 text-red-800 border-red-200 hover:bg-red-200"
                                 >
-                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  <AlertTriangle className="h-2 w-2 sm:h-3 sm:w-3 mr-1" />
                                   Unavailable
                                 </Badge>
                               )}
@@ -613,31 +614,31 @@ export default function PackProductPage() {
 
             {/* Selection Summary */}
             {selectedFlavors.length > 0 && (
-              <Card className="mt-8 border-2 border-pink-200 rounded-2xl bg-gradient-to-br from-pink-50 to-rose-50">
-                <CardHeader>
-                  <CardTitle className="text-pink-800">Your Selection Summary</CardTitle>
+              <Card className="mt-6 sm:mt-8 border-2 border-pink-200 rounded-xl sm:rounded-2xl bg-gradient-to-br from-pink-50 to-rose-50">
+                <CardHeader className="p-4 sm:p-6">
+                  <CardTitle className="text-pink-800 text-base sm:text-lg">Your Selection Summary</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="space-y-2 sm:space-y-3">
                     {selectedFlavors.map((flavor) => (
-                      <div key={flavor.id} className="flex justify-between items-center p-3 bg-white rounded-lg border border-pink-200">
-                        <div className="flex items-center">
-                          <span className="font-medium text-pink-800">{flavor.name}</span>
-                          <Badge className="ml-3 bg-pink-100 text-pink-800 border-pink-200">
+                      <div key={flavor.id} className="flex justify-between items-center p-2 sm:p-3 bg-white rounded-lg border border-pink-200">
+                        <div className="flex items-center min-w-0 flex-1">
+                          <span className="font-medium text-pink-800 text-sm sm:text-base truncate">{flavor.name}</span>
+                          <Badge className="ml-2 sm:ml-3 bg-pink-100 text-pink-800 border-pink-200 text-xs">
                             {flavor.quantity}x
                           </Badge>
                         </div>
-                        <div className="text-right">
-                          <span className="font-bold text-pink-700">
+                        <div className="text-right flex-shrink-0 ml-2">
+                          <span className="font-bold text-pink-700 text-sm sm:text-base">
                             +{(flavor.price * flavor.quantity).toFixed(2)} EGP
                           </span>
                         </div>
                       </div>
                     ))}
-                    <div className="border-t border-pink-200 pt-3">
+                    <div className="border-t border-pink-200 pt-2 sm:pt-3">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-pink-800">Total Flavors:</span>
-                        <span className="font-bold text-pink-800">
+                        <span className="font-semibold text-pink-800 text-sm sm:text-base">Total Flavors:</span>
+                        <span className="font-bold text-pink-800 text-sm sm:text-base">
                           {totalSelectedCount} / {product.count}
                         </span>
                       </div>
@@ -652,20 +653,20 @@ export default function PackProductPage() {
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md mx-4">
           <DialogHeader>
-            <DialogTitle className="text-pink-800">Item Added to Cart!</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-pink-800 text-base sm:text-lg">Item Added to Cart!</DialogTitle>
+            <DialogDescription className="text-sm sm:text-base">
               Your {product.name} has been successfully added to your cart. Would you like to proceed to checkout or continue shopping?
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-4 mt-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-4">
             <Button
               onClick={() => {
                 setShowConfirmation(false);
                 router.back();
               }}
-              className="flex-1 bg-pink-600 hover:bg-pink-700"
+              className="flex-1 bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
             >
               Continue Shopping
             </Button>
@@ -674,7 +675,7 @@ export default function PackProductPage() {
                 setShowConfirmation(false);
                 router.push('/cart');
               }}
-              className="flex-1 bg-pink-600 hover:bg-pink-700"
+              className="flex-1 bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
             >
               Go to Cart
             </Button>

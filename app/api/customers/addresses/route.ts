@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import db from '@/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { databaseService } from '@/lib/services/databaseService';
 
 export async function POST(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    const session = await getServerSession(authOptions);
 
-    if (!token) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -23,23 +24,40 @@ export async function POST(request: Request) {
       );
     }
 
+    // Get customer ID
+    const customerResult = await databaseService.query(
+      'SELECT id FROM customers WHERE email = ?',
+      [session.user.email]
+    );
+
+    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
+
+    if (customerArray.length === 0) {
+      return NextResponse.json(
+        { error: 'Customer not found' },
+        { status: 404 }
+      );
+    }
+
+    const customerId = customerArray[0].id;
+
     // If this is the default address, unset any existing default
     if (isDefault) {
-      await db.query(
-        'UPDATE addresses SET is_default = false WHERE customer_id = ?',
-        [(token as any).id]
+      await databaseService.query(
+        'UPDATE customer_addresses SET is_default = false WHERE customer_id = ?',
+        [customerId]
       );
     }
 
     // Add new address
-    const [result] = await db.query(
-      'INSERT INTO addresses (customer_id, city_id, zone_id, street_address, additional_info, is_default) VALUES (?, ?, ?, ?, ?, ?)',
-      [(token as any).id, cityId, zoneId, streetAddress, additionalInfo, isDefault || false]
+    const insertResult = await databaseService.query(
+      'INSERT INTO customer_addresses (customer_id, city_id, zone_id, street_address, additional_info, is_default) VALUES (?, ?, ?, ?, ?, ?)',
+      [customerId, cityId, zoneId, streetAddress, additionalInfo, isDefault || false]
     );
 
     return NextResponse.json({
       message: 'Address added successfully',
-      addressId: (result as any).insertId
+      addressId: (insertResult as any).insertId
     });
   } catch (error) {
     console.error('Add address error:', error);
@@ -52,9 +70,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    const session = await getServerSession(authOptions);
 
-    if (!token) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -71,18 +89,35 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Get customer ID
+    const customerResult = await databaseService.query(
+      'SELECT id FROM customers WHERE email = ?',
+      [session.user.email]
+    );
+
+    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
+
+    if (customerArray.length === 0) {
+      return NextResponse.json(
+        { error: 'Customer not found' },
+        { status: 404 }
+      );
+    }
+
+    const customerId = customerArray[0].id;
+
     // If this is the default address, unset any existing default
     if (isDefault) {
-      await db.query(
-        'UPDATE addresses SET is_default = false WHERE customer_id = ?',
-        [(token as any).id]
+      await databaseService.query(
+        'UPDATE customer_addresses SET is_default = false WHERE customer_id = ?',
+        [customerId]
       );
     }
 
     // Update address
-    await db.query(
-      'UPDATE addresses SET city_id = ?, zone_id = ?, street_address = ?, additional_info = ?, is_default = ? WHERE id = ? AND customer_id = ?',
-      [cityId, zoneId, streetAddress, additionalInfo, isDefault || false, addressId, (token as any).id]
+    await databaseService.query(
+      'UPDATE customer_addresses SET city_id = ?, zone_id = ?, street_address = ?, additional_info = ?, is_default = ? WHERE id = ? AND customer_id = ?',
+      [cityId, zoneId, streetAddress, additionalInfo, isDefault || false, addressId, customerId]
     );
 
     return NextResponse.json({
@@ -99,9 +134,9 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    const session = await getServerSession(authOptions);
 
-    if (!token) {
+    if (!session?.user?.email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -118,10 +153,43 @@ export async function DELETE(request: Request) {
       );
     }
 
+    // Get customer ID
+    const customerResult = await databaseService.query(
+      'SELECT id FROM customers WHERE email = ?',
+      [session.user.email]
+    );
+
+    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
+
+    if (customerArray.length === 0) {
+      return NextResponse.json(
+        { error: 'Customer not found' },
+        { status: 404 }
+      );
+    }
+
+    const customerId = customerArray[0].id;
+
+    // Check if this is the last address
+    const addressCountResult = await databaseService.query(
+      'SELECT COUNT(*) as count FROM customer_addresses WHERE customer_id = ?',
+      [customerId]
+    );
+
+    const addressCountArray = Array.isArray(addressCountResult) ? addressCountResult : (addressCountResult ? [addressCountResult] : []);
+    const addressCount = addressCountArray[0]?.count || 0;
+
+    if (addressCount <= 1) {
+      return NextResponse.json(
+        { error: 'Cannot delete the last address. You must have at least one address.' },
+        { status: 400 }
+      );
+    }
+
     // Delete address
-    await db.query(
-      'DELETE FROM addresses WHERE id = ? AND customer_id = ?',
-      [addressId, (token as any).id]
+    await databaseService.query(
+      'DELETE FROM customer_addresses WHERE id = ? AND customer_id = ?',
+      [addressId, customerId]
     );
 
     return NextResponse.json({

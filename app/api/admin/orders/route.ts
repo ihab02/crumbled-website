@@ -31,7 +31,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch all orders with customer information
+    // Get pagination parameters
+    const { searchParams } = new URL(request.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    const offset = (page - 1) * limit
+
+    // Ensure parameters are valid numbers
+    if (isNaN(page) || isNaN(limit) || isNaN(offset)) {
+      return NextResponse.json(
+        { error: 'Invalid pagination parameters' },
+        { status: 400 }
+      )
+    }
+
+    // Get total count for pagination
+    const countSql = `
+      SELECT COUNT(*) as total
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+    `
+    const countResult = await db.query(countSql)
+    const totalOrders = safeExtractArray(countResult)[0]?.total || 0
+    const totalPages = Math.ceil(totalOrders / limit)
+
+    // Fetch orders with customer information and pagination
+    // Use string interpolation for LIMIT and OFFSET since they are safe numeric values
     const sql = `
       SELECT 
         o.id,
@@ -41,16 +66,39 @@ export async function GET(request: NextRequest) {
         o.payment_method,
         o.guest_otp,
         o.otp_verified,
-        c.id as customer_id,
+        o.customer_id,
+        o.customer_phone,
+        o.delivery_address,
+        o.delivery_city,
+        o.delivery_zone,
+        o.zone,
+        o.delivery_fee,
+        o.subtotal,
+        c.id as customer_id_from_customers,
         CONCAT(c.first_name, ' ', c.last_name) as customer_name,
         c.email as customer_email,
-        c.phone as customer_phone
+        COALESCE(c.phone, o.customer_phone) as customer_phone,
+        COALESCE(z.delivery_days, 0) as delivery_days,
+        dts.name as delivery_time_slot_name,
+        dts.from_hour,
+        dts.to_hour,
+        CASE 
+          WHEN COALESCE(z.delivery_days, 0) > 0 THEN 
+            DATE_ADD(o.created_at, INTERVAL z.delivery_days DAY)
+          ELSE NULL
+        END as expected_delivery_date
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN zones z ON TRIM(o.delivery_zone) COLLATE utf8mb4_general_ci = TRIM(z.name) COLLATE utf8mb4_general_ci
+      LEFT JOIN delivery_time_slots dts ON z.time_slot_id = dts.id
       ORDER BY o.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const ordersResult = await db.query(sql)
+    console.log('🔍 [DEBUG] Query with interpolated values - limit:', limit, 'offset:', offset)
+    console.log('🔍 [DEBUG] Final SQL:', sql)
+    
+    const ordersResult = await db.query(sql, [])
 
     console.log('Orders query result:', ordersResult)
     console.log('Orders result type:', typeof ordersResult)
@@ -58,6 +106,19 @@ export async function GET(request: NextRequest) {
 
     // Extract orders from the result - handle different possible structures
     const orders = safeExtractArray(ordersResult)
+    
+    // Debug: Check first order's delivery info
+    if (orders.length > 0) {
+      const firstOrder = orders[0]
+      console.log('🔍 [DEBUG] First order delivery info:', {
+        delivery_zone: firstOrder.delivery_zone,
+        delivery_days: firstOrder.delivery_days,
+        delivery_time_slot_name: firstOrder.delivery_time_slot_name,
+        from_hour: firstOrder.from_hour,
+        to_hour: firstOrder.to_hour,
+        expected_delivery_date: firstOrder.expected_delivery_date
+      })
+    }
     
     console.log('Extracted orders:', orders)
     console.log('Orders type:', typeof orders)
@@ -83,15 +144,20 @@ export async function GET(request: NextRequest) {
               pi.size_id,
               cs.label as size_label,
               CASE 
-                WHEN pi.product_type = 'cookie_pack' THEN cp.name
-                WHEN pi.product_type = 'beverage' THEN p.name
-                WHEN pi.product_type = 'cake' THEN p.name
-                ELSE 'Unknown Product'
+                WHEN pi.product_type = 'cookie_pack' THEN 
+                  CASE 
+                    WHEN pr.name IS NOT NULL THEN pr.name
+                    WHEN pi.product_id BETWEEN 1 AND 100 THEN 'Custom Cookie Pack'
+                    ELSE 'Cookie Pack'
+                  END
+                WHEN pi.product_type = 'beverage' THEN COALESCE(p.name, 'Beverage')
+                WHEN pi.product_type = 'cake' THEN COALESCE(p.name, 'Cake')
+                ELSE 'Product'
               END as product_name
             FROM order_items oi
             LEFT JOIN product_instance pi ON oi.product_instance_id = pi.id
             LEFT JOIN cookie_size cs ON pi.size_id = cs.id
-            LEFT JOIN cookie_pack cp ON pi.product_id = cp.id AND pi.product_type = 'cookie_pack'
+            LEFT JOIN products pr ON pi.product_id = pr.id AND pi.product_type = 'cookie_pack'
             LEFT JOIN products p ON pi.product_id = p.id AND pi.product_type IN ('beverage', 'cake')
             WHERE oi.order_id = ?
           `, [order.id])
@@ -170,7 +236,17 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    return NextResponse.json(ordersWithItems)
+    return NextResponse.json({
+      orders: ordersWithItems,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalOrders,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    })
   } catch (error) {
     console.error('Error fetching orders:', error)
     return NextResponse.json(

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
-import { verifyJWT } from '@/lib/middleware/auth';
-import { cookies } from 'next/headers';
 
 interface PaymentMethod {
   enabled: boolean;
@@ -17,27 +17,16 @@ interface PaymentMethods {
 // GET /api/admin/settings/payment-methods
 export async function GET() {
   try {
-    // Verify admin authentication
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get('adminToken');
-    
-    if (!adminToken) {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { success: false, error: 'Authentication required' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    try {
-      verifyJWT(adminToken.value, 'admin');
-    } catch (error) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired token' },
-        { status: 401 }
-      );
-    }
-
-    const [result] = await databaseService.query(
+    const result = await databaseService.query(
       'SELECT setting_value FROM site_settings WHERE setting_key = ?',
       ['payment_methods']
     );
@@ -47,9 +36,10 @@ export async function GET() {
       paymob: { enabled: true, name: 'Paymob', description: 'Secure online payment' }
     };
 
-    if (Array.isArray(result) && result.length > 0) {
+    const resultArray = Array.isArray(result) ? result : (result ? [result] : []);
+    if (resultArray.length > 0) {
       try {
-        paymentMethods = JSON.parse((result[0] as any).setting_value);
+        paymentMethods = JSON.parse((resultArray[0] as any).setting_value);
       } catch (error) {
         console.error('Error parsing payment methods:', error);
       }
@@ -71,22 +61,11 @@ export async function GET() {
 // POST /api/admin/settings/payment-methods
 export async function POST(request: Request) {
   try {
-    // Verify admin authentication
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get('adminToken');
-    
-    if (!adminToken) {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { success: false, error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    try {
-      verifyJWT(adminToken.value, 'admin');
-    } catch (error) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired token' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }

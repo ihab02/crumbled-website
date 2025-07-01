@@ -141,6 +141,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     
     console.log('🔍 [DEBUG] Confirm API - Request body:', JSON.stringify(requestBody, null, 2))
     console.log('🔍 [DEBUG] Confirm API - Guest data:', JSON.stringify(guestData, null, 2))
+    console.log('🔍 [DEBUG] Confirm API - Save New Address:', saveNewAddress)
     
     const cartId = await getOrCreateCart();
 
@@ -365,7 +366,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       // Registered user
       if (useNewAddress && newAddress) {
         // Use new address
-        const [zoneResult] = await databaseService.query(
+        const zoneResult = await databaseService.query(
           'SELECT z.delivery_fee, c.name as city_name, z.name as zone_name FROM zones z JOIN cities c ON z.city_id = c.id WHERE z.id = ?',
           [newAddress.zone_id]
         );
@@ -381,12 +382,70 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
             delivery_fee: zone.delivery_fee
           };
         }
+
+        // Save new address if requested
+        if (saveNewAddress && newAddress) {
+          console.log('🔍 [DEBUG] Confirm API - Saving new address for user:', session.user.email)
+          
+          // Get customer ID
+          const customerResult = await databaseService.query(
+            'SELECT id FROM customers WHERE email = ?',
+            [session.user.email]
+          );
+          
+          const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
+          
+          if (customerArray.length > 0) {
+            const customerId = customerArray[0].id;
+            
+            // Check if this address already exists for this customer
+            const existingAddressResult = await databaseService.query(
+              `SELECT id FROM customer_addresses 
+               WHERE customer_id = ? 
+               AND street_address = ? 
+               AND city_id = ? 
+               AND zone_id = ? 
+               AND (additional_info = ? OR (additional_info IS NULL AND ? IS NULL))`,
+              [
+                customerId,
+                newAddress.street_address,
+                newAddress.city_id,
+                newAddress.zone_id,
+                newAddress.additional_info || null,
+                newAddress.additional_info || null
+              ]
+            );
+            
+            const existingAddressArray = Array.isArray(existingAddressResult) ? existingAddressResult : (existingAddressResult ? [existingAddressResult] : []);
+            
+            if (existingAddressArray.length === 0) {
+              // Address doesn't exist, save it
+              const insertResult = await databaseService.query(
+                'INSERT INTO customer_addresses (customer_id, street_address, additional_info, city_id, zone_id, is_default) VALUES (?, ?, ?, ?, ?, ?)',
+                [
+                  customerId,
+                  newAddress.street_address,
+                  newAddress.additional_info || null,
+                  newAddress.city_id,
+                  newAddress.zone_id,
+                  false // Don't set as default automatically
+                ]
+              );
+              
+              console.log('🔍 [DEBUG] Confirm API - New address saved with ID:', (insertResult as any).insertId)
+            } else {
+              console.log('🔍 [DEBUG] Confirm API - Address already exists, skipping save')
+            }
+          } else {
+            console.error('❌ [DEBUG] Confirm API - Customer not found for email:', session.user.email)
+          }
+        }
       } else if (selectedAddressId) {
         // Use selected saved address
         console.log('🔍 [DEBUG] Confirm API - Looking up saved address ID:', selectedAddressId)
         console.log('🔍 [DEBUG] Confirm API - User email:', session.user.email)
         
-        const [addressResult] = await databaseService.query(
+        const addressResult = await databaseService.query(
           `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee
            FROM customer_addresses ca
            JOIN cities c ON ca.city_id = c.id
@@ -418,7 +477,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
       // Get customer info
       console.log('🔍 [DEBUG] Confirm API - Looking up customer info for email:', session.user.email)
-      const [userResult] = await databaseService.query(
+      const userResult = await databaseService.query(
         'SELECT first_name, last_name, email, phone FROM customers WHERE email = ?',
         [session.user.email]
       );
@@ -528,7 +587,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
     console.log('🔍 [DEBUG] Confirm API - All validations passed, proceeding with order confirmation')
 
-    const total = subtotal + deliveryFee;
+    const total = subtotal + Number(deliveryFee);
 
     console.log(`🔍 [DEBUG] Confirm API - Final calculations:`)
     console.log(`  - Subtotal: ${subtotal}`)
@@ -542,7 +601,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         cart: {
           items,
           subtotal,
-          deliveryFee,
+          deliveryFee: Number(deliveryFee),
           total,
           itemCount
         },

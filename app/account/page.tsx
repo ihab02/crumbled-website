@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Package, User, LogOut, Clock, Truck, CheckCircle, AlertCircle } from "lucide-react"
+import { Package, User, LogOut, Clock, Truck, CheckCircle, AlertCircle, MapPin, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { toast } from 'react-hot-toast'
 
@@ -47,7 +47,7 @@ export default function AccountPage() {
   const [currentOrders, setCurrentOrders] = useState<Order[]>([])
   const [pastOrders, setPastOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'profile' | 'addresses'>('profile')
+  const [activeTab, setActiveTab] = useState<string>('orders')
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -63,6 +63,7 @@ export default function AccountPage() {
   const [cities, setCities] = useState<{ id: number; name: string }[]>([])
   const [zones, setZones] = useState<{ id: number; name: string; deliveryFee: number }[]>([])
   const [customer, setCustomer] = useState<Customer | null>(null)
+  const [deleteAddressId, setDeleteAddressId] = useState<number | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -87,6 +88,13 @@ export default function AccountPage() {
     }
 
     checkAuth()
+
+    // Handle URL parameters for tab selection
+    const urlParams = new URLSearchParams(window.location.search)
+    const tabParam = urlParams.get('tab')
+    if (tabParam && ['orders', 'addresses', 'profile'].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
   }, [router])
 
   const fetchOrders = async () => {
@@ -129,6 +137,11 @@ export default function AccountPage() {
         lastName: data.customer.lastName,
         phone: data.customer.phone || ''
       })
+
+      // Ensure user has at least one address
+      if (!data.customer.addresses || data.customer.addresses.length === 0) {
+        toast.error('No addresses found. Please add at least one address to continue.')
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to fetch customer data')
       router.push('/auth/login')
@@ -229,10 +242,19 @@ export default function AccountPage() {
   }
 
   const handleAddressDelete = async (addressId: number) => {
-    if (!confirm('Are you sure you want to delete this address?')) return
+    // Check if this is the last address
+    if (customer?.addresses && customer.addresses.length <= 1) {
+      toast.error('Cannot delete the last address. You must have at least one address.')
+      return
+    }
+    setDeleteAddressId(addressId)
+  }
+
+  const confirmDeleteAddress = async () => {
+    if (!deleteAddressId) return
 
     try {
-      const response = await fetch(`/api/customers/addresses?id=${addressId}`, {
+      const response = await fetch(`/api/customers/addresses?id=${deleteAddressId}`, {
         method: 'DELETE',
       })
 
@@ -246,7 +268,13 @@ export default function AccountPage() {
       fetchCustomerData()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete address')
+    } finally {
+      setDeleteAddressId(null)
     }
+  }
+
+  const cancelDeleteAddress = () => {
+    setDeleteAddressId(null)
   }
 
   const handleLogout = async () => {
@@ -403,9 +431,10 @@ export default function AccountPage() {
           </div>
         )}
 
-        <Tabs defaultValue="orders" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="orders" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="orders">Order History</TabsTrigger>
+            <TabsTrigger value="addresses">Addresses</TabsTrigger>
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -485,6 +514,157 @@ export default function AccountPage() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="addresses">
+            <Card className="border-2 border-pink-200 rounded-3xl">
+              <CardHeader>
+                <CardTitle className="text-pink-800 flex items-center gap-2">
+                  <MapPin className="h-5 w-5" /> My Addresses
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Add New Address Form */}
+                  <div className="border border-pink-200 rounded-xl p-6 bg-gradient-to-r from-pink-50 to-rose-50">
+                    <h3 className="font-bold text-pink-800 mb-4 flex items-center gap-2">
+                      <Plus className="h-4 w-4" /> Add New Address
+                    </h3>
+                    <form onSubmit={handleAddressSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-pink-700 mb-1">City</label>
+                          <select
+                            value={addressForm.cityId}
+                            onChange={(e) => {
+                              setAddressForm(prev => ({ ...prev, cityId: e.target.value, zoneId: '' }))
+                              if (e.target.value) fetchZones(e.target.value)
+                            }}
+                            className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                            required
+                          >
+                            <option value="">Select City</option>
+                            {cities.map((city) => (
+                              <option key={city.id} value={city.id}>{city.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-pink-700 mb-1">Zone</label>
+                          <select
+                            value={addressForm.zoneId}
+                            onChange={(e) => setAddressForm(prev => ({ ...prev, zoneId: e.target.value }))}
+                            className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                            required
+                            disabled={!addressForm.cityId}
+                          >
+                            <option value="">Select Zone</option>
+                            {zones.map((zone) => (
+                              <option key={zone.id} value={zone.id}>{zone.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-pink-700 mb-1">Street Address</label>
+                        <input
+                          type="text"
+                          value={addressForm.streetAddress}
+                          onChange={(e) => setAddressForm(prev => ({ ...prev, streetAddress: e.target.value }))}
+                          className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                          placeholder="Enter street address"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-pink-700 mb-1">Additional Info</label>
+                        <input
+                          type="text"
+                          value={addressForm.additionalInfo}
+                          onChange={(e) => setAddressForm(prev => ({ ...prev, additionalInfo: e.target.value }))}
+                          className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                          placeholder="Apartment, floor, etc."
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="isDefault"
+                          checked={addressForm.isDefault}
+                          onChange={(e) => setAddressForm(prev => ({ ...prev, isDefault: e.target.checked }))}
+                          className="rounded border-pink-300 text-pink-600 focus:ring-pink-500"
+                        />
+                        <label htmlFor="isDefault" className="text-sm text-pink-700">Set as default address</label>
+                      </div>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full"
+                      >
+                        {loading ? 'Adding...' : 'Add Address'}
+                      </Button>
+                    </form>
+                  </div>
+
+                  {/* Saved Addresses */}
+                  <div>
+                    <h3 className="font-bold text-pink-800 mb-4 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" /> Saved Addresses
+                    </h3>
+                    {customer?.addresses && customer.addresses.length > 0 ? (
+                      <div className="space-y-4">
+                        {customer.addresses.map((address) => (
+                          <div key={address.id} className="border border-pink-200 rounded-xl p-4 bg-white">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="font-bold text-pink-800">{address.streetAddress}</h4>
+                                  {address.isDefault && (
+                                    <Badge className="bg-pink-100 text-pink-800 border-pink-200">Default</Badge>
+                                  )}
+                                </div>
+                                {address.additionalInfo && (
+                                  <p className="text-sm text-pink-600 mb-1">{address.additionalInfo}</p>
+                                )}
+                                <p className="text-sm text-pink-600">{address.zone}, {address.city}</p>
+                                <p className="text-sm text-pink-600">Delivery Fee: ${address.deliveryFee.toFixed(2)}</p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAddressDelete(address.id)}
+                                disabled={customer?.addresses && customer.addresses.length <= 1}
+                                className={`ml-4 ${
+                                  customer?.addresses && customer.addresses.length <= 1
+                                    ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                                    : 'border-red-300 text-red-600 hover:bg-red-50'
+                                }`}
+                                title={
+                                  customer?.addresses && customer.addresses.length <= 1
+                                    ? 'Cannot delete the last address'
+                                    : 'Delete address'
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <AlertCircle className="h-8 w-8 text-red-600" />
+                        </div>
+                        <p className="text-red-600 mb-2 font-semibold">No addresses found!</p>
+                        <p className="text-sm text-pink-500 mb-4">You must have at least one address to place orders.</p>
+                        <p className="text-sm text-pink-500">Add your first address above to get started.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="profile">
             <Card className="border-2 border-pink-200 rounded-3xl">
               <CardHeader>
@@ -527,6 +707,43 @@ export default function AccountPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Delete Address Confirmation Dialog */}
+      {deleteAddressId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Address</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete this address? This action cannot be undone.
+                {customer?.addresses && customer.addresses.length <= 2 && (
+                  <span className="block mt-2 text-sm text-orange-600">
+                    ⚠️ This is one of your last addresses. Make sure you have another address before deleting.
+                  </span>
+                )}
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={cancelDeleteAddress}
+                  className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmDeleteAddress}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

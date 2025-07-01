@@ -187,7 +187,7 @@ function PaymentCallbackContent() {
                 <p className="text-sm text-gray-500">
                   A confirmation email has been sent to your email address.
                 </p>
-                <Link href="/checkout/success">
+                <Link href={`/checkout/success?orderId=${paymentResult.orderId}`}>
                   <Button className="w-full bg-green-600 hover:bg-green-700">
                     View Order Details
                   </Button>

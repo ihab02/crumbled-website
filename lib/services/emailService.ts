@@ -175,7 +175,7 @@ class EmailService {
   }
 
   public async sendOrderConfirmationEmail(to: string, orderId: string, orderDetails: any) {
-    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/images/logo-with-background.jpg`;
+    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/logo-with-background.jpg`;
     
     await this.sendEmail({
       to,
@@ -385,7 +385,7 @@ class EmailService {
                       ${item.flavorDetails ? `<div class="item-description">${item.flavorDetails}</div>` : ''}
                       <div class="item-description">Quantity: ${item.quantity}</div>
                     </div>
-                    <div class="item-price">${item.total.toFixed(2)} EGP</div>
+                    <div class="item-price">${Number(item.total).toFixed(2)} EGP</div>
                   </div>
                 `).join('')}
               </div>
@@ -393,7 +393,7 @@ class EmailService {
               <div class="totals">
                 <div class="total-row">
                   <span>Subtotal:</span>
-                  <span>${orderDetails.subtotal.toFixed(2)} EGP</span>
+                  <span>${Number(orderDetails.subtotal).toFixed(2)} EGP</span>
                 </div>
                 <div class="total-row">
                   <span>Delivery Fee:</span>
@@ -435,7 +435,7 @@ class EmailService {
                 <div class="section">
                   <h3>Payment Information</h3>
                   <p>You have chosen <strong>Cash on Delivery</strong> as your payment method. Please have the exact amount ready when your order arrives.</p>
-                  <p><strong>Total Amount Due:</strong> ${orderDetails.total.toFixed(2)} EGP</p>
+                  <p><strong>Total Amount Due:</strong> ${Number(orderDetails.total).toFixed(2)} EGP</p>
                 </div>
               ` : `
                 <div class="section">
@@ -444,6 +444,33 @@ class EmailService {
                   <p><strong>Payment Status:</strong> <span class="status-badge status-confirmed">Paid</span></p>
                 </div>
               `}
+
+              <div class="section">
+                <h3>Need to Cancel?</h3>
+                <p>If you need to cancel your order, please click the button below. Orders can only be cancelled within 30 minutes of placement.</p>
+                <div style="text-align: center; margin: 20px 0;">
+                  <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/orders/${orderId}/cancel?email=${encodeURIComponent(orderDetails.customerInfo.email)}" 
+                     style="
+                       display: inline-block;
+                       padding: 12px 24px;
+                       background: #ef4444;
+                       color: white;
+                       text-decoration: none;
+                       border-radius: 8px;
+                       font-weight: 600;
+                       font-size: 14px;
+                       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                       transition: all 0.3s ease;
+                     "
+                     onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'"
+                     onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+                    ❌ Cancel Order
+                  </a>
+                </div>
+                <p style="font-size: 12px; color: #6b7280; text-align: center;">
+                  <strong>Note:</strong> Cancellation is only available within 30 minutes of order placement.
+                </p>
+              </div>
 
               <div class="section">
                 <h3>What's Next?</h3>
