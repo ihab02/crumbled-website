@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
-import { getJwtSecret } from '@/lib/auth-config';
+import { verifyJWT } from '@/lib/middleware/auth';
 
 interface OrderModeRequest {
   orderMode: 'stock_based' | 'preorder';
@@ -13,58 +13,6 @@ interface OrderModeResponse {
     orderMode: 'stock_based' | 'preorder';
   };
   error?: string;
-}
-
-// JWT verification function (same as middleware)
-async function verifyJWT(token: string, userType: 'customer' | 'admin'): Promise<any> {
-  try {
-    const [headerB64, payloadB64, signatureB64] = token.split('.');
-    
-    if (!headerB64 || !payloadB64 || !signatureB64) {
-      throw new Error('Invalid token format');
-    }
-    
-    // Decode header and payload
-    const header = JSON.parse(atob(headerB64));
-    const payload = JSON.parse(atob(payloadB64));
-    
-    // Check if token is expired
-    if (payload.exp && payload.exp < Date.now() / 1000) {
-      throw new Error('Token expired');
-    }
-
-    // Verify signature using Web Crypto API
-    const encoder = new TextEncoder();
-    const data = encoder.encode(`${headerB64}.${payloadB64}`);
-    const signature = Uint8Array.from(atob(signatureB64), c => c.charCodeAt(0));
-    
-    // Import the secret key
-    const secret = getJwtSecret(userType);
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    // Verify the signature
-    const isValid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      signature,
-      data
-    );
-
-    if (!isValid) {
-      throw new Error('Invalid signature');
-    }
-
-    return payload;
-  } catch (error) {
-    console.error('JWT verification error:', error);
-    throw error;
-  }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<OrderModeResponse>> {
@@ -88,9 +36,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<OrderModeR
     let isAdmin = false;
     let decodedToken = null;
     try {
-      decodedToken = await verifyJWT(adminToken.value, 'admin');
+      decodedToken = verifyJWT(adminToken.value, 'admin');
       console.log('Decoded token:', decodedToken);
-      isAdmin = decodedToken.role === 'admin';
+      isAdmin = true; // If verifyJWT doesn't throw, it's a valid admin token
       console.log('Is admin:', isAdmin);
     } catch (error) {
       console.error('Token verification error:', error);
@@ -156,8 +104,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse<OrderModeR
     // Verify admin token
     let isAdmin = false;
     try {
-      const decoded = await verifyJWT(adminToken.value, 'admin');
-      isAdmin = decoded.role === 'admin';
+      const decoded = verifyJWT(adminToken.value, 'admin');
+      isAdmin = true; // If verifyJWT doesn't throw, it's a valid admin token
     } catch (error) {
       console.error('Token verification error:', error);
       isAdmin = false;

@@ -356,11 +356,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-    console.log(`🔍 [DEBUG] Confirm API - Final calculations:`)
-    console.log(`  - Subtotal: ${subtotal}`)
-    console.log(`  - Delivery fee: ${deliveryFee}`)
-    console.log(`  - Total: ${subtotal + deliveryFee}`)
-
     // Handle delivery address
     let deliveryAddress;
     let deliveryFee = 0;
@@ -402,8 +397,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
         console.log('🔍 [DEBUG] Confirm API - Address lookup result:', addressResult)
 
-        if (Array.isArray(addressResult) && addressResult.length > 0) {
-          const address = addressResult[0];
+        // Handle both array and single object results
+        const addressArray = Array.isArray(addressResult) ? addressResult : (addressResult ? [addressResult] : []);
+
+        if (addressArray.length > 0) {
+          const address = addressArray[0];
           deliveryFee = address.delivery_fee;
           deliveryAddress = {
             street_address: address.street_address,
@@ -419,18 +417,27 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }
 
       // Get customer info
+      console.log('🔍 [DEBUG] Confirm API - Looking up customer info for email:', session.user.email)
       const [userResult] = await databaseService.query(
         'SELECT first_name, last_name, email, phone FROM customers WHERE email = ?',
         [session.user.email]
       );
 
-      if (Array.isArray(userResult) && userResult.length > 0) {
-        const user = userResult[0];
+      console.log('🔍 [DEBUG] Confirm API - Customer lookup result:', userResult)
+
+      // Handle both array and single object results
+      const userArray = Array.isArray(userResult) ? userResult : (userResult ? [userResult] : []);
+
+      if (userArray.length > 0) {
+        const user = userArray[0];
         customerInfo = {
           name: `${user.first_name} ${user.last_name}`,
           email: user.email,
           phone: user.phone
         };
+        console.log('🔍 [DEBUG] Confirm API - Customer info set:', customerInfo)
+      } else {
+        console.error('❌ [DEBUG] Confirm API - No customer found for email:', session.user.email)
       }
     } else {
       // Guest user
@@ -502,6 +509,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     }
 
     if (!deliveryAddress) {
+      console.error('❌ [DEBUG] Confirm API - No delivery address set')
       return NextResponse.json({
         success: false,
         message: 'Delivery address is required',
@@ -510,6 +518,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     }
 
     if (!customerInfo) {
+      console.error('❌ [DEBUG] Confirm API - No customer info set')
       return NextResponse.json({
         success: false,
         message: 'Customer information is required',
@@ -517,7 +526,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }, { status: 400 });
     }
 
+    console.log('🔍 [DEBUG] Confirm API - All validations passed, proceeding with order confirmation')
+
     const total = subtotal + deliveryFee;
+
+    console.log(`🔍 [DEBUG] Confirm API - Final calculations:`)
+    console.log(`  - Subtotal: ${subtotal}`)
+    console.log(`  - Delivery fee: ${deliveryFee}`)
+    console.log(`  - Total: ${total}`)
 
     return NextResponse.json({
       success: true,

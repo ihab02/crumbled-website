@@ -408,6 +408,29 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
     if (paymentMethod === 'cod') {
       // Cash on Delivery - order is complete
       try {
+        // Fetch delivery rules for the zone
+        let deliveryRules = null;
+        try {
+          const zoneId = await databaseService.query(
+            'SELECT z.id FROM zones z JOIN cities c ON z.city_id = c.id WHERE c.name = ? AND z.name = ?',
+            [orderData.deliveryAddress.city_name, orderData.deliveryAddress.zone_name]
+          );
+          
+          if (Array.isArray(zoneId) && zoneId.length > 0) {
+            const currentDate = new Date().toISOString().split('T')[0];
+            const deliveryRulesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/zones/delivery-rules?zoneId=${zoneId[0].id}&orderDate=${currentDate}`);
+            if (deliveryRulesResponse.ok) {
+              const deliveryRulesData = await deliveryRulesResponse.json();
+              if (deliveryRulesData.success) {
+                deliveryRules = deliveryRulesData.deliveryRules;
+              }
+            }
+          }
+        } catch (rulesError) {
+          console.error('❌ Failed to fetch delivery rules:', rulesError);
+          // Continue without delivery rules if fetch fails
+        }
+
         // Send order confirmation email
         await emailService.sendOrderConfirmationEmail(
           orderData.customerInfo.email, 
@@ -420,7 +443,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
             status: 'pending',
             paymentMethod: 'cod',
             customerInfo: orderData.customerInfo,
-            deliveryAddress: orderData.deliveryAddress
+            deliveryAddress: orderData.deliveryAddress,
+            deliveryRules: deliveryRules
           }
         );
         console.log('✅ Order confirmation email sent for COD order');

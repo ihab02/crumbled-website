@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
+import { verifyJWT } from '@/lib/middleware/auth';
+import { cookies } from 'next/headers';
 
 interface PaymentMethod {
   enabled: boolean;
@@ -15,6 +17,26 @@ interface PaymentMethods {
 // GET /api/admin/settings/payment-methods
 export async function GET() {
   try {
+    // Verify admin authentication
+    const cookieStore = await cookies();
+    const adminToken = cookieStore.get('adminToken');
+    
+    if (!adminToken) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    try {
+      verifyJWT(adminToken.value, 'admin');
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid or expired token' },
+        { status: 401 }
+      );
+    }
+
     const [result] = await databaseService.query(
       'SELECT setting_value FROM site_settings WHERE setting_key = ?',
       ['payment_methods']
@@ -49,6 +71,26 @@ export async function GET() {
 // POST /api/admin/settings/payment-methods
 export async function POST(request: Request) {
   try {
+    // Verify admin authentication
+    const cookieStore = await cookies();
+    const adminToken = cookieStore.get('adminToken');
+    
+    if (!adminToken) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    try {
+      verifyJWT(adminToken.value, 'admin');
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid or expired token' },
+        { status: 401 }
+      );
+    }
+
     const { paymentMethods } = await request.json();
 
     // Validate that at least one payment method is enabled

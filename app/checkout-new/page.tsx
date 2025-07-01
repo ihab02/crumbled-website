@@ -152,6 +152,11 @@ export default function NewCheckoutPage() {
   // Add step state
   const [step, setStep] = useState(1)
 
+  // Delivery rules modal state
+  const [deliveryRules, setDeliveryRules] = useState<any>(null)
+  const [deliveryRulesLoading, setDeliveryRulesLoading] = useState(false)
+  const [acknowledgeDeliveryRules, setAcknowledgeDeliveryRules] = useState(false)
+
   // Determine if user is logged in based on session status
   const isLoggedIn = status === 'authenticated' && session?.user
   const isSessionLoading = status === 'loading'
@@ -194,6 +199,50 @@ export default function NewCheckoutPage() {
     fetchPaymentMethods()
   }, [isSessionLoading])
 
+  // Reset acknowledgement when delivery address/zone changes
+  useEffect(() => {
+    setAcknowledgeDeliveryRules(false)
+  }, [selectedAddressId, useNewAddress, selectedZone, newAddress.zone_id])
+
+  // Fetch delivery rules when step 3 is reached
+  useEffect(() => {
+    if (step === 3 && checkoutData) {
+      const fetchCurrentZoneRules = async () => {
+        // Get the current zone ID based on user type
+        let zoneId: number | null = null;
+        
+        if (isLoggedIn && checkoutData?.userType === 'registered') {
+          if (useNewAddress) {
+            zoneId = newAddress.zone_id;
+          } else if (selectedAddressId && checkoutData.user?.addresses) {
+            const address = checkoutData.user.addresses.find(addr => addr.id === selectedAddressId);
+            // We need to find the zone ID from the zone name
+            if (address && checkoutData.cities) {
+              const city = checkoutData.cities.find(c => c.name === address.city_name);
+              if (city) {
+                const zone = city.zones.find(z => z.name === address.zone_name);
+                if (zone) {
+                  zoneId = zone.id;
+                }
+              }
+            }
+          }
+        } else {
+          // For guest users
+          if (selectedZone) {
+            zoneId = parseInt(selectedZone);
+          }
+        }
+        
+        if (zoneId) {
+          await fetchDeliveryRules(zoneId);
+        }
+      };
+
+      fetchCurrentZoneRules();
+    }
+  }, [step, checkoutData, isLoggedIn, useNewAddress, selectedAddressId, selectedZone, newAddress.zone_id])
+
   const fetchPaymentMethods = async () => {
     try {
       const response = await fetch('/api/payment-methods')
@@ -209,6 +258,27 @@ export default function NewCheckoutPage() {
       }
     } catch (error) {
       console.error('Error fetching payment methods:', error)
+    }
+  }
+
+  const fetchDeliveryRules = async (zoneId: number) => {
+    try {
+      setDeliveryRulesLoading(true)
+      // Pass current date to calculate delivery date
+      const currentDate = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+      const response = await fetch(`/api/zones/delivery-rules?zoneId=${zoneId}&orderDate=${currentDate}`)
+      const data = await response.json()
+      
+      if (data.success) {
+        setDeliveryRules(data.deliveryRules)
+      } else {
+        toast.error('Failed to load delivery rules')
+      }
+    } catch (error) {
+      console.error('Error fetching delivery rules:', error)
+      toast.error('Failed to load delivery rules')
+    } finally {
+      setDeliveryRulesLoading(false)
     }
   }
 
@@ -238,6 +308,15 @@ export default function NewCheckoutPage() {
           if (defaultCity) {
             setSelectedCity('1')
             setSelectedZone('')
+          }
+        }
+        
+        // Set default delivery fee for logged-in users with addresses
+        if (result.data.userType === 'registered' && result.data.user?.addresses && result.data.user.addresses.length > 0) {
+          const defaultAddress = result.data.user.addresses.find((addr: any) => addr.is_default) || result.data.user.addresses[0];
+          if (defaultAddress) {
+            setSelectedAddressId(defaultAddress.id);
+            setDeliveryFee(Number(defaultAddress.delivery_fee));
           }
         }
       } else {
@@ -389,13 +468,13 @@ export default function NewCheckoutPage() {
     if (!checkoutData) return
 
     const requestData = {
-      userType: checkoutData.userType,
-      user: checkoutData.userType === 'registered' ? checkoutData.user : null,
-      guest: checkoutData.userType === 'guest' ? guestData : null,
-      selectedAddressId,
-      useNewAddress,
-      newAddress: useNewAddress ? newAddress : null,
-      saveNewAddress
+      // For guest users
+      guestData: checkoutData.userType === 'guest' ? guestData : undefined,
+      // For registered users
+      selectedAddressId: checkoutData.userType === 'registered' ? selectedAddressId : undefined,
+      useNewAddress: checkoutData.userType === 'registered' ? useNewAddress : undefined,
+      newAddress: checkoutData.userType === 'registered' && useNewAddress ? newAddress : undefined,
+      saveNewAddress: checkoutData.userType === 'registered' ? saveNewAddress : undefined
     }
 
     try {
@@ -565,7 +644,7 @@ export default function NewCheckoutPage() {
   }
 
   const subtotal = checkoutData.cart?.total || 0
-  const total = subtotal + deliveryFee
+  const total = Number(subtotal) + Number(deliveryFee)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
@@ -684,7 +763,11 @@ export default function NewCheckoutPage() {
                                   name="address"
                                   value={address.id}
                                   checked={selectedAddressId === address.id && !useNewAddress}
-                                  onChange={(e) => { setSelectedAddressId(Number(e.target.value)); setUseNewAddress(false); }}
+                                  onChange={(e) => { 
+                                    setSelectedAddressId(Number(e.target.value)); 
+                                    setUseNewAddress(false);
+                                    setDeliveryFee(Number(address.delivery_fee));
+                                  }}
                                   className="text-pink-600 focus:ring-pink-500"
                                 />
                                 <Label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
@@ -759,7 +842,15 @@ export default function NewCheckoutPage() {
                                 </div>
                                 <div>
                                   <Label htmlFor="newZone">Zone *</Label>
-                                  <Select value={newAddress.zone_id.toString()} onValueChange={(value) => setNewAddress({ ...newAddress, zone_id: Number(value) })}>
+                                  <Select value={newAddress.zone_id.toString()} onValueChange={(value) => {
+                                    const zoneId = Number(value);
+                                    const selectedCityData = checkoutData.cities.find(city => city.id === newAddress.city_id);
+                                    const selectedZoneData = selectedCityData?.zones.find(zone => zone.id === zoneId);
+                                    setNewAddress({ ...newAddress, zone_id: zoneId });
+                                    if (selectedZoneData) {
+                                      setDeliveryFee(Number(selectedZoneData.delivery_fee));
+                                    }
+                                  }}>
                                     <SelectTrigger className="mt-1">
                                       <SelectValue placeholder="Select a zone" />
                                     </SelectTrigger>
@@ -1023,9 +1114,13 @@ export default function NewCheckoutPage() {
                   <div className="flex justify-end mt-6">
                     <Button
                       onClick={() => {
-                        if (!selectedCity || !selectedZone) {
-                          toast.error('Please select both city and zone');
-                          return;
+                        // For logged-in users, we don't need to check selectedCity/selectedZone
+                        // as they're only used for guest users
+                        if (checkoutData?.userType === 'guest') {
+                          if (!selectedCity || !selectedZone) {
+                            toast.error('Please select both city and zone');
+                            return;
+                          }
                         }
                         setStep(2);
                       }}
@@ -1171,22 +1266,14 @@ export default function NewCheckoutPage() {
                     <Button variant="outline" onClick={() => setStep(1)}>
                       Back
                     </Button>
-                    <Button
-                      onClick={() => {
-                        if (orderConfirmed) {
-                          processPayment()
-                        } else {
-                          confirmOrder()
-                        }
-                      }}
-                      disabled={processingPayment}
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
-                    >
-                      {processingPayment ? 'Processing...' : 
-                       orderConfirmed ? 
-                         (paymentMethod === 'cod' ? 'Place Order' : 'Pay Now') : 
-                         'Confirm Order'}
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button
+                        onClick={() => setStep(3)}
+                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
+                      >
+                        Continue to Confirmation
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1370,7 +1457,7 @@ export default function NewCheckoutPage() {
                         </div>
                         <div className="flex justify-between">
                           <span>Delivery Fee</span>
-                          <span>{deliveryFee.toFixed(2)} EGP</span>
+                          <span>{Number(deliveryFee).toFixed(2)} EGP</span>
                         </div>
                         <div className="border-t pt-2">
                           <div className="flex justify-between font-semibold">
@@ -1380,6 +1467,82 @@ export default function NewCheckoutPage() {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Delivery Rules Section */}
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Delivery Rules & Conditions
+                    </h4>
+                    
+                    {deliveryRulesLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
+                        <span className="ml-2 text-blue-700">Loading delivery rules...</span>
+                      </div>
+                    ) : deliveryRules ? (
+                      <div className="space-y-3">
+                        <div className="bg-white p-3 rounded-lg border border-blue-100">
+                          <h5 className="font-semibold text-blue-900 mb-2">
+                            {deliveryRules.zoneName}, {deliveryRules.cityName}
+                          </h5>
+                          
+                          <div className="space-y-2 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-blue-600" />
+                              <span className="text-blue-800">
+                                <strong>Delivery Time:</strong> {
+                                  deliveryRules.formattedDeliveryDate ? 
+                                    `Expected delivery on ${deliveryRules.formattedDeliveryDate}` :
+                                    deliveryRules.deliveryDays === 0 ? 'Same day' :
+                                    deliveryRules.deliveryDays === 1 ? 'Next day' :
+                                    `${deliveryRules.deliveryDays} days`
+                                }
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="h-4 w-4 text-blue-600" />
+                              <span className="text-blue-800">
+                                <strong>Delivery Fee:</strong> {deliveryRules.deliveryFee.toFixed(2)} EGP
+                              </span>
+                            </div>
+                            
+                            {deliveryRules.timeSlot && (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Shield className="h-4 w-4 text-blue-600" />
+                                  <span className="text-blue-800">
+                                    <strong>Time Slot:</strong> {deliveryRules.timeSlot.name}
+                                  </span>
+                                </div>
+                                <div className="ml-6 text-blue-700">
+                                  <p><strong>Hours:</strong> {deliveryRules.timeSlot.fromHour} - {deliveryRules.timeSlot.toHour}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-start space-x-2">
+                          <Checkbox
+                            id="acknowledge-rules"
+                            checked={acknowledgeDeliveryRules}
+                            onCheckedChange={(checked) => setAcknowledgeDeliveryRules(checked as boolean)}
+                          />
+                          <label htmlFor="acknowledge-rules" className="text-sm text-blue-800 leading-relaxed">
+                            I acknowledge and agree to the delivery rules and conditions for {deliveryRules.zoneName}. 
+                            I understand that delivery will be made according to the specified time frame and conditions.
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <AlertTriangle className="h-6 w-6 text-red-500 mx-auto mb-2" />
+                        <p className="text-red-600 text-sm">Failed to load delivery rules</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
@@ -1395,7 +1558,7 @@ export default function NewCheckoutPage() {
                           confirmOrder()
                         }
                       }}
-                      disabled={processingPayment}
+                      disabled={processingPayment || !acknowledgeDeliveryRules}
                       className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
                     >
                       {processingPayment ? 'Processing...' : 
@@ -1481,6 +1644,7 @@ export default function NewCheckoutPage() {
             </div>
           </div>
         )}
+        
         <Dialog open={otpModalOpen} onOpenChange={setOtpModalOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>

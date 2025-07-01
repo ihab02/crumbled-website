@@ -397,11 +397,11 @@ class EmailService {
                 </div>
                 <div class="total-row">
                   <span>Delivery Fee:</span>
-                  <span>${orderDetails.deliveryFee.toFixed(2)} EGP</span>
+                  <span>${Number(orderDetails.deliveryFee).toFixed(2)} EGP</span>
                 </div>
                 <div class="total-row">
                   <span>Total:</span>
-                  <span>${orderDetails.total.toFixed(2)} EGP</span>
+                  <span>${Number(orderDetails.total).toFixed(2)} EGP</span>
                 </div>
               </div>
 
@@ -409,11 +409,25 @@ class EmailService {
                 <h3>Delivery Information</h3>
                 <div class="delivery-info">
                   <h4>${orderDetails.customerInfo.name}</h4>
-                  <p>${orderDetails.deliveryAddress.street_address}</p>
-                  ${orderDetails.deliveryAddress.additional_info ? `<p>${orderDetails.deliveryAddress.additional_info}</p>` : ''}
-                  <p>${orderDetails.deliveryAddress.city_name}, ${orderDetails.deliveryAddress.zone_name}</p>
-                  <p>Phone: ${orderDetails.customerInfo.phone}</p>
-                  <p>Email: ${orderDetails.customerInfo.email}</p>
+                  <p><strong>Address:</strong> ${orderDetails.deliveryAddress.street_address}</p>
+                  ${orderDetails.deliveryAddress.additional_info ? `<p><strong>Additional Info:</strong> ${orderDetails.deliveryAddress.additional_info}</p>` : ''}
+                  <p><strong>Location:</strong> ${orderDetails.deliveryAddress.city_name}, ${orderDetails.deliveryAddress.zone_name}</p>
+                  <p><strong>Phone:</strong> ${orderDetails.customerInfo.phone}</p>
+                  <p><strong>Email:</strong> ${orderDetails.customerInfo.email}</p>
+                  <p><strong>Delivery Fee:</strong> ${Number(orderDetails.deliveryFee).toFixed(2)} EGP</p>
+                  ${orderDetails.deliveryRules ? `
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                      <h5 style="margin: 0 0 10px 0; color: #0ea5e9;">Delivery Details</h5>
+                      <p><strong>Delivery Time:</strong> ${orderDetails.deliveryRules.formattedDeliveryDate ? 
+                        `Expected delivery on ${orderDetails.deliveryRules.formattedDeliveryDate}` : 
+                        orderDetails.deliveryRules.deliveryDays === 0 ? 'Same day' :
+                        orderDetails.deliveryRules.deliveryDays === 1 ? 'Next day' :
+                        `${orderDetails.deliveryRules.deliveryDays} days`}</p>
+                      ${orderDetails.deliveryRules.timeSlot ? `
+                        <p><strong>Time Slot:</strong> ${orderDetails.deliveryRules.timeSlot.name} (${orderDetails.deliveryRules.timeSlot.fromHour} - ${orderDetails.deliveryRules.timeSlot.toHour})</p>
+                      ` : ''}
+                    </div>
+                  ` : ''}
                 </div>
               </div>
 

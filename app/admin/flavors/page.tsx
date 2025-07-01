@@ -6,10 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Package, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
+
+interface StockInfo {
+  quantity: number;
+  min_threshold: number;
+  max_capacity: number;
+  status: 'unknown' | 'out_of_stock' | 'low_stock' | 'in_stock' | 'high_stock';
+}
 
 interface Flavor {
   id: number;
@@ -25,7 +32,57 @@ interface Flavor {
     image_url: string;
     is_cover: boolean;
   }>;
+  stock: {
+    mini: StockInfo;
+    medium: StockInfo;
+    large: StockInfo;
+  };
 }
+
+const getStockStatusColor = (status: string) => {
+  switch (status) {
+    case 'out_of_stock':
+      return 'bg-red-100 text-red-800 border-red-200';
+    case 'low_stock':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'in_stock':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'high_stock':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200';
+  }
+};
+
+const getStockStatusIcon = (status: string) => {
+  switch (status) {
+    case 'out_of_stock':
+      return <XCircle className="h-4 w-4" />;
+    case 'low_stock':
+      return <AlertTriangle className="h-4 w-4" />;
+    case 'in_stock':
+      return <CheckCircle className="h-4 w-4" />;
+    case 'high_stock':
+      return <Package className="h-4 w-4" />;
+    default:
+      return <Package className="h-4 w-4" />;
+  }
+};
+
+const getStockStatusText = (status: string) => {
+  switch (status) {
+    case 'out_of_stock':
+      return 'Out of Stock';
+    case 'low_stock':
+      return 'Low Stock';
+    case 'in_stock':
+      return 'In Stock';
+    case 'high_stock':
+      return 'High Stock';
+    default:
+      return 'Unknown';
+  }
+};
 
 export default function FlavorsPage() {
   const [flavors, setFlavors] = useState<Flavor[]>([]);
@@ -151,9 +208,9 @@ export default function FlavorsPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {flavors.map((flavor) => (
-          <div key={flavor.id} className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-start gap-6">
-              <div className="w-32 h-32 flex-shrink-0">
+          <Card key={flavor.id} className="overflow-hidden">
+            <div className="flex items-start gap-4 p-6">
+              <div className="w-24 h-24 flex-shrink-0">
                 <img
                   src={flavor.images?.find(img => img.is_cover)?.image_url || flavor.images?.[0]?.image_url || '/images/placeholder.svg'}
                   alt={flavor.name}
@@ -164,55 +221,93 @@ export default function FlavorsPage() {
                   }}
                 />
               </div>
-              <div className="flex-grow">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900">{flavor.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{flavor.category}</p>
+              <div className="flex-grow min-w-0">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 truncate">{flavor.name}</h3>
+                    <p className="text-sm text-gray-500">{flavor.category}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ml-2">
                     <button
                       onClick={() => router.push(`/admin/flavors/${flavor.id}`)}
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-blue-600 hover:text-blue-800 p-1 rounded"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleToggleActive(flavor)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        flavor.is_active
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {flavor.is_active ? 'Active' : 'Inactive'}
-                    </button>
-                    <button
                       onClick={() => handleDeleteFlavor(flavor)}
-                      className="text-red-600 hover:text-red-800"
+                      className="text-red-600 hover:text-red-800 p-1 rounded"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
-                <p className="mt-2 text-gray-600">{flavor.description}</p>
-                <div className="mt-4 grid grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Mini</p>
-                    <p className="font-medium">${flavor.mini_price.toFixed(2)}</p>
+                
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2">{flavor.description}</p>
+                
+                {/* Status Toggle */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-700">Status:</span>
+                  <button
+                    onClick={() => handleToggleActive(flavor)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      flavor.is_active
+                        ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                  >
+                    {flavor.is_active ? 'Active' : 'Inactive'}
+                  </button>
+                </div>
+
+                {/* Stock Information */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-700">Stock Status:</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['mini', 'medium', 'large'] as const).map((size) => {
+                      const stock = flavor.stock[size];
+                      return (
+                        <div key={size} className="text-center">
+                          <div className="text-xs text-gray-500 capitalize mb-1">{size}</div>
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${getStockStatusColor(stock.status)}`}
+                          >
+                            <div className="flex items-center gap-1">
+                              {getStockStatusIcon(stock.status)}
+                              <span>{stock.quantity}</span>
+                            </div>
+                          </Badge>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {getStockStatusText(stock.status)}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Medium</p>
-                    <p className="font-medium">${flavor.medium_price.toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Large</p>
-                    <p className="font-medium">${flavor.large_price.toFixed(2)}</p>
+                </div>
+
+                {/* Price Information */}
+                <div className="mt-4 pt-3 border-t border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Price Addons (EGP):</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center">
+                      <div className="text-xs text-gray-500">Mini</div>
+                      <div className="font-medium text-sm">EGP {flavor.mini_price.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-500">Medium</div>
+                      <div className="font-medium text-sm">EGP {flavor.medium_price.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-500">Large</div>
+                      <div className="font-medium text-sm">EGP {flavor.large_price.toFixed(2)}</div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

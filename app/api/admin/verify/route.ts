@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verify } from 'jsonwebtoken';
 import { cookies } from 'next/headers';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+import { verifyJWT } from '@/lib/middleware/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,10 +12,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const decoded = verify(adminToken, JWT_SECRET) as { role: string };
-      if (decoded.role !== 'admin') {
-        return NextResponse.json({ verified: false }, { status: 401 });
-      }
+      verifyJWT(adminToken, 'admin');
     } catch (error) {
       return NextResponse.json({ verified: false }, { status: 401 });
     }

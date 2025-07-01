@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import toast from 'react-hot-toast';
 import { CreditCard, Save, ArrowLeft, AlertTriangle, CheckCircle } from 'lucide-react';
 
 interface PaymentMethod {

@@ -11,18 +11,6 @@ CREATE TABLE IF NOT EXISTS flavors (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS flavor_stock (
-  id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
-  flavor_id VARCHAR(36) NOT NULL,
-  size ENUM('mini', 'large') NOT NULL,
-  quantity INT NOT NULL DEFAULT 0,
-  min_threshold INT NOT NULL DEFAULT 10,
-  max_capacity INT NOT NULL DEFAULT 100,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (flavor_id) REFERENCES flavors(id) ON DELETE CASCADE
-);
-
 --
 -- Table structure for table `email_settings`
 --
@@ -53,4 +41,14 @@ CREATE TABLE IF NOT EXISTS otp_verifications (
   expires_at TIMESTAMP NOT NULL,
   INDEX idx_phone_otp (phone, otp),
   INDEX idx_expires_at (expires_at)
+);
+
+-- Site Settings Table
+CREATE TABLE IF NOT EXISTS site_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  setting_key VARCHAR(255) UNIQUE NOT NULL,
+  setting_value TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_setting_key (setting_key)
 ); 

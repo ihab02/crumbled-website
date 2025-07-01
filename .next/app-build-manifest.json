@@ -1,14 +1,14 @@
 {
   "pages": {
-    "/admin/delivery-management/page": [
+    "/checkout/success/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/delivery-management/page.js"
+      "static/chunks/app/checkout/success/page.js"
     ],
-    "/admin/layout": [
+    "/checkout/success/loading": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/layout.js"
+      "static/chunks/app/checkout/success/loading.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",
@@ -16,25 +16,50 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/admin/flavors/page": [
+    "/admin/settings/email/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/flavors/page.js"
+      "static/chunks/app/admin/settings/email/page.js"
     ],
-    "/admin/flavors/layout": [
+    "/admin/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/flavors/layout.js"
+      "static/chunks/app/admin/layout.js"
     ],
-    "/admin/login/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/login/page.js"
+      "static/chunks/app/page.js"
     ],
-    "/admin/dashboard/page": [
+    "/flavors/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/admin/dashboard/page.js"
+      "static/chunks/app/flavors/page.js"
+    ],
+    "/flavors/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/flavors/layout.js"
+    ],
+    "/shop/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/shop/page.js"
+    ],
+    "/shop/pack/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/shop/pack/[id]/page.js"
+    ],
+    "/cart/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/cart/page.js"
+    ],
+    "/checkout-new/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/checkout-new/page.js"
     ],
     "/_not-found/page": [
       "static/chunks/webpack.js",

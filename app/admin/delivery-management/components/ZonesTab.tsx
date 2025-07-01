@@ -101,6 +101,12 @@ export default function ZonesTab() {
     return `${days} days`;
   };
 
+  const getDeliveryDaysShort = (days: number) => {
+    if (days === 0) return 'Same';
+    if (days === 1) return 'Next';
+    return `${days}d`;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -133,25 +139,25 @@ export default function ZonesTab() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Zone Name
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 City
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Delivery Days
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Days
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Time Slot
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Delivery Fee
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -159,19 +165,19 @@ export default function ZonesTab() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredZones.map((zone) => (
               <tr key={zone.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td className="px-8 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {zone.name}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
                   {zone.city_name}
                   {zone.city_is_active === 0 && (
                     <span className="ml-1 text-xs text-red-600">(Inactive)</span>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {getDeliveryDaysText(zone.delivery_days)}
+                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500" title={getDeliveryDaysText(zone.delivery_days)}>
+                  {getDeliveryDaysShort(zone.delivery_days)}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
                   {zone.time_slot_name ? (
                     <span>
                       {zone.time_slot_name}<br />
@@ -183,10 +189,10 @@ export default function ZonesTab() {
                     <span className="text-gray-400">No time slot</span>
                   )}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
                   {Number(zone.delivery_fee || 0).toFixed(2)} EGP
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-8 py-4 whitespace-nowrap">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       zone.is_active === 1 && zone.city_is_active === 1
@@ -197,7 +203,7 @@ export default function ZonesTab() {
                     {zone.is_active === 1 && zone.city_is_active === 1 ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(zone)}

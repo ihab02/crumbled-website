@@ -354,7 +354,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutS
       const addressesResult = await databaseService.query(
         `SELECT ca.id, ca.street_address, ca.additional_info, 
                 c.name as city_name, z.name as zone_name, z.delivery_fee, ca.is_default
-         FROM addresses ca
+         FROM customer_addresses ca
          JOIN cities c ON ca.city_id = c.id
          JOIN zones z ON ca.zone_id = z.id
          WHERE ca.customer_id = ?

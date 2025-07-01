@@ -129,6 +129,35 @@ export async function POST(request: NextRequest) {
           if (Array.isArray(orderDetailsResult) && orderDetailsResult.length > 0) {
             const orderDetails = orderDetailsResult[0] as any;
             
+            // Fetch delivery rules for the zone (if available)
+            let deliveryRules = null;
+            try {
+              // Get delivery address from order (if available)
+              const [addressResult] = await databaseService.query(
+                `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee
+                 FROM customer_addresses ca
+                 JOIN cities c ON ca.city_id = c.id
+                 JOIN zones z ON ca.zone_id = z.id
+                 WHERE ca.customer_id = ? AND ca.is_default = 1`,
+                [orderDetails.customer_id]
+              );
+              
+              if (Array.isArray(addressResult) && addressResult.length > 0) {
+                const address = addressResult[0];
+                const currentDate = new Date().toISOString().split('T')[0];
+                const deliveryRulesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/zones/delivery-rules?zoneId=${address.zone_id}&orderDate=${currentDate}`);
+                if (deliveryRulesResponse.ok) {
+                  const deliveryRulesData = await deliveryRulesResponse.json();
+                  if (deliveryRulesData.success) {
+                    deliveryRules = deliveryRulesData.deliveryRules;
+                  }
+                }
+              }
+            } catch (rulesError) {
+              console.error('❌ Failed to fetch delivery rules in webhook:', rulesError);
+              // Continue without delivery rules if fetch fails
+            }
+            
             await emailService.sendOrderConfirmationEmail(
               orderDetails.email,
               ourOrderId.toString(),
@@ -144,7 +173,8 @@ export async function POST(request: NextRequest) {
                   email: orderDetails.email,
                   phone: orderDetails.phone
                 },
-                deliveryAddress: {} // TODO: Get actual delivery address
+                deliveryAddress: {}, // TODO: Get actual delivery address
+                deliveryRules: deliveryRules
               }
             );
             

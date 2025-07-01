@@ -58,7 +58,7 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
       const data = await response.json();
       setFormData({
         ...data,
-        is_active: data.is_active === 1,
+        is_active: Boolean(data.is_active),
         images: data.images || []
       });
       if (data.images) {
@@ -232,214 +232,190 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-lg flex flex-col py-8 px-4 min-h-screen">
-          <nav className="flex flex-col space-y-4">
-            <Link href="/admin/flavors">
-              <span className="block py-2 px-4 rounded-lg text-lg font-semibold text-gray-800 dark:text-gray-100 hover:bg-pink-100 dark:hover:bg-pink-900 transition">🍪 Flavors</span>
-            </Link>
-          </nav>
-        </aside>
-        <main className="flex-1 p-8">
-          <div className="container mx-auto">
-            <div className="animate-pulse">
-              <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
-              <div className="space-y-4">
-                <div className="h-10 bg-gray-200 rounded"></div>
-                <div className="h-10 bg-gray-200 rounded"></div>
-                <div className="h-10 bg-gray-200 rounded"></div>
-              </div>
-            </div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-8"></div>
+          <div className="space-y-4">
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-50 dark:bg-gray-900">
-      <aside className="w-64 bg-white dark:bg-gray-800 shadow-lg flex flex-col py-8 px-4 min-h-screen">
-        <nav className="flex flex-col space-y-4">
-          <Link href="/admin/flavors">
-            <span className="block py-2 px-4 rounded-lg text-lg font-semibold text-gray-800 dark:text-gray-100 hover:bg-pink-100 dark:hover:bg-pink-900 transition">🍪 Flavors</span>
-          </Link>
-        </nav>
-      </aside>
-      <main className="flex-1 p-8">
-        <div className="container mx-auto">
-          <div className="max-w-2xl mx-auto">
-            <div className="flex items-center mb-8">
-              <Button
-                variant="ghost"
-                className="mr-4"
-                onClick={() => router.push('/admin/flavors')}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-              <h1 className="text-3xl font-bold">Edit Flavor</h1>
-            </div>
+    <div className="max-w-2xl mx-auto">
+      <div className="flex items-center mb-8">
+        <Button
+          variant="ghost"
+          className="mr-4"
+          onClick={() => router.push('/admin/flavors')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-3xl font-bold">Edit Flavor</h1>
+      </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+          />
+        </div>
 
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                    rows={4}
-                    required
-                  />
-                </div>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+              rows={4}
+              required
+            />
+          </div>
 
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="enabled"
-                    checked={formData.is_active}
-                    onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                  />
-                  <Label htmlFor="enabled">Enabled</Label>
-                </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="enabled"
+              checked={formData.is_active}
+              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+            />
+            <Label htmlFor="enabled">Enabled</Label>
+          </div>
 
-                <div>
-                  <Label htmlFor="images">Images</Label>
-                  <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {formData.images.map((image, index) => (
-                      <div key={index} className="relative group">
-                        <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
-                          <img
-                            src={image.image_url}
-                            alt={`Flavor image ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveImage(index)}
-                              className="text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <Trash2 className="h-6 w-6" />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 p-2 rounded-lg">
-                          <Switch
-                            id={`cover-${index}`}
-                            checked={image.is_cover}
-                            onCheckedChange={(checked) => {
-                              // Count how many images are currently set as cover
-                              const currentCoverCount = formData.images.filter(img => img.is_cover).length;
-                              
-                              // If trying to uncheck the last cover image, prevent it
-                              if (!checked && currentCoverCount <= 1) {
-                                toast.error('At least one image must be set as cover');
-                                return;
-                              }
-
-                              const newImages = formData.images.map((img, i) => ({
-                                ...img,
-                                is_cover: i === index ? checked : false
-                              }));
-                              setFormData({ ...formData, images: newImages });
-                            }}
-                          />
-                          <Label htmlFor={`cover-${index}`} className="text-sm cursor-pointer">
-                            Cover Image
-                          </Label>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
-                      <label
-                        htmlFor="image-upload"
-                        className="w-full h-full flex items-center justify-center cursor-pointer"
+          <div>
+            <Label htmlFor="images">Images</Label>
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-4">
+              {formData.images.map((image, index) => (
+                <div key={index} className="relative group">
+                  <div className="relative aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
+                    <img
+                      src={image.image_url}
+                      alt={`Flavor image ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="text-white opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <div className="text-center">
-                          <Plus className="h-8 w-8 text-gray-400 mx-auto" />
-                          <span className="mt-2 block text-sm text-gray-500">
-                            Add Image
-                          </span>
-                        </div>
-                        <input
-                          id="image-upload"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleImageUpload}
-                          multiple
-                        />
-                      </label>
+                        <Trash2 className="h-6 w-6" />
+                      </button>
                     </div>
                   </div>
-                </div>
-              </div>
+                  <div className="mt-2 flex items-center justify-center space-x-2 bg-white dark:bg-gray-800 p-2 rounded-lg">
+                    <Switch
+                      id={`cover-${index}`}
+                      checked={image.is_cover}
+                      onCheckedChange={(checked) => {
+                        // Count how many images are currently set as cover
+                        const currentCoverCount = formData.images.filter(img => img.is_cover).length;
+                        
+                        // If trying to uncheck the last cover image, prevent it
+                        if (!checked && currentCoverCount <= 1) {
+                          toast.error('At least one image must be set as cover');
+                          return;
+                        }
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="mini_price">Mini Price Addon (EGP)</Label>
-                  <Input
-                    id="mini_price"
-                    type="number"
-                    step="0.01"
-                    value={formData.mini_price}
-                    onChange={(e) => setFormData({ ...formData, mini_price: parseFloat(e.target.value) })}
-                    required
-                  />
+                        const newImages = formData.images.map((img, i) => ({
+                          ...img,
+                          is_cover: i === index ? checked : false
+                        }));
+                        setFormData({ ...formData, images: newImages });
+                      }}
+                    />
+                    <Label htmlFor={`cover-${index}`} className="text-sm cursor-pointer">
+                      Cover Image
+                    </Label>
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="medium_price">Medium Price Addon (EGP)</Label>
-                  <Input
-                    id="medium_price"
-                    type="number"
-                    step="0.01"
-                    value={formData.medium_price}
-                    onChange={(e) => setFormData({ ...formData, medium_price: parseFloat(e.target.value) })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="large_price">Large Price Addon (EGP)</Label>
-                  <Input
-                    id="large_price"
-                    type="number"
-                    step="0.01"
-                    value={formData.large_price}
-                    onChange={(e) => setFormData({ ...formData, large_price: parseFloat(e.target.value) })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push('/admin/flavors')}
+              ))}
+              <div className="aspect-square rounded-lg overflow-hidden border-2 border-dashed border-gray-300 hover:border-gray-400 transition-colors">
+                <label
+                  htmlFor="image-upload"
+                  className="w-full h-full flex items-center justify-center cursor-pointer"
                 >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </Button>
+                  <div className="text-center">
+                    <Plus className="h-8 w-8 text-gray-400 mx-auto" />
+                    <span className="mt-2 block text-sm text-gray-500">
+                      Add Image
+                    </span>
+                  </div>
+                  <input
+                    id="image-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                    multiple
+                  />
+                </label>
               </div>
-            </form>
+            </div>
           </div>
         </div>
-      </main>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="mini_price">Mini Price Addon (EGP)</Label>
+            <Input
+              id="mini_price"
+              type="number"
+              step="0.01"
+              value={formData.mini_price}
+              onChange={(e) => setFormData({ ...formData, mini_price: parseFloat(e.target.value) })}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="medium_price">Medium Price Addon (EGP)</Label>
+            <Input
+              id="medium_price"
+              type="number"
+              step="0.01"
+              value={formData.medium_price}
+              onChange={(e) => setFormData({ ...formData, medium_price: parseFloat(e.target.value) })}
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="large_price">Large Price Addon (EGP)</Label>
+            <Input
+              id="large_price"
+              type="number"
+              step="0.01"
+              value={formData.large_price}
+              onChange={(e) => setFormData({ ...formData, large_price: parseFloat(e.target.value) })}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push('/admin/flavors')}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 } 
