@@ -105,7 +105,7 @@ function SortableMediaCard({ mediaItem, onEdit, onDelete, onToggleActive }: {
           <div className="flex-1">
             <div className="font-semibold">{mediaItem.title || 'Untitled'}</div>
             <div className="text-sm text-gray-600">{mediaItem.media_type}</div>
-            <div className="text-xs text-gray-500">Order: {mediaItem.display_order}</div>
+            <div className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">Order: {mediaItem.display_order}</div>
             <div className="flex items-center gap-2 mt-1">
               <Badge variant={mediaItem.is_active ? "default" : "secondary"}>
                 {mediaItem.is_active ? "Active" : "Inactive"}
@@ -465,7 +465,13 @@ export default function SlidingMediaPage() {
       
       if (oldIndex !== -1 && newIndex !== -1) {
         const newMedia = arrayMove(media, oldIndex, newIndex);
-        setMedia(newMedia);
+        // Update the display_order values to match the new order
+        const updatedMedia = newMedia.map((item, index) => ({
+          ...item,
+          display_order: index
+        }));
+        console.log('Updated media order:', updatedMedia.map(item => ({ id: item.id, order: item.display_order })));
+        setMedia(updatedMedia);
         setOrderChanged(true);
       }
     }
@@ -474,6 +480,7 @@ export default function SlidingMediaPage() {
   const saveOrder = async () => {
     try {
       const updates = media.map((item, idx) => ({ id: item.id, display_order: idx }));
+      console.log('Saving order updates:', updates);
       const response = await fetch('/api/admin/sliding-media', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -483,11 +490,13 @@ export default function SlidingMediaPage() {
       if (result.success) {
         toast.success('Order updated successfully');
         setOrderChanged(false);
-        fetchMedia();
+        // Don't refetch immediately - let the user see the updated order
+        // fetchMedia();
       } else {
         toast.error('Failed to update order');
       }
     } catch (e) {
+      console.error('Error saving order:', e);
       toast.error('Failed to update order');
     }
   };
@@ -526,10 +535,18 @@ export default function SlidingMediaPage() {
         </Button>
       </div>
 
-      <div className="mb-4">
-        <p className="text-sm text-gray-600 mb-2">
+      <div className="mb-4 flex justify-between items-center">
+        <p className="text-sm text-gray-600">
           Drag the grip handle to reorder media items. Click "Save Order" to persist changes.
         </p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={fetchMedia}
+          className="text-xs"
+        >
+          Refresh
+        </Button>
       </div>
 
       <DndContext 

@@ -133,16 +133,19 @@ export async function PUT(request: NextRequest) {
     }
     const body = await request.json();
     const { order } = body;
+    console.log('Received order update request:', order);
     if (!Array.isArray(order)) {
       return NextResponse.json({ success: false, error: "Invalid order data" }, { status: 400 });
     }
     // Update each item's display_order
     for (const item of order) {
+      console.log(`Updating item ${item.id} to order ${item.display_order}`);
       await databaseService.query(
         'UPDATE sliding_media SET display_order = ? WHERE id = ?',
         [item.display_order, item.id]
       );
     }
+    console.log('Order update completed successfully');
     return NextResponse.json({ success: true, message: "Order updated" });
   } catch (error) {
     console.error("Error updating sliding media order:", error);

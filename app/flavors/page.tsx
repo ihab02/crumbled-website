@@ -171,7 +171,7 @@ export default function FlavorsPage() {
                   className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all w-full md:w-auto px-8"
                   onClick={() => router.push('/shop')}
                 >
-                  Shop Now
+                  Order Now
                 </Button>
               </div>
             </Card>
