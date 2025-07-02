@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Save
 } from "lucide-react"
+import DeliveryDatePicker from "@/components/DeliveryDatePicker"
 
 interface CheckoutData {
   userType: 'registered' | 'guest';
@@ -156,6 +157,9 @@ export default function NewCheckoutPage() {
   const [deliveryRules, setDeliveryRules] = useState<any>(null)
   const [deliveryRulesLoading, setDeliveryRulesLoading] = useState(false)
   const [acknowledgeDeliveryRules, setAcknowledgeDeliveryRules] = useState(false)
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string>('')
+  const [currentZoneId, setCurrentZoneId] = useState<number | null>(null)
+  const [deliveryDateInitialized, setDeliveryDateInitialized] = useState(false)
 
   // Determine if user is logged in based on session status
   const isLoggedIn = status === 'authenticated' && session?.user
@@ -235,6 +239,7 @@ export default function NewCheckoutPage() {
         }
         
         if (zoneId) {
+          setCurrentZoneId(zoneId);
           await fetchDeliveryRules(zoneId);
         }
       };
@@ -486,7 +491,9 @@ export default function NewCheckoutPage() {
       selectedAddressId: checkoutData.userType === 'registered' ? selectedAddressId : undefined,
       useNewAddress: checkoutData.userType === 'registered' ? useNewAddress : undefined,
       newAddress: checkoutData.userType === 'registered' && useNewAddress ? newAddress : undefined,
-      saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined
+      saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined,
+      // Delivery date
+      deliveryDate: selectedDeliveryDate
     }
 
     console.log('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
@@ -1489,6 +1496,19 @@ export default function NewCheckoutPage() {
                     </div>
                   </div>
 
+                  {/* Delivery Date Selection */}
+                  <div className="mb-6">
+                    <DeliveryDatePicker
+                      zoneId={currentZoneId}
+                      onDateSelect={(date) => {
+                        setSelectedDeliveryDate(date);
+                        setDeliveryDateInitialized(true);
+                      }}
+                      selectedDate={selectedDeliveryDate}
+                      disabled={!currentZoneId}
+                    />
+                  </div>
+
                   {/* Delivery Rules Section */}
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                     <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
@@ -1509,18 +1529,21 @@ export default function NewCheckoutPage() {
                           </h5>
                           
                           <div className="space-y-2 text-sm">
-                            <div className="flex items-center gap-2">
-                              <Package className="h-4 w-4 text-blue-600" />
-                              <span className="text-blue-800">
-                                <strong>Delivery Time:</strong> {
-                                  deliveryRules.formattedDeliveryDate ? 
-                                    `Expected delivery on ${deliveryRules.formattedDeliveryDate}` :
-                                    deliveryRules.deliveryDays === 0 ? 'Same day' :
-                                    deliveryRules.deliveryDays === 1 ? 'Next day' :
-                                    `${deliveryRules.deliveryDays} days`
-                                }
-                              </span>
-                            </div>
+                            {selectedDeliveryDate && (
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <span className="text-green-800">
+                                  <strong>Selected Delivery Date:</strong> {
+                                    new Date(selectedDeliveryDate).toLocaleDateString('en-US', {
+                                      weekday: 'long',
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })
+                                  }
+                                </span>
+                              </div>
+                            )}
                             
                             <div className="flex items-center gap-2">
                               <CreditCard className="h-4 w-4 text-blue-600" />
@@ -1578,7 +1601,7 @@ export default function NewCheckoutPage() {
                           confirmOrder()
                         }
                       }}
-                      disabled={processingPayment || !acknowledgeDeliveryRules}
+                      disabled={processingPayment || !acknowledgeDeliveryRules || !selectedDeliveryDate || !deliveryDateInitialized}
                       className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
                     >
                       {processingPayment ? 'Processing...' : 

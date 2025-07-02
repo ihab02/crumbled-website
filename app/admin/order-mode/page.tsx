@@ -5,10 +5,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, Package, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { CheckCircle, Package, ShoppingCart, AlertTriangle, Clock, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type OrderMode = "stock_based" | "preorder";
+
+interface TimeWindowSettings {
+  enabled: boolean;
+  fromTime: string;
+  toTime: string;
+}
 
 interface OrderModeInfo {
   mode: OrderMode;
@@ -54,6 +63,11 @@ const orderModeInfo: Record<OrderMode, OrderModeInfo> = {
 
 export default function OrderModePage() {
   const [currentMode, setCurrentMode] = useState<OrderMode>("stock_based");
+  const [timeWindowSettings, setTimeWindowSettings] = useState<TimeWindowSettings>({
+    enabled: false,
+    fromTime: "08:00",
+    toTime: "17:00"
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +91,9 @@ export default function OrderModePage() {
       const result = await response.json();
       if (result.success) {
         setCurrentMode(result.data.orderMode);
+        if (result.data.timeWindowSettings) {
+          setTimeWindowSettings(result.data.timeWindowSettings);
+        }
       } else {
         setError(result.error || "Failed to fetch order mode");
       }
@@ -113,6 +130,38 @@ export default function OrderModePage() {
       }
     } catch (error) {
       setError("Failed to update order mode");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateTimeWindowSettings = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/order-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          timeWindowSettings: timeWindowSettings 
+        }),
+      });
+      if (response.status === 403 || response.status === 401) {
+        setError("You must be logged in as an admin to access this page.");
+        setSaving(false);
+        return;
+      }
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Time window settings updated successfully",
+        });
+      } else {
+        setError(result.error || "Failed to update time window settings");
+      }
+    } catch (error) {
+      setError("Failed to update time window settings");
     } finally {
       setSaving(false);
     }
@@ -205,6 +254,91 @@ export default function OrderModePage() {
             </Card>
           ))}
         </div>
+
+        {/* Time Window Settings */}
+        <Card className="border-2 border-purple-200 bg-purple-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-purple-800">
+              <Clock className="h-5 w-5" />
+              Next-Day Delivery Time Window
+            </CardTitle>
+            <p className="text-sm text-purple-700">
+              Control when customers can place orders for next-day delivery
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="time-window-toggle" className="text-base font-medium">
+                  Enable Time Window Enforcement
+                </Label>
+                <p className="text-sm text-gray-600 mt-1">
+                  When enabled, customers can only place next-day delivery orders during the specified time window
+                </p>
+              </div>
+              <Switch
+                id="time-window-toggle"
+                checked={timeWindowSettings.enabled}
+                onCheckedChange={(checked) => 
+                  setTimeWindowSettings(prev => ({ ...prev, enabled: checked }))
+                }
+              />
+            </div>
+
+            {timeWindowSettings.enabled && (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="from-time">From Time</Label>
+                  <Input
+                    id="from-time"
+                    type="time"
+                    value={timeWindowSettings.fromTime}
+                    onChange={(e) => 
+                      setTimeWindowSettings(prev => ({ ...prev, fromTime: e.target.value }))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="to-time">To Time</Label>
+                  <Input
+                    id="to-time"
+                    type="time"
+                    value={timeWindowSettings.toTime}
+                    onChange={(e) => 
+                      setTimeWindowSettings(prev => ({ ...prev, toTime: e.target.value }))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white p-4 rounded-lg border border-purple-200">
+              <h4 className="font-medium text-purple-900 mb-2 flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                How it works:
+              </h4>
+              <ul className="text-sm text-purple-800 space-y-1">
+                <li>• When enabled, customers can only select next-day delivery during the specified hours</li>
+                <li>• Outside these hours, next-day delivery will be automatically disabled</li>
+                <li>• Customers will see a clear message explaining why next-day delivery is unavailable</li>
+                <li>• The system will suggest the next available delivery date</li>
+                <li>• Same-day delivery (if available) remains unaffected by this setting</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={updateTimeWindowSettings}
+                disabled={saving}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                {saving ? "Saving..." : "Save Time Window Settings"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

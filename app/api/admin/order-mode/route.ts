@@ -3,7 +3,12 @@ import { databaseService } from '@/lib/services/databaseService';
 import { verifyJWT } from '@/lib/middleware/auth';
 
 interface OrderModeRequest {
-  orderMode: 'stock_based' | 'preorder';
+  orderMode?: 'stock_based' | 'preorder';
+  timeWindowSettings?: {
+    enabled: boolean;
+    fromTime: string;
+    toTime: string;
+  };
 }
 
 interface OrderModeResponse {
@@ -11,6 +16,11 @@ interface OrderModeResponse {
   message: string;
   data?: {
     orderMode: 'stock_based' | 'preorder';
+    timeWindowSettings?: {
+      enabled: boolean;
+      fromTime: string;
+      toTime: string;
+    };
   };
   error?: string;
 }
@@ -57,24 +67,46 @@ export async function GET(request: NextRequest): Promise<NextResponse<OrderModeR
     console.log('Admin verified, proceeding with order mode fetch');
 
     // Get current order mode
-    const [result] = await databaseService.query(
+    const [orderModeResult] = await databaseService.query(
       'SELECT setting_value FROM site_settings WHERE setting_key = ?',
       ['order_mode']
     );
 
     let orderMode: 'stock_based' | 'preorder' = 'stock_based';
     
-    if (Array.isArray(result) && result.length > 0) {
-      orderMode = (result[0] as any).setting_value as 'stock_based' | 'preorder';
+    if (Array.isArray(orderModeResult) && orderModeResult.length > 0) {
+      orderMode = (orderModeResult[0] as any).setting_value as 'stock_based' | 'preorder';
+    }
+
+    // Get time window settings
+    const [timeWindowResult] = await databaseService.query(
+      'SELECT setting_value FROM site_settings WHERE setting_key = ?',
+      ['time_window_settings']
+    );
+
+    let timeWindowSettings = {
+      enabled: false,
+      fromTime: "08:00",
+      toTime: "17:00"
+    };
+    
+    if (Array.isArray(timeWindowResult) && timeWindowResult.length > 0) {
+      try {
+        timeWindowSettings = JSON.parse(timeWindowResult[0].setting_value);
+      } catch (error) {
+        console.error('Error parsing time window settings:', error);
+      }
     }
 
     console.log('Order mode retrieved:', orderMode);
+    console.log('Time window settings retrieved:', timeWindowSettings);
 
     return NextResponse.json({
       success: true,
       message: 'Order mode retrieved successfully',
       data: {
-        orderMode
+        orderMode,
+        timeWindowSettings
       }
     });
 
@@ -119,30 +151,64 @@ export async function PUT(request: NextRequest): Promise<NextResponse<OrderModeR
       }, { status: 403 });
     }
 
-    const { orderMode } = await request.json() as OrderModeRequest;
+    const { orderMode, timeWindowSettings } = await request.json() as OrderModeRequest;
 
-    // Validate order mode
-    if (!['stock_based', 'preorder'].includes(orderMode)) {
-      return NextResponse.json({
-        success: false,
-        message: 'Invalid order mode',
-        error: 'Order mode must be either "stock_based" or "preorder"'
-      }, { status: 400 });
+    // Update order mode if provided
+    if (orderMode) {
+      // Validate order mode
+      if (!['stock_based', 'preorder'].includes(orderMode)) {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid order mode',
+          error: 'Order mode must be either "stock_based" or "preorder"'
+        }, { status: 400 });
+      }
+
+      // Update order mode
+      await databaseService.query(
+        `INSERT INTO site_settings (setting_key, setting_value, updated_at) 
+         VALUES (?, ?, NOW()) 
+         ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+        ['order_mode', orderMode, orderMode]
+      );
     }
 
-    // Update order mode
-    await databaseService.query(
-      `INSERT INTO site_settings (setting_key, setting_value, updated_at) 
-       VALUES (?, ?, NOW()) 
-       ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
-      ['order_mode', orderMode, orderMode]
-    );
+    // Update time window settings if provided
+    if (timeWindowSettings) {
+      // Validate time window settings
+      if (typeof timeWindowSettings.enabled !== 'boolean') {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid time window settings',
+          error: 'enabled must be a boolean'
+        }, { status: 400 });
+      }
+
+      if (timeWindowSettings.enabled) {
+        if (!timeWindowSettings.fromTime || !timeWindowSettings.toTime) {
+          return NextResponse.json({
+            success: false,
+            message: 'Invalid time window settings',
+            error: 'fromTime and toTime are required when enabled is true'
+          }, { status: 400 });
+        }
+      }
+
+      // Update time window settings
+      await databaseService.query(
+        `INSERT INTO site_settings (setting_key, setting_value, updated_at) 
+         VALUES (?, ?, NOW()) 
+         ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+        ['time_window_settings', JSON.stringify(timeWindowSettings), JSON.stringify(timeWindowSettings)]
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Order mode updated successfully',
+      message: 'Settings updated successfully',
       data: {
-        orderMode
+        orderMode: orderMode || 'stock_based',
+        timeWindowSettings: timeWindowSettings || { enabled: false, fromTime: "08:00", toTime: "17:00" }
       }
     });
 
