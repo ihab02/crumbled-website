@@ -137,10 +137,8 @@ export default function NewCheckoutPage() {
   const [otpCountdown, setOtpCountdown] = useState(0)
   const [phoneToVerify, setPhoneToVerify] = useState('')
   const [verifiedPhone, setVerifiedPhone] = useState('')
-  const [orderConfirmed, setOrderConfirmed] = useState(false)
-  const [orderData, setOrderData] = useState<any>(null)
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'paymob'>('cod')
-  const [processingPayment, setProcessingPayment] = useState(false)
+  const [placingOrder, setPlacingOrder] = useState(false)
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState<Record<string, PaymentMethod>>({})
   const [outOfStockItems, setOutOfStockItems] = useState<Array<{
     id: number
@@ -208,9 +206,9 @@ export default function NewCheckoutPage() {
     setAcknowledgeDeliveryRules(false)
   }, [selectedAddressId, useNewAddress, selectedZone, newAddress.zone_id])
 
-  // Fetch delivery rules when step 3 is reached
+  // Fetch delivery rules when step 2 is reached
   useEffect(() => {
-    if (step === 3 && checkoutData) {
+    if (step === 2 && checkoutData) {
       const fetchCurrentZoneRules = async () => {
         // Get the current zone ID based on user type
         let zoneId: number | null = null;
@@ -481,26 +479,32 @@ export default function NewCheckoutPage() {
     await sendOtp(phoneToVerify)
   }
 
-  const confirmOrder = async () => {
+
+
+
+
+  const placeOrder = async () => {
     if (!checkoutData) return
 
-    const requestData = {
-      // For guest users
-      guestData: checkoutData.userType === 'guest' ? guestData : undefined,
-      // For registered users
-      selectedAddressId: checkoutData.userType === 'registered' ? selectedAddressId : undefined,
-      useNewAddress: checkoutData.userType === 'registered' ? useNewAddress : undefined,
-      newAddress: checkoutData.userType === 'registered' && useNewAddress ? newAddress : undefined,
-      saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined,
-      // Delivery date
-      deliveryDate: selectedDeliveryDate
-    }
-
-    console.log('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
-    console.log('🔍 [DEBUG] Frontend - Save new address state:', saveNewAddress)
+    setPlacingOrder(true)
 
     try {
-      const response = await fetch('/api/checkout/confirm', {
+      // Step 1: Confirm order
+      const requestData = {
+        // For guest users
+        guestData: checkoutData.userType === 'guest' ? guestData : undefined,
+        // For registered users
+        selectedAddressId: checkoutData.userType === 'registered' ? selectedAddressId : undefined,
+        useNewAddress: checkoutData.userType === 'registered' ? useNewAddress : undefined,
+        newAddress: checkoutData.userType === 'registered' && useNewAddress ? newAddress : undefined,
+        saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined,
+        // Delivery date
+        deliveryDate: selectedDeliveryDate
+      }
+
+      console.log('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
+
+      const confirmResponse = await fetch('/api/checkout/confirm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -508,33 +512,21 @@ export default function NewCheckoutPage() {
         body: JSON.stringify(requestData)
       })
 
-      const result = await response.json()
+      const confirmResult = await confirmResponse.json()
 
-      if (response.ok && result.success) {
-        setOrderData(result.data)
-        setOrderConfirmed(true)
-        setStep(3)
-      } else {
-        toast.error(result.error || 'Failed to confirm order')
+      if (!confirmResponse.ok || !confirmResult.success) {
+        throw new Error(confirmResult.error || 'Failed to confirm order')
       }
-    } catch (error) {
-      toast.error('Error confirming order')
-    }
-  }
 
-  const processPayment = async () => {
-    if (!orderData) {
-      toast.error('No order data available')
-      return
-    }
+      const orderData = confirmResult.data
 
-    const paymentRequest = {
-      paymentMethod,
-      orderData
-    }
+      // Step 2: Process payment
+      const paymentRequest = {
+        paymentMethod,
+        orderData
+      }
 
-    try {
-      const response = await fetch('/api/checkout/payment', {
+      const paymentResponse = await fetch('/api/checkout/payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -542,22 +534,25 @@ export default function NewCheckoutPage() {
         body: JSON.stringify(paymentRequest)
       })
 
-      const result = await response.json()
+      const paymentResult = await paymentResponse.json()
 
-      if (response.ok && result.success) {
+      if (paymentResponse.ok && paymentResult.success) {
         if (paymentMethod === 'cod') {
           toast.success('Order placed successfully!')
-          router.push(`/checkout/success?orderId=${result.data?.orderId}`)
-        } else if (paymentMethod === 'paymob' && result.data?.paymentUrl) {
-          window.location.href = result.data.paymentUrl
+          router.push(`/checkout/success?orderId=${paymentResult.data?.orderId}`)
+        } else if (paymentMethod === 'paymob' && paymentResult.data?.paymentUrl) {
+          window.location.href = paymentResult.data.paymentUrl
         } else {
           toast.error('No payment URL in response')
         }
       } else {
-        toast.error(result.error || 'Payment failed')
+        throw new Error(paymentResult.error || 'Payment failed')
       }
     } catch (error) {
-      toast.error('Error processing payment')
+      console.error('Error placing order:', error)
+      toast.error(error instanceof Error ? error.message : 'Error placing order')
+    } finally {
+      setPlacingOrder(false)
     }
   }
 
@@ -594,8 +589,7 @@ export default function NewCheckoutPage() {
   function Stepper({ step }: { step: number }) {
     const steps = [
       { label: 'Delivery Info', icon: <MapPin className="h-4 w-4" /> },
-      { label: 'Payment', icon: <CreditCard className="h-4 w-4" /> },
-      { label: 'Confirmation', icon: <CheckCircle className="h-4 w-4" /> },
+      { label: 'Place Order', icon: <CheckCircle className="h-4 w-4" /> },
     ]
     return (
       <div className="flex items-center justify-center gap-4 mb-8">
@@ -670,6 +664,28 @@ export default function NewCheckoutPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
+      {/* Loading Overlay */}
+      {placingOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-500 mx-auto mb-4"></div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {paymentMethod === 'cod' ? 'Placing Your Order...' : 'Processing Payment...'}
+            </h3>
+            <p className="text-gray-600 mb-4">
+              {paymentMethod === 'cod' 
+                ? 'Please wait while we confirm your order details and place your order.'
+                : 'Please wait while we process your payment securely.'
+              }
+            </p>
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              <span>This may take a few moments...</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="container mx-auto p-4">
         <Stepper step={step} />
         
@@ -1379,8 +1395,8 @@ export default function NewCheckoutPage() {
             </div>
           </div>
         )}
-        {/* Step 3: Confirmation */}
-        {step === 3 && (
+        {/* Step 2: Place Order */}
+        {step === 2 && (
           <div className="grid gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-6">
               <Card className="border-2 border-pink-200 rounded-3xl">
@@ -1590,24 +1606,26 @@ export default function NewCheckoutPage() {
 
                   {/* Action Buttons */}
                   <div className="flex justify-between mt-8">
-                    <Button variant="outline" onClick={() => setStep(2)}>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setStep(2)}
+                      disabled={placingOrder}
+                    >
                       Back
                     </Button>
                     <Button
-                      onClick={() => {
-                        if (orderConfirmed) {
-                          processPayment()
-                        } else {
-                          confirmOrder()
-                        }
-                      }}
-                      disabled={processingPayment || !acknowledgeDeliveryRules || !selectedDeliveryDate || !deliveryDateInitialized}
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
+                      onClick={placeOrder}
+                      disabled={placingOrder || !acknowledgeDeliveryRules || !selectedDeliveryDate || !deliveryDateInitialized}
+                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {processingPayment ? 'Processing...' : 
-                       orderConfirmed ? 
-                         (paymentMethod === 'cod' ? 'Place Order' : 'Pay Now') : 
-                         'Confirm Order'}
+                      {placingOrder ? (
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="h-5 w-5 animate-spin" />
+                          {paymentMethod === 'cod' ? 'Placing Order...' : 'Processing Payment...'}
+                        </div>
+                      ) : (
+                        paymentMethod === 'cod' ? 'Place Order' : 'Pay Now'
+                      )}
                     </Button>
                   </div>
                 </CardContent>

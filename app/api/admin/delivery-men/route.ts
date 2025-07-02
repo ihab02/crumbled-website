@@ -1,31 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
+import { verifyJWT } from '@/lib/middleware/auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const token = request.cookies.get('adminToken')?.value
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const decoded = await verifyJWT(token)
+    if (!decoded || decoded.type !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Fetch all active delivery personnel
     const deliveryMen = await databaseService.query(`
       SELECT 
         id,
         name,
         id_number,
-        home_address,
         mobile_phone,
         available_from_hour,
         available_to_hour,
         available_days,
         notes,
-        is_active,
-        created_at,
-        updated_at
-      FROM delivery_men
+        is_active
+      FROM delivery_men 
+      WHERE is_active = 1
       ORDER BY name ASC
     `);
 
-    return NextResponse.json(deliveryMen);
+    return NextResponse.json({
+      success: true,
+      data: deliveryMen
+    });
   } catch (error) {
     console.error('Error fetching delivery men:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch delivery men' },
+      { error: 'Failed to fetch delivery personnel' },
       { status: 500 }
     );
   }

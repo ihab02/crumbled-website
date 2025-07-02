@@ -38,6 +38,9 @@ interface Order {
   from_hour?: string | null;
   to_hour?: string | null;
   expected_delivery_date?: string | null;
+  delivery_man_id?: number | null;
+  delivery_man_name?: string | null;
+  delivery_man_phone?: string | null;
   items: Array<{
     id: number;
     quantity: number;
@@ -52,6 +55,18 @@ interface Order {
   }>;
 }
 
+interface DeliveryPerson {
+  id: number;
+  name: string;
+  id_number: string;
+  mobile_phone: string;
+  available_from_hour: string;
+  available_to_hour: string;
+  available_days: string;
+  notes: string | null;
+  is_active: boolean;
+}
+
 interface PaginationInfo {
   currentPage: number;
   totalPages: number;
@@ -64,6 +79,10 @@ interface PaginationInfo {
 const ORDER_STATUSES = [
   'pending',
   'confirmed',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+  'delivering',
   'delivered',
   'cancelled'
 ];
@@ -75,6 +94,7 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterDeliveryPerson, setFilterDeliveryPerson] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
@@ -87,6 +107,13 @@ export default function AdminOrdersPage() {
     hasPrevPage: false
   });
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
+  const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{orderId: number, newStatus: string} | null>(null);
+  const [selectedDeliveryPerson, setSelectedDeliveryPerson] = useState<number | null>(null);
+  const [isAssigningDelivery, setIsAssigningDelivery] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,8 +124,21 @@ export default function AdminOrdersPage() {
     
     if (user) {
       fetchOrders();
+      fetchDeliveryPersons();
     }
   }, [user, authLoading, router]);
+
+  const fetchDeliveryPersons = async () => {
+    try {
+      const response = await fetch('/api/admin/delivery-men');
+      if (response.ok) {
+        const data = await response.json();
+        setDeliveryPersons(data.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch delivery persons:', error);
+    }
+  };
 
   const fetchOrders = async (page: number = 1) => {
     try {
@@ -135,6 +175,25 @@ export default function AdminOrdersPage() {
   };
 
   const handleStatusChange = async (orderId: number, newStatus: string) => {
+    const order = orders.find(o => o.id === orderId);
+    
+    // If trying to change to "out_for_delivery" and order is already delivered, show confirmation
+    if (newStatus === 'out_for_delivery' && order?.status === 'delivered') {
+      setPendingStatusChange({ orderId, newStatus });
+      setShowConfirmationModal(true);
+      return;
+    }
+    
+    // If status is "out_for_delivery", open delivery modal
+    if (newStatus === 'out_for_delivery') {
+      openDeliveryModal([orderId]);
+      return;
+    }
+
+    await updateOrderStatus(orderId, newStatus);
+  };
+
+  const updateOrderStatus = async (orderId: number, newStatus: string) => {
     try {
       const response = await fetch('/api/admin/orders', {
         method: 'PATCH',
@@ -155,6 +214,14 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const confirmStatusChange = async () => {
+    if (pendingStatusChange) {
+      await updateOrderStatus(pendingStatusChange.orderId, pendingStatusChange.newStatus);
+      setShowConfirmationModal(false);
+      setPendingStatusChange(null);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'delivered':
@@ -163,8 +230,82 @@ export default function AdminOrdersPage() {
         return 'bg-red-100 text-red-800';
       case 'confirmed':
         return 'bg-blue-100 text-blue-800';
+      case 'out_for_delivery':
+      case 'delivering':
+        return 'bg-purple-100 text-purple-800';
       default:
         return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  // Helper function to check if an order can be assigned to delivery
+  const canAssignToDelivery = (order: Order) => {
+    return order.status !== 'delivered' && order.status !== 'cancelled';
+  };
+
+  const handleOrderSelection = (orderId: number) => {
+    const order = searchFilteredOrders.find(o => o.id === orderId);
+    if (order && !canAssignToDelivery(order)) {
+      toast.error('Cannot assign delivered or cancelled orders to delivery');
+      return;
+    }
+    
+    setSelectedOrders(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
+  const handleBulkSelection = () => {
+    const assignableOrders = searchFilteredOrders.filter(canAssignToDelivery);
+    if (selectedOrders.length === assignableOrders.length) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(assignableOrders.map(order => order.id));
+    }
+  };
+
+  const openDeliveryModal = (orderIds: number[]) => {
+    setSelectedOrders(orderIds);
+    setShowDeliveryModal(true);
+    setSelectedDeliveryPerson(null);
+  };
+
+  const assignDeliveryPerson = async () => {
+    if (!selectedDeliveryPerson || selectedOrders.length === 0) {
+      toast.error('Please select a delivery person and orders');
+      return;
+    }
+
+    setIsAssigningDelivery(true);
+    try {
+      const response = await fetch('/api/admin/orders/assign-delivery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderIds: selectedOrders,
+          deliveryManId: selectedDeliveryPerson
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to assign delivery person');
+      }
+
+      const result = await response.json();
+      toast.success(result.message);
+      setShowDeliveryModal(false);
+      setSelectedOrders([]);
+      setSelectedDeliveryPerson(null);
+      fetchOrders(currentPage);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to assign delivery person');
+    } finally {
+      setIsAssigningDelivery(false);
     }
   };
 
@@ -305,6 +446,8 @@ export default function AdminOrdersPage() {
       'Expected Delivery Date': order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
       'Delivery Time Slot': order.delivery_time_slot_name || 'N/A',
       'Delivery Hours': order.from_hour && order.to_hour ? `${order.from_hour} - ${order.to_hour}` : 'N/A',
+      'Delivery Person': order.delivery_man_name || 'Not Assigned',
+      'Delivery Person Phone': order.delivery_man_phone || 'N/A',
       'Order Date': new Date(order.created_at).toLocaleString(),
       'Items Count': order.items.length,
       'Items Details': order.items.map(item => 
@@ -331,6 +474,8 @@ export default function AdminOrdersPage() {
       { wch: 20 }, // Expected Delivery Date
       { wch: 20 }, // Delivery Time Slot
       { wch: 15 }, // Delivery Hours
+      { wch: 20 }, // Delivery Person
+      { wch: 15 }, // Delivery Person Phone
       { wch: 20 }, // Order Date
       { wch: 12 }, // Items Count
       { wch: 50 }  // Items Details
@@ -350,6 +495,7 @@ export default function AdminOrdersPage() {
         'Delivery Address': order.delivery_address || 'N/A',
         'Expected Delivery Date': order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
         'Delivery Time Slot': order.delivery_time_slot_name || 'N/A',
+        'Delivery Person': order.delivery_man_name || 'Not Assigned',
         'Order Date': new Date(order.created_at).toLocaleDateString(),
         'Items': order.items.map(item => `${item.product_name} (${item.quantity}x)`).join('; ')
       }));
@@ -357,7 +503,7 @@ export default function AdminOrdersPage() {
       const zoneWorksheet = XLSX.utils.json_to_sheet(zoneData);
       const zoneColumnWidths = [
         { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, 
-        { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 40 }
+        { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 40 }
       ];
       zoneWorksheet['!cols'] = zoneColumnWidths;
       
@@ -447,13 +593,14 @@ export default function AdminOrdersPage() {
       `EGP ${Number(order.total).toFixed(2)}`,
       order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
       order.delivery_time_slot_name || 'N/A',
+      order.delivery_man_name || 'Not Assigned',
       new Date(order.created_at).toLocaleDateString()
     ]);
     
     // Add detailed table
     autoTable(doc, {
       startY: currentY,
-      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Expected Delivery', 'Time Slot', 'Order Date']],
+      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Expected Delivery', 'Time Slot', 'Delivery Person', 'Order Date']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
@@ -468,7 +615,8 @@ export default function AdminOrdersPage() {
         5: { cellWidth: 20 }, // Total
         6: { cellWidth: 25 }, // Expected Delivery
         7: { cellWidth: 20 }, // Time Slot
-        8: { cellWidth: 20 }  // Order Date
+        8: { cellWidth: 20 }, // Delivery Person
+        9: { cellWidth: 20 }  // Order Date
       }
     });
     
@@ -513,8 +661,17 @@ export default function AdminOrdersPage() {
     ? orders 
     : orders.filter(order => order.status === filterStatus);
 
+  // Filter orders by delivery person
+  const deliveryPersonFilteredOrders = filterDeliveryPerson === 'all'
+    ? filteredOrders
+    : filterDeliveryPerson === 'assigned'
+    ? filteredOrders.filter(order => order.delivery_man_name)
+    : filterDeliveryPerson === 'unassigned'
+    ? filteredOrders.filter(order => !order.delivery_man_name)
+    : filteredOrders.filter(order => order.delivery_man_id?.toString() === filterDeliveryPerson);
+
   // Filter orders based on search term
-  const searchFilteredOrders = filteredOrders.filter((order) => {
+  const searchFilteredOrders = deliveryPersonFilteredOrders.filter((order) => {
     const searchLower = searchTerm.toLowerCase();
     return (
       order.id.toString().includes(searchLower) ||
@@ -522,7 +679,8 @@ export default function AdminOrdersPage() {
       (order.customer_email && order.customer_email.toLowerCase().includes(searchLower)) ||
       (order.customer_phone && order.customer_phone.toLowerCase().includes(searchLower)) ||
       order.status.toLowerCase().includes(searchLower) ||
-      order.payment_method.toLowerCase().includes(searchLower)
+      order.payment_method.toLowerCase().includes(searchLower) ||
+      (order.delivery_man_name && order.delivery_man_name.toLowerCase().includes(searchLower))
     );
   });
 
@@ -562,6 +720,20 @@ export default function AdminOrdersPage() {
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={filterDeliveryPerson}
+                    onChange={(e) => setFilterDeliveryPerson(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="all">All Delivery Persons</option>
+                    <option value="assigned">Assigned Orders</option>
+                    <option value="unassigned">Unassigned Orders</option>
+                    {deliveryPersons.map((person) => (
+                      <option key={person.id} value={person.id.toString()}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="date"
                     placeholder="From Date"
@@ -588,6 +760,7 @@ export default function AdminOrdersPage() {
                       setToDate('');
                       setSearchTerm('');
                       setFilterStatus('all');
+                      setFilterDeliveryPerson('all');
                       fetchOrders(1);
                     }}
                     className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -614,10 +787,44 @@ export default function AdminOrdersPage() {
               </div>
             </div>
 
+            {/* Bulk Actions */}
+            {selectedOrders.length > 0 && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <span className="text-sm font-medium text-blue-900">
+                      {selectedOrders.length} order(s) selected
+                    </span>
+                    <button
+                      onClick={() => openDeliveryModal(selectedOrders)}
+                      disabled={selectedOrders.length === 0}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      🚚 Assign Delivery Person
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setSelectedOrders([])}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.length === searchFilteredOrders.length && searchFilteredOrders.length > 0}
+                        onChange={handleBulkSelection}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order ID
                     </th>
@@ -635,6 +842,9 @@ export default function AdminOrdersPage() {
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Time Slot
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Delivery Person
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
@@ -656,6 +866,14 @@ export default function AdminOrdersPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {searchFilteredOrders.map((order) => (
                     <tr key={order.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => handleOrderSelection(order.id)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         #{order.id}
                       </td>
@@ -702,6 +920,18 @@ export default function AdminOrdersPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {order.delivery_man_name ? (
+                          <div>
+                            <div className="font-medium text-gray-900">{order.delivery_man_name}</div>
+                            {order.delivery_man_phone && (
+                              <div className="text-xs text-gray-400">{order.delivery_man_phone}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">Not Assigned</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         EGP {Number(order.total).toFixed(2)}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
@@ -722,25 +952,25 @@ export default function AdminOrdersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex space-x-2">
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                            className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                          >
-                            {ORDER_STATUSES.map((status) => (
-                              <option key={status} value={status}>
-                                {status.charAt(0).toUpperCase() + status.slice(1)}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                          >
-                            View Details
-                          </button>
-                        </div>
+                                                  <div className="flex space-x-2">
+                            <select
+                              value={order.status}
+                              onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            >
+                              {ORDER_STATUSES.map((status) => (
+                                <option key={status} value={status}>
+                                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                              View Details
+                            </button>
+                          </div>
                       </td>
                     </tr>
                   ))}
@@ -983,6 +1213,170 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delivery Assignment Modal */}
+        {showDeliveryModal && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-medium text-gray-900">
+                    Assign Delivery Person
+                  </h2>
+                  <button
+                    onClick={() => setShowDeliveryModal(false)}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg
+                      className="h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 py-4">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Assigning {selectedOrders.length} order(s) to a delivery person will mark them as "Out for Delivery".
+                  </p>
+                  
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Delivery Person
+                  </label>
+                  <select
+                    value={selectedDeliveryPerson || ''}
+                    onChange={(e) => setSelectedDeliveryPerson(Number(e.target.value) || null)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="">Choose a delivery person...</option>
+                    {deliveryPersons.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name} - {person.mobile_phone}
+                        {person.available_from_hour && person.available_to_hour && 
+                          ` (${person.available_from_hour.substring(0, 5)}-${person.available_to_hour.substring(0, 5)})`
+                        }
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowDeliveryModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={assignDeliveryPerson}
+                    disabled={!selectedDeliveryPerson || isAssigningDelivery}
+                    className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isAssigningDelivery ? 'Assigning...' : 'Assign Delivery Person'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Status Change Confirmation Modal */}
+        {showConfirmationModal && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-medium text-gray-900">
+                    Confirm Status Change
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setShowConfirmationModal(false);
+                      setPendingStatusChange(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg
+                      className="h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 py-4">
+                <div className="mb-4">
+                  <div className="flex items-center mb-4">
+                    <div className="flex-shrink-0">
+                      <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        Warning: Changing Delivered Order Status
+                      </h3>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 mb-4">
+                    You are attempting to change a delivered order back to "Out for Delivery". 
+                    This action will:
+                  </p>
+                  
+                  <ul className="text-sm text-gray-600 mb-4 list-disc list-inside space-y-1">
+                    <li>Mark the order as "Out for Delivery" again</li>
+                    <li>Require you to assign a delivery person</li>
+                    <li>Reset the delivery tracking process</li>
+                  </ul>
+                  
+                  <p className="text-sm font-medium text-gray-900">
+                    Are you sure you want to proceed with this status change?
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => {
+                      setShowConfirmationModal(false);
+                      setPendingStatusChange(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmStatusChange}
+                    className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                  >
+                    Confirm Change
+                  </button>
+                </div>
               </div>
             </div>
           </div>
