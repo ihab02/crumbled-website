@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
 import { Upload, X, Image as ImageIcon, ArrowLeft } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function NewFlavorPage() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('Classic')
   const [miniPrice, setMiniPrice] = useState('')
   const [mediumPrice, setMediumPrice] = useState('')
   const [largePrice, setLargePrice] = useState('')
@@ -63,6 +65,7 @@ export default function NewFlavorPage() {
       const formData = new FormData()
       formData.append('name', name)
       formData.append('description', description)
+      formData.append('category', category)
       formData.append('miniPrice', miniPrice)
       formData.append('mediumPrice', mediumPrice)
       formData.append('largePrice', largePrice)
@@ -149,6 +152,21 @@ export default function NewFlavorPage() {
               rows={4}
               required
             />
+          </div>
+          <div>
+            <Label htmlFor="category">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Classic">Classic</SelectItem>
+                <SelectItem value="Premium">Premium</SelectItem>
+                <SelectItem value="Fruit">Fruit</SelectItem>
+                <SelectItem value="Chocolate">Chocolate</SelectItem>
+                <SelectItem value="Specialty">Specialty</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">

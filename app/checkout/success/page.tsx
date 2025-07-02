@@ -144,7 +144,7 @@ export default function CheckoutSuccessPage() {
           
           {/* Continue Shopping Button at Top */}
           <div className="mb-6">
-            <Button asChild className="h-12 border-2 border-pink-300 text-pink-700 hover:bg-pink-50 hover:border-pink-400 font-semibold rounded-2xl shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300">
+            <Button asChild className="h-12 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:from-pink-600 hover:via-rose-600 hover:to-pink-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 border-0">
               <Link href="/">Continue Shopping</Link>
             </Button>
           </div>

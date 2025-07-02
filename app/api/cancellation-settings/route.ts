@@ -41,7 +41,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<Cancellati
     return NextResponse.json({
       success: true,
       message: 'Cancellation settings retrieved successfully',
-      data: cancellationSettings
+      settings: cancellationSettings
     });
 
   } catch (error) {

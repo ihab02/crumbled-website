@@ -153,6 +153,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
+    const category = formData.get('category') as string || 'Classic';
     const miniPrice = formData.get('miniPrice') as string;
     const mediumPrice = formData.get('mediumPrice') as string;
     const largePrice = formData.get('largePrice') as string;
@@ -193,7 +194,7 @@ export async function POST(request: Request) {
     // Insert the flavor first
     const result = await databaseService.query(
       'INSERT INTO flavors (name, description, mini_price, medium_price, large_price, is_enabled, slug, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, description, miniPrice, mediumPrice, largePrice, enabled, slug, 'Classic']
+      [name, description, miniPrice, mediumPrice, largePrice, enabled, slug, category]
     ) as any;
 
     const flavorId = result.insertId;

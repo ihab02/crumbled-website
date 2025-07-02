@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { ArrowLeft, Trash2, Plus } from 'lucide-react';
 
@@ -14,6 +15,7 @@ interface Flavor {
   id: number;
   name: string;
   description: string;
+  category: string;
   mini_price: number;
   medium_price: number;
   large_price: number;
@@ -33,6 +35,7 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
     id: 0,
     name: '',
     description: '',
+    category: 'Classic',
     mini_price: 0,
     medium_price: 0,
     large_price: 0,
@@ -58,6 +61,7 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
       const data = await response.json();
       setFormData({
         ...data,
+        category: data.category || 'Classic',
         is_active: Boolean(data.is_active),
         images: data.images || []
       });
@@ -173,6 +177,7 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({
           name: formData.name,
           description: formData.description,
+          category: formData.category,
           mini_price: formData.mini_price,
           medium_price: formData.medium_price,
           large_price: formData.large_price,
@@ -281,6 +286,25 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
               rows={4}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Category</Label>
+            <Select
+              value={formData.category}
+              onValueChange={(value) => setFormData({ ...formData, category: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Classic">Classic</SelectItem>
+                <SelectItem value="Premium">Premium</SelectItem>
+                <SelectItem value="Fruit">Fruit</SelectItem>
+                <SelectItem value="Chocolate">Chocolate</SelectItem>
+                <SelectItem value="Specialty">Specialty</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -401,6 +425,23 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
               required
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="category">Category</Label>
+          <Select
+            value={formData.category}
+            onValueChange={(value) => setFormData({ ...formData, category: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Classic">Classic</SelectItem>
+              <SelectItem value="Special">Special</SelectItem>
+              <SelectItem value="Seasonal">Seasonal</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex justify-end space-x-4">

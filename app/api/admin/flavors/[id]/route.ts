@@ -54,6 +54,7 @@ export async function GET(
       id: flavorData.id,
       name: flavorData.name,
       description: flavorData.description,
+      category: flavorData.category || 'Classic',
       mini_price: parseFloat(flavorData.mini_price) || 0,
       medium_price: parseFloat(flavorData.medium_price) || 0,
       large_price: parseFloat(flavorData.large_price) || 0,
@@ -89,7 +90,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, description, mini_price, medium_price, large_price, is_active } = body;
+    const { name, description, category, mini_price, medium_price, large_price, is_active } = body;
 
     if (!name || !description || !mini_price || !medium_price || !large_price) {
       return new NextResponse('Missing required fields', { status: 400 });
@@ -97,16 +98,17 @@ export async function PUT(
 
     await db.query(
       `UPDATE flavors 
-       SET name = ?, description = ?, 
+       SET name = ?, description = ?, category = ?,
            mini_price = ?, medium_price = ?, large_price = ?, is_enabled = ?
        WHERE id = ?`,
-      [name, description, mini_price, medium_price, large_price, is_active, params.id]
+      [name, description, category || 'Classic', mini_price, medium_price, large_price, is_active, params.id]
     );
 
     return NextResponse.json({ 
       id: params.id, 
       name, 
       description, 
+      category: category || 'Classic',
       mini_price, 
       medium_price, 
       large_price, 
