@@ -21,7 +21,8 @@ import {
   Database,
   Warehouse,
   User,
-  Truck
+  Truck,
+  Image
 } from 'lucide-react';
 
 const menuItems = [
@@ -59,6 +60,11 @@ const menuItems = [
     title: 'Product Types',
     href: '/admin/product-types',
     icon: Tag
+  },
+  {
+    title: 'Sliding Media',
+    href: '/admin/sliding-media',
+    icon: Image
   },
   {
     title: 'Customers',

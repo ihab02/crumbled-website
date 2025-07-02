@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { ShoppingBag } from 'lucide-react';
+import SlidingMediaHeader from '@/components/SlidingMediaHeader';
 
 interface Flavor {
   id: number;
@@ -100,6 +101,7 @@ export default function FlavorsPage() {
   if (loading) {
     return (
       <div className="container mx-auto p-4">
+        <SlidingMediaHeader />
         <h1 className="text-3xl font-bold mb-6">Our Flavors</h1>
         <div className="grid grid-cols-1 gap-6">
           {[1, 2, 3].map((i) => (
@@ -123,6 +125,7 @@ export default function FlavorsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <SlidingMediaHeader />
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Our Flavors</h1>
         <Button onClick={() => router.push('/shop')}>
