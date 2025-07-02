@@ -13,7 +13,7 @@ interface OrderModeResponse {
 export async function GET(request: NextRequest): Promise<NextResponse<OrderModeResponse>> {
   try {
     // Get current order mode
-    const [result] = await databaseService.query(
+    const result = await databaseService.query(
       'SELECT setting_value FROM site_settings WHERE setting_key = ?',
       ['order_mode']
     );
