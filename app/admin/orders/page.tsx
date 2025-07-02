@@ -76,6 +76,8 @@ export default function AdminOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
   const [pagination, setPagination] = useState<PaginationInfo>({
     currentPage: 1,
     totalPages: 1,
@@ -100,7 +102,20 @@ export default function AdminOrdersPage() {
 
   const fetchOrders = async (page: number = 1) => {
     try {
-      const response = await fetch(`/api/admin/orders?page=${page}&limit=10`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '10'
+      });
+      
+      if (fromDate) {
+        params.append('fromDate', fromDate);
+      }
+      if (toDate) {
+        params.append('toDate', toDate);
+      }
+      
+      const response = await fetch(`/api/admin/orders?${params.toString()}`);
       if (!response.ok) {
         if (response.status === 401) {
           router.push('/admin/login');
@@ -109,7 +124,7 @@ export default function AdminOrdersPage() {
         throw new Error('Failed to fetch orders');
       }
       const data = await response.json();
-      setOrders(data.orders);
+      setOrders(data.data || []);
       setPagination(data.pagination);
       setCurrentPage(page);
     } catch (error) {
@@ -547,11 +562,37 @@ export default function AdminOrdersPage() {
                       </option>
                     ))}
                   </select>
+                  <input
+                    type="date"
+                    placeholder="From Date"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
+                  <input
+                    type="date"
+                    placeholder="To Date"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  />
                   <button
-                    onClick={() => fetchOrders(currentPage)}
+                    onClick={() => fetchOrders(1)}
                     className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
-                    Refresh
+                    Filter
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFromDate('');
+                      setToDate('');
+                      setSearchTerm('');
+                      setFilterStatus('all');
+                      fetchOrders(1);
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Clear
                   </button>
                 </div>
                 
