@@ -55,7 +55,7 @@ export async function POST(
     }
 
     // Check if order is already completed or shipped
-    if (['completed', 'shipped', 'delivered'].includes(order.status)) {
+    if (["completed", "shipped", "delivered"].includes(order.status)) {
       return NextResponse.json({
         success: false,
         message: 'Order cannot be cancelled',
@@ -63,21 +63,47 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Check if order is within 30 minutes of creation
+    // Get cancellation settings
+    const cancellationResult = await databaseService.query(
+      'SELECT setting_value FROM site_settings WHERE setting_key = ?',
+      ['cancellation_settings']
+    );
+
+    let cancellationSettings = {
+      enabled: true,
+      showInEmail: true,
+      showOnSuccessPage: true,
+      timeWindowMinutes: 30
+    };
+    
+    if (Array.isArray(cancellationResult) && cancellationResult.length > 0) {
+      try {
+        cancellationSettings = JSON.parse(cancellationResult[0].setting_value);
+      } catch (error) {
+        console.error('Error parsing cancellation settings:', error);
+      }
+    }
+
+    // Check if cancellation is enabled
+    if (!cancellationSettings.enabled) {
+      return NextResponse.json({
+        success: false,
+        message: 'Cancellation disabled',
+        error: 'Order cancellation is currently disabled'
+      }, { status: 400 });
+    }
+
+    // Check if order is within the configured time window
     const orderDate = new Date(order.created_at);
     const currentDate = new Date();
     const timeDifference = currentDate.getTime() - orderDate.getTime();
     const minutesDifference = timeDifference / (1000 * 60);
 
-    console.log('🔍 [DEBUG] Cancel Order API - Order created:', orderDate);
-    console.log('🔍 [DEBUG] Cancel Order API - Current time:', currentDate);
-    console.log('🔍 [DEBUG] Cancel Order API - Minutes difference:', minutesDifference);
-
-    if (minutesDifference > 30) {
+    if (minutesDifference > cancellationSettings.timeWindowMinutes) {
       return NextResponse.json({
         success: false,
         message: 'Cancellation time expired',
-        error: 'Orders can only be cancelled within 30 minutes of placement'
+        error: `Orders can only be cancelled within ${cancellationSettings.timeWindowMinutes} minutes of placement`
       }, { status: 400 });
     }
 
@@ -164,21 +190,47 @@ export async function GET(
       }, { status: 400 });
     }
 
-    // Check if order is within 30 minutes of creation
+    // Get cancellation settings
+    const cancellationResult = await databaseService.query(
+      'SELECT setting_value FROM site_settings WHERE setting_key = ?',
+      ['cancellation_settings']
+    );
+
+    let cancellationSettings = {
+      enabled: true,
+      showInEmail: true,
+      showOnSuccessPage: true,
+      timeWindowMinutes: 30
+    };
+    
+    if (Array.isArray(cancellationResult) && cancellationResult.length > 0) {
+      try {
+        cancellationSettings = JSON.parse(cancellationResult[0].setting_value);
+      } catch (error) {
+        console.error('Error parsing cancellation settings:', error);
+      }
+    }
+
+    // Check if cancellation is enabled
+    if (!cancellationSettings.enabled) {
+      return NextResponse.json({
+        success: false,
+        message: 'Cancellation disabled',
+        error: 'Order cancellation is currently disabled'
+      }, { status: 400 });
+    }
+
+    // Check if order is within the configured time window
     const orderDate = new Date(order.created_at);
     const currentDate = new Date();
     const timeDifference = currentDate.getTime() - orderDate.getTime();
     const minutesDifference = timeDifference / (1000 * 60);
 
-    console.log('🔍 [DEBUG] Cancel Order API - Order created:', orderDate);
-    console.log('🔍 [DEBUG] Cancel Order API - Current time:', currentDate);
-    console.log('🔍 [DEBUG] Cancel Order API - Minutes difference:', minutesDifference);
-
-    if (minutesDifference > 30) {
+    if (minutesDifference > cancellationSettings.timeWindowMinutes) {
       return NextResponse.json({
         success: false,
         message: 'Cancellation time expired',
-        error: 'Orders can only be cancelled within 30 minutes of placement'
+        error: `Orders can only be cancelled within ${cancellationSettings.timeWindowMinutes} minutes of placement`
       }, { status: 400 });
     }
 

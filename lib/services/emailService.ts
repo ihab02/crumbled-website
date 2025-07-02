@@ -177,6 +177,27 @@ class EmailService {
   public async sendOrderConfirmationEmail(to: string, orderId: string, orderDetails: any) {
     const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/logo-with-background.jpg`;
     
+    // Get cancellation settings
+    let cancellationSettings = {
+      enabled: true,
+      showInEmail: true,
+      showOnSuccessPage: true,
+      timeWindowMinutes: 30
+    };
+    
+    try {
+      const cancellationResult = await databaseService.query(
+        'SELECT setting_value FROM site_settings WHERE setting_key = ?',
+        ['cancellation_settings']
+      );
+      
+      if (Array.isArray(cancellationResult) && cancellationResult.length > 0) {
+        cancellationSettings = JSON.parse(cancellationResult[0].setting_value);
+      }
+    } catch (error) {
+      console.error('Error fetching cancellation settings for email:', error);
+    }
+    
     await this.sendEmail({
       to,
       subject: `Order Confirmation - Order #${orderId}`,
@@ -445,32 +466,34 @@ class EmailService {
                 </div>
               `}
 
-              <div class="section">
-                <h3>Need to Cancel?</h3>
-                <p>If you need to cancel your order, please click the button below. Orders can only be cancelled within 30 minutes of placement.</p>
-                <div style="text-align: center; margin: 20px 0;">
-                  <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/orders/${orderId}/cancel?email=${encodeURIComponent(orderDetails.customerInfo.email)}" 
-                     style="
-                       display: inline-block;
-                       padding: 12px 24px;
-                       background: #ef4444;
-                       color: white;
-                       text-decoration: none;
-                       border-radius: 8px;
-                       font-weight: 600;
-                       font-size: 14px;
-                       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                       transition: all 0.3s ease;
-                     "
-                     onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'"
-                     onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
-                    ❌ Cancel Order
-                  </a>
+              ${cancellationSettings.enabled && cancellationSettings.showInEmail ? `
+                <div class="section">
+                  <h3>Need to Cancel?</h3>
+                  <p>If you need to cancel your order, please click the button below. Orders can only be cancelled within ${cancellationSettings.timeWindowMinutes} minutes of placement.</p>
+                  <div style="text-align: center; margin: 20px 0;">
+                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/orders/${orderId}/cancel?email=${encodeURIComponent(orderDetails.customerInfo.email)}" 
+                       style="
+                         display: inline-block;
+                         padding: 12px 24px;
+                         background: #ef4444;
+                         color: white;
+                         text-decoration: none;
+                         border-radius: 8px;
+                         font-weight: 600;
+                         font-size: 14px;
+                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                         transition: all 0.3s ease;
+                       "
+                       onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)'"
+                       onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+                      ❌ Cancel Order
+                    </a>
+                  </div>
+                  <p style="font-size: 12px; color: #6b7280; text-align: center;">
+                    <strong>Note:</strong> Cancellation is only available within ${cancellationSettings.timeWindowMinutes} minutes of order placement.
+                  </p>
                 </div>
-                <p style="font-size: 12px; color: #6b7280; text-align: center;">
-                  <strong>Note:</strong> Cancellation is only available within 30 minutes of order placement.
-                </p>
-              </div>
+              ` : ''}
 
               <div class="section">
                 <h3>What's Next?</h3>
@@ -500,7 +523,7 @@ class EmailService {
 
             <div class="footer">
               <p>Thank you for choosing Crumbled!</p>
-              <p>For support, contact us at <a href="mailto:support@crumbled.com">support@crumbled.com</a></p>
+              <p>For support, contact us at <a href="mailto:support@crumbled-eg.com">support@crumbled-eg.com</a></p>
               <p style="font-size: 12px; margin-top: 20px;">
                 This is an automated message, please do not reply to this email.
               </p>

@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { CheckCircle, Package, ShoppingCart, AlertTriangle, Clock, Settings } from "lucide-react";
+import { CheckCircle, Package, ShoppingCart, AlertTriangle, Clock, Settings, XCircle, Mail, Monitor } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type OrderMode = "stock_based" | "preorder";
@@ -17,6 +17,13 @@ interface TimeWindowSettings {
   enabled: boolean;
   fromTime: string;
   toTime: string;
+}
+
+interface CancellationSettings {
+  enabled: boolean;
+  showInEmail: boolean;
+  showOnSuccessPage: boolean;
+  timeWindowMinutes: number;
 }
 
 interface OrderModeInfo {
@@ -68,6 +75,12 @@ export default function OrderModePage() {
     fromTime: "08:00",
     toTime: "17:00"
   });
+  const [cancellationSettings, setCancellationSettings] = useState<CancellationSettings>({
+    enabled: true,
+    showInEmail: true,
+    showOnSuccessPage: true,
+    timeWindowMinutes: 30
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +106,9 @@ export default function OrderModePage() {
         setCurrentMode(result.data.orderMode);
         if (result.data.timeWindowSettings) {
           setTimeWindowSettings(result.data.timeWindowSettings);
+        }
+        if (result.data.cancellationSettings) {
+          setCancellationSettings(result.data.cancellationSettings);
         }
       } else {
         setError(result.error || "Failed to fetch order mode");
@@ -162,6 +178,38 @@ export default function OrderModePage() {
       }
     } catch (error) {
       setError("Failed to update time window settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateCancellationSettings = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/order-mode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          cancellationSettings: cancellationSettings 
+        }),
+      });
+      if (response.status === 403 || response.status === 401) {
+        setError("You must be logged in as an admin to access this page.");
+        setSaving(false);
+        return;
+      }
+      const result = await response.json();
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Cancellation settings updated successfully",
+        });
+      } else {
+        setError(result.error || "Failed to update cancellation settings");
+      }
+    } catch (error) {
+      setError("Failed to update cancellation settings");
     } finally {
       setSaving(false);
     }
@@ -335,6 +383,139 @@ export default function OrderModePage() {
                 className="bg-purple-600 hover:bg-purple-700"
               >
                 {saving ? "Saving..." : "Save Time Window Settings"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cancellation Settings */}
+        <Card className="border-2 border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-800">
+              <XCircle className="h-5 w-5" />
+              Order Cancellation Settings
+            </CardTitle>
+            <p className="text-sm text-red-700">
+              Control whether customers can cancel their orders and how the cancellation feature is displayed
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Master Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="cancellation-toggle" className="text-base font-medium">
+                  Enable Order Cancellation
+                </Label>
+                <p className="text-sm text-gray-600 mt-1">
+                  Master switch to enable or disable the order cancellation feature for all customers
+                </p>
+              </div>
+              <Switch
+                id="cancellation-toggle"
+                checked={cancellationSettings.enabled}
+                onCheckedChange={(checked) => 
+                  setCancellationSettings(prev => ({ ...prev, enabled: checked }))
+                }
+              />
+            </div>
+
+            {cancellationSettings.enabled && (
+              <>
+                {/* Display Options */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Mail className="h-5 w-5 text-blue-600" />
+                      <div>
+                        <Label htmlFor="show-in-email" className="text-base font-medium">
+                          Show Cancellation in Email
+                        </Label>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Include cancellation option in order confirmation emails
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      id="show-in-email"
+                      checked={cancellationSettings.showInEmail}
+                      onCheckedChange={(checked) => 
+                        setCancellationSettings(prev => ({ ...prev, showInEmail: checked }))
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Monitor className="h-5 w-5 text-green-600" />
+                      <div>
+                        <Label htmlFor="show-on-success-page" className="text-base font-medium">
+                          Show Cancellation on Success Page
+                        </Label>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Display cancellation button on the checkout success page
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      id="show-on-success-page"
+                      checked={cancellationSettings.showOnSuccessPage}
+                      onCheckedChange={(checked) => 
+                        setCancellationSettings(prev => ({ ...prev, showOnSuccessPage: checked }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Time Window */}
+                <div>
+                  <Label htmlFor="cancellation-time-window" className="text-base font-medium">
+                    Cancellation Time Window (minutes)
+                  </Label>
+                  <p className="text-sm text-gray-600 mt-1 mb-3">
+                    How long after order placement customers can cancel their orders
+                  </p>
+                  <Input
+                    id="cancellation-time-window"
+                    type="number"
+                    min="0"
+                    max="1440"
+                    value={cancellationSettings.timeWindowMinutes}
+                    onChange={(e) => 
+                      setCancellationSettings(prev => ({ 
+                        ...prev, 
+                        timeWindowMinutes: parseInt(e.target.value) || 0 
+                      }))
+                    }
+                    className="w-32"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum: 1440 minutes (24 hours)
+                  </p>
+                </div>
+              </>
+            )}
+
+            <div className="bg-white p-4 rounded-lg border border-red-200">
+              <h4 className="font-medium text-red-900 mb-2 flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                How it works:
+              </h4>
+              <ul className="text-sm text-red-800 space-y-1">
+                <li>• When enabled, customers can cancel orders within the specified time window</li>
+                <li>• Cancellation options appear based on your display settings (email, success page)</li>
+                <li>• Orders can only be cancelled if they haven't been processed yet</li>
+                <li>• The time window starts from the moment the order is placed</li>
+                <li>• Cancelled orders are marked as "cancelled" in the system</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={updateCancellationSettings}
+                disabled={saving}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {saving ? "Saving..." : "Save Cancellation Settings"}
               </Button>
             </div>
           </CardContent>

@@ -15,6 +15,7 @@ export default function CheckoutSuccessPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [cancellationSettings, setCancellationSettings] = useState<any>(null)
 
   useEffect(() => {
     const fetchOrderInfo = async () => {
@@ -74,7 +75,20 @@ export default function CheckoutSuccessPage() {
       }
     }
 
+    const fetchCancellationSettings = async () => {
+      try {
+        const response = await fetch('/api/cancellation-settings')
+        const data = await response.json()
+        if (response.ok && data.success) {
+          setCancellationSettings(data.data)
+        }
+      } catch (error) {
+        console.error('Error fetching cancellation settings:', error)
+      }
+    }
+
     fetchOrderInfo()
+    fetchCancellationSettings()
   }, [searchParams])
 
   const copyTrackingId = () => {
@@ -300,7 +314,9 @@ export default function CheckoutSuccessPage() {
 
                     {/* Action Buttons */}
                     <div className="space-y-4">
-                      {orderInfo.order_status !== 'cancelled' && (
+                      {orderInfo.order_status !== 'cancelled' && 
+                       cancellationSettings?.enabled && 
+                       cancellationSettings?.showOnSuccessPage && (
                         <Button 
                           onClick={handleCancelOrder}
                           disabled={cancelling}

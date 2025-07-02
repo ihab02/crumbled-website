@@ -9,6 +9,12 @@ interface OrderModeRequest {
     fromTime: string;
     toTime: string;
   };
+  cancellationSettings?: {
+    enabled: boolean;
+    showInEmail: boolean;
+    showOnSuccessPage: boolean;
+    timeWindowMinutes: number;
+  };
 }
 
 interface OrderModeResponse {
@@ -21,20 +27,22 @@ interface OrderModeResponse {
       fromTime: string;
       toTime: string;
     };
+    cancellationSettings?: {
+      enabled: boolean;
+      showInEmail: boolean;
+      showOnSuccessPage: boolean;
+      timeWindowMinutes: number;
+    };
   };
   error?: string;
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<OrderModeResponse>> {
   try {
-    console.log('=== Admin Order Mode GET Request ===');
-    
     // Check for admin token in cookies
     const adminToken = request.cookies.get('adminToken');
-    console.log('Admin token found:', !!adminToken?.value);
     
     if (!adminToken?.value) {
-      console.log('No admin token found');
       return NextResponse.json({
         success: false,
         message: 'Unauthorized',
@@ -44,19 +52,15 @@ export async function GET(request: NextRequest): Promise<NextResponse<OrderModeR
 
     // Verify admin token
     let isAdmin = false;
-    let decodedToken = null;
     try {
-      decodedToken = verifyJWT(adminToken.value, 'admin');
-      console.log('Decoded token:', decodedToken);
+      const decoded = verifyJWT(adminToken.value, 'admin');
       isAdmin = true; // If verifyJWT doesn't throw, it's a valid admin token
-      console.log('Is admin:', isAdmin);
     } catch (error) {
       console.error('Token verification error:', error);
       isAdmin = false;
     }
 
     if (!isAdmin) {
-      console.log('Not admin, returning 403');
       return NextResponse.json({
         success: false,
         message: 'Unauthorized',
@@ -64,22 +68,25 @@ export async function GET(request: NextRequest): Promise<NextResponse<OrderModeR
       }, { status: 403 });
     }
 
-    console.log('Admin verified, proceeding with order mode fetch');
-
     // Get current order mode
-    const [orderModeResult] = await databaseService.query(
+    const orderModeResult = await databaseService.query(
       'SELECT setting_value FROM site_settings WHERE setting_key = ?',
       ['order_mode']
     );
+
+    console.log('[ADMIN DEBUG] Database result:', orderModeResult);
 
     let orderMode: 'stock_based' | 'preorder' = 'stock_based';
     
     if (Array.isArray(orderModeResult) && orderModeResult.length > 0) {
       orderMode = (orderModeResult[0] as any).setting_value as 'stock_based' | 'preorder';
+      console.log('[ADMIN DEBUG] Setting order mode to:', orderMode);
+    } else {
+      console.log('[ADMIN DEBUG] No result found, using default stock_based');
     }
 
     // Get time window settings
-    const [timeWindowResult] = await databaseService.query(
+    const timeWindowResult = await databaseService.query(
       'SELECT setting_value FROM site_settings WHERE setting_key = ?',
       ['time_window_settings']
     );
@@ -98,15 +105,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<OrderModeR
       }
     }
 
-    console.log('Order mode retrieved:', orderMode);
-    console.log('Time window settings retrieved:', timeWindowSettings);
+    // Get cancellation settings
+    const cancellationResult = await databaseService.query(
+      'SELECT setting_value FROM site_settings WHERE setting_key = ?',
+      ['cancellation_settings']
+    );
+
+    let cancellationSettings = {
+      enabled: true,
+      showInEmail: true,
+      showOnSuccessPage: true,
+      timeWindowMinutes: 30
+    };
+    
+    if (Array.isArray(cancellationResult) && cancellationResult.length > 0) {
+      try {
+        cancellationSettings = JSON.parse(cancellationResult[0].setting_value);
+      } catch (error) {
+        console.error('Error parsing cancellation settings:', error);
+      }
+    }
 
     return NextResponse.json({
       success: true,
       message: 'Order mode retrieved successfully',
       data: {
         orderMode,
-        timeWindowSettings
+        timeWindowSettings,
+        cancellationSettings
       }
     });
 
@@ -151,7 +177,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse<OrderModeR
       }, { status: 403 });
     }
 
-    const { orderMode, timeWindowSettings } = await request.json() as OrderModeRequest;
+    const { orderMode, timeWindowSettings, cancellationSettings } = await request.json() as OrderModeRequest;
 
     // Update order mode if provided
     if (orderMode) {
@@ -203,12 +229,57 @@ export async function PUT(request: NextRequest): Promise<NextResponse<OrderModeR
       );
     }
 
+    // Update cancellation settings if provided
+    if (cancellationSettings) {
+      // Validate cancellation settings
+      if (typeof cancellationSettings.enabled !== 'boolean') {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid cancellation settings',
+          error: 'enabled must be a boolean'
+        }, { status: 400 });
+      }
+
+      if (typeof cancellationSettings.showInEmail !== 'boolean') {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid cancellation settings',
+          error: 'showInEmail must be a boolean'
+        }, { status: 400 });
+      }
+
+      if (typeof cancellationSettings.showOnSuccessPage !== 'boolean') {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid cancellation settings',
+          error: 'showOnSuccessPage must be a boolean'
+        }, { status: 400 });
+      }
+
+      if (typeof cancellationSettings.timeWindowMinutes !== 'number' || cancellationSettings.timeWindowMinutes < 0) {
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid cancellation settings',
+          error: 'timeWindowMinutes must be a positive number'
+        }, { status: 400 });
+      }
+
+      // Update cancellation settings
+      await databaseService.query(
+        `INSERT INTO site_settings (setting_key, setting_value, updated_at) 
+         VALUES (?, ?, NOW()) 
+         ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
+        ['cancellation_settings', JSON.stringify(cancellationSettings), JSON.stringify(cancellationSettings)]
+      );
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Settings updated successfully',
       data: {
         orderMode: orderMode || 'stock_based',
-        timeWindowSettings: timeWindowSettings || { enabled: false, fromTime: "08:00", toTime: "17:00" }
+        timeWindowSettings: timeWindowSettings || { enabled: false, fromTime: "08:00", toTime: "17:00" },
+        cancellationSettings: cancellationSettings || { enabled: true, showInEmail: true, showOnSuccessPage: true, timeWindowMinutes: 30 }
       }
     });
 
