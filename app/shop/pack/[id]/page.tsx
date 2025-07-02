@@ -156,6 +156,9 @@ export default function PackProductPage() {
   };
 
   const getFlavorStock = (flavor: Flavor, size: string): number => {
+    // In preorder mode, return a high number to indicate availability
+    if (orderMode === 'preorder') return 999;
+    
     if (!flavor.stock) return 0;
     const sizeKey = size.toLowerCase() as keyof typeof flavor.stock;
     return flavor.stock[sizeKey] || 0;
@@ -490,7 +493,7 @@ export default function PackProductPage() {
                     <Card
                       key={flavor.id}
                       className={`overflow-hidden border-2 transition-all hover:shadow-lg rounded-xl sm:rounded-2xl group ${
-                        !isAvailable
+                        !isAvailable && orderMode === 'stock_based'
                           ? "border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed"
                           : isSelected
                           ? "border-pink-400 bg-gradient-to-br from-pink-50 to-rose-50 shadow-md"
@@ -529,7 +532,7 @@ export default function PackProductPage() {
                                 Only {currentStock} left
                               </Badge>
                             )}
-                            {orderMode === 'stock_based' && currentStock === 0 && (
+                            {orderMode === 'stock_based' && currentStock === 0 && !flavor.allow_out_of_stock_order && (
                               <Badge 
                                 variant="destructive"
                                 className="text-xs bg-red-100 text-red-800 border-red-200 hover:bg-red-200"
@@ -566,7 +569,7 @@ export default function PackProductPage() {
                               size="sm"
                               className="h-7 w-7 sm:h-8 sm:w-8 rounded-full text-pink-600 hover:bg-pink-50 disabled:opacity-50 transition-colors p-0"
                               onClick={() => handleFlavorSelect(flavor, 'add')}
-                              disabled={!canAddMore || !isAvailable || selectedCount >= maxSelectable}
+                              disabled={!canAddMore || !isAvailable || (orderMode === 'stock_based' && selectedCount >= maxSelectable)}
                             >
                               <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
@@ -583,7 +586,7 @@ export default function PackProductPage() {
                                 Max reached
                               </Badge>
                             )}
-                            {orderMode === 'stock_based' && selectedCount >= maxSelectable && maxSelectable > 0 && (
+                            {orderMode === 'stock_based' && selectedCount >= maxSelectable && maxSelectable > 0 && maxSelectable < 999 && (
                               <Badge className="bg-orange-100 text-orange-800 border-orange-200 px-2 py-1 text-xs">
                                 Stock limit
                               </Badge>
