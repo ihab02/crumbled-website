@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { databaseService } from '@/lib/services/databaseService';
+import pool from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { generatePackImage } from '@/utils/generatePackImage';
 
@@ -23,22 +23,30 @@ interface Product {
 
 export async function GET() {
   try {
-    const products = await databaseService.query(`
-      SELECT p.*, pt.name as product_type_name
-      FROM products p
-      JOIN product_types pt ON p.product_type_id = pt.id
-      ORDER BY p.display_order ASC
-    `);
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      const [products] = await connection.query(`
+        SELECT p.*, pt.name as product_type_name
+        FROM products p
+        JOIN product_types pt ON p.product_type_id = pt.id
+        ORDER BY p.display_order ASC
+      `);
 
-    // Convert base_price to number and add stock fields
-    const productsWithNumbers = products.map((p: Product) => ({
-      ...p,
-      base_price: typeof p.base_price === 'string' ? parseFloat(p.base_price) : p.base_price,
-      stock_quantity: parseInt(p.stock_quantity) || 0,
-      is_available: Boolean(p.is_available)
-    }));
+      // Convert base_price to number and add stock fields
+      const productsWithNumbers = products.map((p: Product) => ({
+        ...p,
+        base_price: typeof p.base_price === 'string' ? parseFloat(p.base_price) : p.base_price,
+        stock_quantity: parseInt(String(p.stock_quantity)) || 0,
+        is_available: Boolean(p.is_available)
+      }));
 
-    return NextResponse.json({ success: true, data: productsWithNumbers });
+      return NextResponse.json({ success: true, data: productsWithNumbers });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
   } catch (error) {
     console.error('Error fetching products:', error);
     return NextResponse.json(
@@ -85,39 +93,49 @@ export async function POST(request: Request) {
       }
     }
 
-    // Get the next display order
-    const [maxOrder] = await databaseService.query(
-      'SELECT COALESCE(MAX(display_order), 0) as max_order FROM products'
-    );
-    const displayOrder = maxOrder.max_order + 1;
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      
+      // Get the next display order
+      const [maxOrderResult] = await connection.query(
+        'SELECT COALESCE(MAX(display_order), 0) as max_order FROM products'
+      );
+      const maxOrder = maxOrderResult[0];
+      const displayOrder = maxOrder.max_order + 1;
 
-    console.log('Inserting product with data:', {
-      ...data,
-      image_url: imageUrl,
-      display_order: displayOrder
-    });
+      console.log('Inserting product with data:', {
+        ...data,
+        image_url: imageUrl,
+        display_order: displayOrder
+      });
 
-    const result = await databaseService.query(
-      `INSERT INTO products (
-        name, description, product_type_id, is_pack, count, flavor_size,
-        base_price, image_url, is_active, display_order
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.name,
-        data.description || null,
-        data.product_type_id,
-        data.is_pack ? 1 : 0,
-        data.count || null,
-        data.flavor_size,
-        data.base_price,
-        imageUrl,
-        data.is_active ? 1 : 0,
-        displayOrder
-      ]
-    );
+      const [result] = await connection.query(
+        `INSERT INTO products (
+          name, description, product_type_id, is_pack, count, flavor_size,
+          base_price, image_url, is_active, display_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.name,
+          data.description || null,
+          data.product_type_id,
+          data.is_pack ? 1 : 0,
+          data.count || null,
+          data.flavor_size,
+          data.base_price,
+          imageUrl,
+          data.is_active ? 1 : 0,
+          displayOrder
+        ]
+      );
 
-    revalidatePath('/admin/products');
-    return NextResponse.json({ success: true, id: result.insertId });
+          revalidatePath('/admin/products');
+      return NextResponse.json({ success: true, id: result.insertId });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
   } catch (error: any) {
     console.error('Error creating product:', error);
     if (error.code === 'ER_DUP_ENTRY') {
@@ -170,39 +188,48 @@ export async function PUT(request: Request) {
       }
     }
 
-    console.log('Updating product with data:', {
-      ...data,
-      image_url: imageUrl
-    });
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      
+      console.log('Updating product with data:', {
+        ...data,
+        image_url: imageUrl
+      });
 
-    await databaseService.query(
-      `UPDATE products SET
-        name = ?,
-        description = ?,
-        product_type_id = ?,
-        is_pack = ?,
-        count = ?,
-        flavor_size = ?,
-        base_price = ?,
-        image_url = ?,
-        is_active = ?
-      WHERE id = ?`,
-      [
-        data.name,
-        data.description || null,
-        data.product_type_id,
-        data.is_pack ? 1 : 0,
-        data.count || null,
-        data.flavor_size,
-        data.base_price,
-        imageUrl,
-        data.is_active ? 1 : 0,
-        data.id
-      ]
-    );
+      await connection.query(
+        `UPDATE products SET
+          name = ?,
+          description = ?,
+          product_type_id = ?,
+          is_pack = ?,
+          count = ?,
+          flavor_size = ?,
+          base_price = ?,
+          image_url = ?,
+          is_active = ?
+        WHERE id = ?`,
+        [
+          data.name,
+          data.description || null,
+          data.product_type_id,
+          data.is_pack ? 1 : 0,
+          data.count || null,
+          data.flavor_size,
+          data.base_price,
+          imageUrl,
+          data.is_active ? 1 : 0,
+          data.id
+        ]
+      );
 
-    revalidatePath('/admin/products');
-    return NextResponse.json({ success: true });
+      revalidatePath('/admin/products');
+      return NextResponse.json({ success: true });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
   } catch (error: any) {
     console.error('Error updating product:', error);
     if (error.code === 'ER_DUP_ENTRY') {

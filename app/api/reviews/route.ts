@@ -7,73 +7,37 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     
     // Get query parameters
-    const productId = searchParams.get('product_id');
-    const flavorId = searchParams.get('flavor_id');
-    const customerId = searchParams.get('customer_id');
-    const rating = searchParams.get('rating');
-    const sortBy = searchParams.get('sort_by') || 'created_at';
-    const sortOrder = searchParams.get('sort_order') || 'DESC';
+    const flavorIdRaw = searchParams.get('flavor_id');
+    const flavorId = flavorIdRaw !== null ? parseInt(flavorIdRaw) : null;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = (page - 1) * limit;
-    const featured = searchParams.get('featured') === 'true';
-    const verified = searchParams.get('verified') === 'true';
 
-    // Build the base query
     let query = `
       SELECT 
         cr.*,
         c.first_name,
         c.last_name,
         c.email,
-        p.name as product_name,
-        f.name as flavor_name,
-        o.order_number
+        f.name as flavor_name
       FROM customer_reviews cr
       LEFT JOIN customers c ON cr.customer_id = c.id
-      LEFT JOIN products p ON cr.product_id = p.id
       LEFT JOIN flavors f ON cr.flavor_id = f.id
-      LEFT JOIN orders o ON cr.order_id = o.id
       WHERE cr.is_approved = true
     `;
-
     const params: any[] = [];
 
-    // Add filters
-    if (productId) {
-      query += ' AND cr.product_id = ?';
-      params.push(productId);
-    }
-
-    if (flavorId) {
+    if (flavorId !== null && !isNaN(flavorId)) {
       query += ' AND cr.flavor_id = ?';
       params.push(flavorId);
     }
 
-    if (customerId) {
-      query += ' AND cr.customer_id = ?';
-      params.push(customerId);
-    }
+    // Inline LIMIT and OFFSET
+    query += ` ORDER BY cr.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
 
-    if (rating) {
-      query += ' AND cr.rating = ?';
-      params.push(rating);
-    }
-
-    if (featured) {
-      query += ' AND cr.is_featured = true';
-    }
-
-    if (verified) {
-      query += ' AND cr.is_verified_purchase = true';
-    }
-
-    // Add sorting
-    query += ` ORDER BY cr.${sortBy} ${sortOrder}`;
-
-    // Add pagination
-    query += ' LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    // Debug logging
+    console.log('REVIEWS QUERY:', query);
+    console.log('REVIEWS PARAMS:', params);
 
     // Execute the query
     const reviews = await databaseService.query(query, params);
@@ -87,32 +51,9 @@ export async function GET(request: NextRequest) {
 
     const countParams: any[] = [];
 
-    if (productId) {
-      countQuery += ' AND cr.product_id = ?';
-      countParams.push(productId);
-    }
-
-    if (flavorId) {
+    if (flavorId !== null && flavorId !== undefined) {
       countQuery += ' AND cr.flavor_id = ?';
       countParams.push(flavorId);
-    }
-
-    if (customerId) {
-      countQuery += ' AND cr.customer_id = ?';
-      countParams.push(customerId);
-    }
-
-    if (rating) {
-      countQuery += ' AND cr.rating = ?';
-      countParams.push(rating);
-    }
-
-    if (featured) {
-      countQuery += ' AND cr.is_featured = true';
-    }
-
-    if (verified) {
-      countQuery += ' AND cr.is_verified_purchase = true';
     }
 
     const countResult = await databaseService.query(countQuery, countParams);
@@ -126,17 +67,9 @@ export async function GET(request: NextRequest) {
         name: review.is_anonymous ? 'Anonymous' : `${review.first_name} ${review.last_name}`,
         email: review.is_anonymous ? null : review.email
       },
-      product: review.product_name ? {
-        id: review.product_id,
-        name: review.product_name
-      } : null,
       flavor: review.flavor_name ? {
         id: review.flavor_id,
         name: review.flavor_name
-      } : null,
-      order: review.order_number ? {
-        id: review.order_id,
-        number: review.order_number
       } : null,
       rating: review.rating,
       title: review.title,
@@ -177,6 +110,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('Review submission body:', body);
+    
     const {
       customerId,
       orderId,
@@ -222,13 +157,87 @@ export async function POST(request: NextRequest) {
       existingReviewParams.push(flavorId);
     }
 
+    console.log('Checking existing review with query:', existingReviewQuery);
+    console.log('Existing review params:', existingReviewParams);
+    
     const existingReview = await databaseService.query(existingReviewQuery, existingReviewParams);
+    console.log('Existing review result:', existingReview);
     
     if (Array.isArray(existingReview) && existingReview.length > 0) {
-      return NextResponse.json(
-        { success: false, error: 'You have already reviewed this item' },
-        { status: 400 }
+      console.log('Found existing review, updating instead of creating new');
+      
+      // Update existing review instead of creating new one
+      const updateQuery = `
+        UPDATE customer_reviews 
+        SET 
+          rating = ?,
+          title = ?,
+          review_text = ?,
+          review_images = ?,
+          is_anonymous = ?,
+          updated_at = NOW()
+        WHERE customer_id = ? AND flavor_id = ?
+      `;
+      
+      const updateParams = [
+        rating,
+        title || null,
+        reviewText,
+        images ? JSON.stringify(images) : null,
+        isAnonymous || false,
+        customerId,
+        flavorId
+      ];
+      
+      await databaseService.query(updateQuery, updateParams);
+      
+      // Fetch the updated review
+      const updatedReview = await databaseService.query(
+        `SELECT 
+          cr.*,
+          c.first_name,
+          c.last_name,
+          c.email,
+          p.name as product_name,
+          f.name as flavor_name
+        FROM customer_reviews cr
+        LEFT JOIN customers c ON cr.customer_id = c.id
+        LEFT JOIN products p ON cr.product_id = p.id
+        LEFT JOIN flavors f ON cr.flavor_id = f.id
+        WHERE cr.customer_id = ? AND cr.flavor_id = ?`,
+        [customerId, flavorId]
       );
+
+      const review = Array.isArray(updatedReview) ? updatedReview[0] : updatedReview;
+
+      return NextResponse.json({
+        success: true,
+        message: 'Review updated successfully',
+        data: {
+          id: review.id,
+          customer: {
+            id: review.customer_id,
+            name: review.is_anonymous ? 'Anonymous' : `${review.first_name} ${review.last_name}`,
+            email: review.is_anonymous ? null : review.email
+          },
+          product: review.product_name ? {
+            id: review.product_id,
+            name: review.product_name
+          } : null,
+          flavor: review.flavor_name ? {
+            id: review.flavor_id,
+            name: review.flavor_name
+          } : null,
+          rating: review.rating,
+          title: review.title,
+          review: review.review_text,
+          images: review.review_images ? JSON.parse(review.review_images) : [],
+          isVerifiedPurchase: review.is_verified_purchase,
+          isFeatured: review.is_featured,
+          isAnonymous: review.is_anonymous,
+          createdAt: review.created_at
+        }
+      });
     }
 
     // Check if customer has purchased the item (for verified purchase badge)

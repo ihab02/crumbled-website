@@ -1372,6 +1372,9 @@ video {
      -moz-user-select: none;
           user-select: none;
 }
+.resize-none {
+  resize: none;
+}
 .list-inside {
   list-style-position: inside;
 }

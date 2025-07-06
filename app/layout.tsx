@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Quicksand } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { Inter } from 'next/font/google'
 import { Providers } from './providers'
 import Header from "@/components/header"
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Footer />
           </div>
           <Toaster />
+          <SonnerToaster />
         </Providers>
       </body>
     </html>

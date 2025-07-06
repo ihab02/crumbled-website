@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,7 @@ interface Zone {
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -250,7 +251,8 @@ export default function RegisterPage() {
       if (data.success) {
         setSuccess("Account created successfully! Redirecting...")
         setTimeout(() => {
-          router.push("/auth/login")
+          const redirectUrl = searchParams.get('redirect') || '/account'
+          router.push(`/auth/login?redirect=${encodeURIComponent(redirectUrl)}`)
         }, 2000)
       } else {
         setError(data.error || "Failed to create account")

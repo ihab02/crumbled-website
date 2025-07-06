@@ -479,10 +479,6 @@ export default function NewCheckoutPage() {
     await sendOtp(phoneToVerify)
   }
 
-
-
-
-
   const placeOrder = async () => {
     if (!checkoutData) return
 
@@ -589,7 +585,8 @@ export default function NewCheckoutPage() {
   function Stepper({ step }: { step: number }) {
     const steps = [
       { label: 'Delivery Info', icon: <MapPin className="h-4 w-4" /> },
-      { label: 'Place Order', icon: <CheckCircle className="h-4 w-4" /> },
+      { label: 'Payment', icon: <CreditCard className="h-4 w-4" /> },
+      { label: 'Confirmation', icon: <CheckCircle className="h-4 w-4" /> },
     ]
     return (
       <div className="flex items-center justify-center gap-4 mb-8">
@@ -1259,11 +1256,6 @@ export default function NewCheckoutPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
                     <Label className="text-base font-medium">Payment Method</Label>
-                    {(() => {
-                      console.log('🔍 [DEBUG] Frontend - Rendering payment methods. enabledPaymentMethods:', JSON.stringify(enabledPaymentMethods, null, 2))
-                      console.log('🔍 [DEBUG] Frontend - Number of enabled methods:', Object.keys(enabledPaymentMethods).length)
-                      return null
-                    })()}
                     {Object.keys(enabledPaymentMethods).length === 0 ? (
                       <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
                         <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>
@@ -1312,7 +1304,8 @@ export default function NewCheckoutPage() {
                     <div className="flex gap-3">
                       <Button
                         onClick={() => setStep(3)}
-                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold"
+                        disabled={!paymentMethod}
+                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Continue to Confirmation
                       </Button>
@@ -1395,8 +1388,8 @@ export default function NewCheckoutPage() {
             </div>
           </div>
         )}
-        {/* Step 2: Place Order */}
-        {step === 2 && (
+        {/* Step 3: Confirmation */}
+        {step === 3 && (
           <div className="grid gap-8 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-6">
               <Card className="border-2 border-pink-200 rounded-3xl">

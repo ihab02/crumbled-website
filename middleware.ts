@@ -199,7 +199,9 @@ export async function middleware(request: NextRequest) {
 
     if (!isAuthenticated) {
       console.log('Not authenticated, redirecting to login');
-      const response = NextResponse.redirect(new URL('/auth/login', request.url));
+      const loginUrl = new URL('/auth/login', request.url);
+      loginUrl.searchParams.set('redirect', request.nextUrl.pathname + request.nextUrl.search);
+      const response = NextResponse.redirect(loginUrl);
       // Clear any existing customer token
       response.cookies.delete('token');
       return response;

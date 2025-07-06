@@ -145,9 +145,10 @@ export default function FlavorsPage() {
           return (
             <Card
               key={flavor.id}
-              className="w-full rounded-3xl border-2 border-pink-200 bg-gradient-to-br from-white to-pink-50 overflow-hidden flex flex-col md:flex-row items-center p-4 group transition-all hover:shadow-2xl"
+              className="w-full rounded-3xl border-2 border-pink-200 bg-gradient-to-br from-white to-pink-50 overflow-hidden flex flex-col md:flex-row items-center p-4 group transition-all hover:shadow-2xl cursor-pointer"
               onMouseEnter={() => handleMouseEnter(flavor.id)}
               onMouseLeave={() => handleMouseLeave(flavor.id)}
+              onClick={() => router.push(`/flavors/${flavor.id}`)}
             >
               <div className="flex-shrink-0 flex items-center justify-center mb-4 md:mb-0 md:mr-8 w-full md:w-auto">
                 <img
@@ -194,7 +195,10 @@ export default function FlavorsPage() {
                 </div>
                 <Button
                   className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all w-full md:w-auto px-8"
-                  onClick={() => router.push('/shop')}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent card click
+                    router.push(`/shop?preselect=${flavor.id}`);
+                  }}
                 >
                   Order Now
                 </Button>

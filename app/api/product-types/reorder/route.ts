@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { databaseService } from '@/lib/services/databaseService';
+import pool from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -12,8 +12,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Start a transaction
-    await databaseService.transaction(async (connection) => {
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+      
       // Update each item's display_order
       for (const item of items) {
         await connection.query(
@@ -21,9 +24,19 @@ export async function POST(request: Request) {
           [item.display_order, item.id]
         );
       }
-    });
-
-    return NextResponse.json({ success: true });
+      
+      await connection.commit();
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      if (connection) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
   } catch (error) {
     console.error('Error reordering product types:', error);
     return NextResponse.json(

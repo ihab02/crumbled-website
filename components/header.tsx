@@ -273,7 +273,7 @@ export default function Header() {
                     className="border-2 border-pink-300 text-pink-600 hover:bg-gradient-to-r hover:from-pink-100 hover:to-rose-100 rounded-full"
                     asChild
                   >
-                    <Link href="/auth/login">Log in</Link>
+                    <Link href={`/auth/login?redirect=${encodeURIComponent(getCurrentUrl())}`}>Log in</Link>
                   </Button>
                   <Button
                     className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full shadow-lg"

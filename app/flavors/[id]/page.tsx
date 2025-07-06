@@ -10,6 +10,7 @@ import { ArrowLeft, Star, MessageSquare, LogIn } from "lucide-react"
 import { products } from "@/lib/data"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
+import { usePathname } from "next/navigation"
 
 interface Flavor {
   id: number;
@@ -32,6 +33,7 @@ interface Flavor {
 
 export default function FlavorDetailPage() {
   const params = useParams()
+  const pathname = usePathname()
   const flavorId = Number.parseInt(params.id as string)
   const { data: session, status } = useSession()
   const [flavor, setFlavor] = useState<Flavor | null>(null)
@@ -94,7 +96,7 @@ export default function FlavorDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          customerId: session.user.id,
+          customerId: parseInt(session.user.id),
           flavorId: flavorId,
           rating: reviewForm.rating,
           reviewText: reviewForm.comment,
@@ -280,7 +282,7 @@ export default function FlavorDetailPage() {
                       asChild
                       className="border-pink-300 text-pink-600 hover:bg-pink-50"
                     >
-                      <Link href="/auth/login">
+                      <Link href={`/auth/login?redirect=${encodeURIComponent(pathname)}`}>
                         <LogIn className="h-4 w-4 mr-2" />
                         Login to Review
                       </Link>
@@ -373,7 +375,7 @@ export default function FlavorDetailPage() {
                           asChild
                           className="border-pink-300 text-pink-600 hover:bg-pink-50"
                         >
-                          <Link href="/auth/login">
+                          <Link href={`/auth/login?redirect=${encodeURIComponent(pathname)}`}>
                             <LogIn className="h-4 w-4 mr-2" />
                             Login to Review
                           </Link>

@@ -144,7 +144,10 @@ export default function LoginPage() {
 
             <p className="text-center text-sm text-pink-600">
               Don't have an account?{' '}
-              <Link href="/auth/register" className="font-semibold hover:text-pink-800">
+              <Link 
+                href={`/auth/register?redirect=${encodeURIComponent(searchParams.get('redirect') || '/account')}`} 
+                className="font-semibold hover:text-pink-800"
+              >
                 Register here
               </Link>
             </p>

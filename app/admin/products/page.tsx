@@ -243,7 +243,7 @@ export default function AdminProductsPage() {
       const response = await fetch('/api/product-types');
       const data = await response.json();
       if (data.success) {
-        setProductTypes(data.data || []);
+        setProductTypes(data.productTypes || []);
       } else {
         setProductTypes([]);
       }
