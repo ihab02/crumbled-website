@@ -4,19 +4,28 @@ import { verifyJWT } from '@/lib/middleware/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('Delivery men API called');
+    console.log('Cookies:', request.cookies.getAll());
+    
     // Verify admin authentication
     const token = request.cookies.get('adminToken')?.value
+    console.log('Admin token found:', !!token);
+    
     if (!token) {
+      console.log('No admin token found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const decoded = await verifyJWT(token)
+    console.log('Token decoded:', decoded);
+    
     if (!decoded || decoded.type !== 'admin') {
+      console.log('Invalid token or not admin type');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Fetch all active delivery personnel
-    const deliveryMen = await databaseService.query(`
+    // Fetch all delivery personnel (both active and inactive for debugging)
+    const allDeliveryMen = await databaseService.query(`
       SELECT 
         id,
         name,
@@ -28,9 +37,15 @@ export async function GET(request: NextRequest) {
         notes,
         is_active
       FROM delivery_men 
-      WHERE is_active = 1
       ORDER BY name ASC
     `);
+
+    console.log('All delivery men:', allDeliveryMen);
+
+    // Filter to only active delivery personnel (handle both boolean and integer)
+    const deliveryMen = allDeliveryMen.filter((dm: any) => dm.is_active === 1 || dm.is_active === true);
+
+    console.log('Active delivery men:', deliveryMen);
 
     return NextResponse.json({
       success: true,

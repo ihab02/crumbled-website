@@ -30,11 +30,37 @@ export default function DeliveryMenTab() {
     try {
       const response = await fetch('/api/admin/delivery-men');
       if (!response.ok) {
-        throw new Error('Failed to fetch delivery men');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch delivery men');
       }
-      const data = await response.json();
-      setDeliveryMen(data);
+      const responseData = await response.json();
+      console.log('API Response:', responseData);
+      
+      const deliveryMenData = Array.isArray(responseData.data) ? responseData.data : [];
+      console.log('Delivery Men Data:', deliveryMenData);
+      
+      // Parse available_days from JSON string to array if needed
+      const parsedDeliveryMen = deliveryMenData.map((deliveryMan: any) => {
+        let availableDays = deliveryMan.available_days;
+        if (typeof availableDays === 'string') {
+          try {
+            availableDays = JSON.parse(availableDays);
+          } catch (error) {
+            console.error('Error parsing available_days:', error);
+            availableDays = [];
+          }
+        }
+        
+        return {
+          ...deliveryMan,
+          available_days: availableDays
+        };
+      });
+      
+      console.log('Parsed Delivery Men:', parsedDeliveryMen);
+      setDeliveryMen(parsedDeliveryMen);
     } catch (error) {
+      console.error('Error fetching delivery men:', error);
       toast.error('Failed to fetch delivery men');
     } finally {
       setLoading(false);
@@ -77,7 +103,7 @@ export default function DeliveryMenTab() {
     fetchDeliveryMen();
   };
 
-  const filteredDeliveryMen = deliveryMen.filter((deliveryMan) => {
+  const filteredDeliveryMen = (deliveryMen || []).filter((deliveryMan) => {
     const searchLower = searchTerm.toLowerCase();
     return (
       deliveryMan.name.toLowerCase().includes(searchLower) ||

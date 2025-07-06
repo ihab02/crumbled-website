@@ -1,14 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Package, User, LogOut, Clock, Truck, CheckCircle, AlertCircle, MapPin, Plus, Trash2 } from "lucide-react"
+import { Package, User, LogOut, Clock, Truck, CheckCircle, AlertCircle, MapPin, Plus, Trash2, Edit, Calendar, CreditCard, Eye, Settings } from "lucide-react"
 import Link from "next/link"
 import { toast } from 'react-hot-toast'
+import { useSession } from 'next-auth/react'
 
 interface Order {
   id: number
@@ -39,8 +40,19 @@ interface Customer {
   addresses: Address[]
 }
 
+interface UserProfile {
+  id: number
+  email: string
+  firstName: string
+  lastName: string
+  phone: string
+  createdAt: string
+}
+
 export default function AccountPage() {
+  const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [orders, setOrders] = useState<Order[]>([])
@@ -64,38 +76,53 @@ export default function AccountPage() {
   const [zones, setZones] = useState<{ id: number; name: string; deliveryFee: number }[]>([])
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [deleteAddressId, setDeleteAddressId] = useState<number | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [editingProfile, setEditingProfile] = useState(false)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const userCookie = document.cookie.split("; ").find((row) => row.startsWith("user_session="))
+    if (status === 'loading') return
 
-        if (userCookie) {
-          const userData = JSON.parse(userCookie.split("=")[1])
-          setIsAuthenticated(true)
-          setUser(userData)
-          fetchOrders()
-          fetchCustomerData()
-        } else {
-          router.push("/auth/login?redirect=/account")
-        }
-      } catch (error) {
-        console.error("Error checking authentication:", error)
-        router.push("/auth/login?redirect=/account")
-      } finally {
-        setLoading(false)
+    if (status === 'unauthenticated') {
+      router.push('/auth/login?redirect=/account')
+      return
+    }
+
+    if (session?.user) {
+      const tab = searchParams.get('tab') || 'profile'
+      setActiveTab(tab)
+      fetchUserData()
+    }
+  }, [session, status, router, searchParams])
+
+  const fetchUserData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch user profile
+      const profileResponse = await fetch('/api/user/profile')
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json()
+        setUserProfile(profileData.data)
+        setFormData({
+          firstName: profileData.data.firstName || '',
+          lastName: profileData.data.lastName || '',
+          phone: profileData.data.phone || ''
+        })
       }
-    }
 
-    checkAuth()
-
-    // Handle URL parameters for tab selection
-    const urlParams = new URLSearchParams(window.location.search)
-    const tabParam = urlParams.get('tab')
-    if (tabParam && ['orders', 'addresses', 'profile'].includes(tabParam)) {
-      setActiveTab(tabParam)
+      // Fetch orders
+      const ordersResponse = await fetch('/api/user/orders')
+      if (ordersResponse.ok) {
+        const ordersData = await ordersResponse.json()
+        setOrders(ordersData.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error)
+      toast.error('Failed to load account data')
+    } finally {
+      setLoading(false)
     }
-  }, [router])
+  }
 
   const fetchOrders = async () => {
     try {
@@ -321,31 +348,19 @@ export default function AccountPage() {
     }
   }
 
-  if (loading) {
+  if (status === 'loading' || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-        <div className="container py-16 text-center">
-          <p className="text-lg text-pink-600">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
+          <p className="text-pink-800">Loading account...</p>
         </div>
       </div>
     )
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-        <div className="container py-16 text-center">
-          <h1 className="text-3xl font-bold text-pink-800 mb-4">Please Sign In</h1>
-          <p className="text-lg text-pink-600 mb-8">You need to be signed in to view this page.</p>
-          <Button
-            className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full"
-            asChild
-          >
-            <Link href="/auth/login?redirect=/account">Sign In</Link>
-          </Button>
-        </div>
-      </div>
-    )
+  if (!session?.user) {
+    return null
   }
 
   return (
@@ -432,10 +447,23 @@ export default function AccountPage() {
         )}
 
         <Tabs defaultValue="orders" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="orders">Order History</TabsTrigger>
-            <TabsTrigger value="addresses">Addresses</TabsTrigger>
-            <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 bg-white p-1 rounded-xl shadow-sm">
+            <TabsTrigger value="orders" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Orders
+            </TabsTrigger>
+            <TabsTrigger value="addresses" className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Addresses
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders">
@@ -699,6 +727,39 @@ export default function AccountPage() {
                   <div className="pt-4 border-t border-pink-200">
                     <Button className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full">
                       Edit Profile
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <Card className="border-2 border-pink-200 rounded-3xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-pink-800">
+                  <Settings className="h-5 w-5" />
+                  Account Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h4 className="font-medium text-yellow-800 mb-2">Danger Zone</h4>
+                    <p className="text-sm text-yellow-700 mb-4">
+                      These actions cannot be undone. Please be careful.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="border-red-300 text-red-600 hover:bg-red-50"
+                      onClick={() => {
+                        if (confirm('Are you sure you want to sign out?')) {
+                          handleLogout()
+                        }
+                      }}
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Sign Out
                     </Button>
                   </div>
                 </div>

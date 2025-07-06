@@ -161,12 +161,16 @@ export default function AdminProductTypesPage() {
     try {
       const response = await fetch('/api/product-types');
       const data = await response.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.productTypes)) {
         setProductTypes(data.productTypes);
+      } else {
+        console.warn('Invalid product types data:', data);
+        setProductTypes([]);
       }
     } catch (error) {
       console.error('Error fetching product types:', error);
       toast.error('Failed to fetch product types');
+      setProductTypes([]);
     } finally {
       setIsLoading(false);
     }
@@ -403,10 +407,10 @@ export default function AdminProductTypesPage() {
             </TableHeader>
             <TableBody>
               <SortableContext
-                items={productTypes.map(pt => pt.id)}
+                items={(productTypes || []).map(pt => pt.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {productTypes.map((productType) => (
+                {(productTypes || []).map((productType) => (
                   <SortableTableRow
                     key={productType.id}
                     productType={productType}
