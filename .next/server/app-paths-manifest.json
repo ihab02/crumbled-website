@@ -1,7 +1,14 @@
 {
-  "/api/admin/sliding-media/route": "app/api/admin/sliding-media/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
   "/api/cart/route": "app/api/cart/route.js",
-  "/api/admin/auth/check/route": "app/api/admin/auth/check/route.js",
+  "/api/flavors/[id]/route": "app/api/flavors/[id]/route.js",
+  "/api/reviews/route": "app/api/reviews/route.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
-  "/admin/sliding-media/page": "app/admin/sliding-media/page.js"
+  "/auth/login/page": "app/auth/login/page.js",
+  "/account/page": "app/account/page.js",
+  "/api/user/profile/route": "app/api/user/profile/route.js",
+  "/api/user/orders/route": "app/api/user/orders/route.js",
+  "/flavors/page": "app/flavors/page.js",
+  "/flavors/[id]/page": "app/flavors/[id]/page.js"
 }

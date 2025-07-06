@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag, Star } from 'lucide-react';
 import SlidingMediaHeader from '@/components/SlidingMediaHeader';
 
 interface Flavor {
@@ -17,6 +17,8 @@ interface Flavor {
     image_url: string;
     is_cover: boolean;
   }>;
+  total_reviews?: number;
+  average_rating?: number;
 }
 
 export default function FlavorsPage() {
@@ -166,6 +168,29 @@ export default function FlavorsPage() {
                   <p className="text-sm md:text-base text-pink-600 line-clamp-2 max-w-xs md:max-w-md">
                     {flavor.description}
                   </p>
+                  {/* Reviews Display */}
+                  {(flavor.total_reviews && flavor.total_reviews > 0) && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`h-4 w-4 ${
+                              i < Math.floor(flavor.average_rating || 0) 
+                                ? "text-yellow-400 fill-current" 
+                                : "text-gray-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm text-pink-600 font-medium">
+                        {flavor.average_rating?.toFixed(1) || '0.0'}
+                      </span>
+                      <span className="text-sm text-pink-500">
+                        ({flavor.total_reviews} reviews)
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <Button
                   className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all w-full md:w-auto px-8"

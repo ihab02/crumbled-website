@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Package, Cookie, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,8 @@ interface ProductType {
 
 export default function ShopPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectFlavorId = searchParams.get('preselect');
   const [products, setProducts] = useState<Product[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,10 +47,10 @@ export default function ShopPage() {
       const data = await response.json();
       
       if (data.success) {
-        // Group products by product type
+        // Group products by product type - filter for pack products only
         const productsArr: Product[] = data.data || [];
-        const groupedProducts: { [key: string]: ProductType } = productsArr.reduce((acc: { [key: string]: ProductType }, product: Product) => {
-          if (!product.is_active) return acc;
+        const packProducts = productsArr.filter(product => product.is_pack && product.is_active);
+        const groupedProducts: { [key: string]: ProductType } = packProducts.reduce((acc: { [key: string]: ProductType }, product: Product) => {
           if (!acc[product.product_type_id]) {
             acc[product.product_type_id] = {
               id: product.product_type_id,
@@ -81,7 +83,10 @@ export default function ShopPage() {
 
   const handleProductClick = (product: Product) => {
     if (product.is_pack) {
-      router.push(`/shop/pack/${product.id}`);
+      const url = preselectFlavorId 
+        ? `/shop/pack/${product.id}?preselect=${preselectFlavorId}`
+        : `/shop/pack/${product.id}`;
+      router.push(url);
     } else {
       router.push(`/shop/product/${product.id}`);
     }
@@ -109,12 +114,20 @@ export default function ShopPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Shop</h1>
+        <h1 className="text-3xl font-bold">Mix My Bundle</h1>
         <Button variant="outline" onClick={() => router.push('/flavors')}>
           <Cookie className="h-4 w-4 mr-2" />
           View Flavors
         </Button>
       </div>
+      
+      {preselectFlavorId && (
+        <div className="mb-6 p-4 bg-pink-50 rounded-xl border border-pink-200">
+          <p className="text-pink-700 text-center">
+            💡 You've selected a flavor! Choose a pack below to customize with your favorite flavors.
+          </p>
+        </div>
+      )}
 
       {productTypes.map((type) => (
         <div key={type.id} className="mb-12">

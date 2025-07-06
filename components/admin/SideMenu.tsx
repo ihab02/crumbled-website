@@ -22,7 +22,8 @@ import {
   Warehouse,
   User,
   Truck,
-  Image
+  Image,
+  Target
 } from 'lucide-react';
 
 const menuItems = [
@@ -80,6 +81,11 @@ const menuItems = [
     title: 'Analytics',
     href: '/admin/analytics',
     icon: BarChart
+  },
+  {
+    title: 'Customer Insights',
+    href: '/admin/customer-insights',
+    icon: Target
   },
   {
     title: 'Messages',

@@ -147,14 +147,16 @@ function generateSlug(name: string): string {
 
 export async function GET() {
   try {
-    // Get flavors with their images
-    const [flavors] = await pool.query<mysql.RowDataPacket[]>(`
+    // Get flavors with their images and review statistics
+    const [flavors] = await pool.query(`
       SELECT 
         f.*,
         fi.id as image_id,
         fi.image_url,
         fi.is_cover,
-        fi.display_order
+        fi.display_order,
+        COALESCE(f.total_reviews, 0) as total_reviews,
+        COALESCE(f.average_rating, 0.00) as average_rating
       FROM flavors f
       LEFT JOIN flavor_images fi ON f.id = fi.flavor_id
       WHERE f.is_active = 1
@@ -167,7 +169,7 @@ export async function GET() {
     // Convert single object to array if needed
     const flavorsArray = Array.isArray(flavors) ? flavors : [flavors];
     
-    flavorsArray.forEach((row: mysql.RowDataPacket) => {
+    flavorsArray.forEach((row: any) => {
       if (!flavorMap.has(row.id)) {
         flavorMap.set(row.id, {
           id: row.id,
@@ -186,6 +188,8 @@ export async function GET() {
           is_active: Boolean(row.is_active),
           created_at: row.created_at,
           updated_at: row.updated_at,
+          total_reviews: parseInt(row.total_reviews) || 0,
+          average_rating: parseFloat(row.average_rating) || 0,
           images: []
         });
       }

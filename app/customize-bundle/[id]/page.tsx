@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Plus, Minus, ShoppingCart } from "lucide-react"
+import { ArrowLeft, Plus, Minus, ShoppingCart, Star } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { bundleProducts } from "@/lib/data"
 
@@ -358,6 +358,29 @@ export default function CustomizeBundlePage() {
                               )}
                             </div>
                             <p className="text-sm text-pink-600">{cookie.description}</p>
+                            {/* Reviews Display */}
+                            {(cookie.reviews && cookie.reviews > 0) && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <div className="flex items-center gap-0.5">
+                                  {[...Array(5)].map((_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`h-3 w-3 ${
+                                        i < Math.floor(cookie.rating || 0) 
+                                          ? "text-yellow-400 fill-current" 
+                                          : "text-gray-300"
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                                <span className="text-xs text-pink-600 font-medium">
+                                  {cookie.rating?.toFixed(1) || '0.0'}
+                                </span>
+                                <span className="text-xs text-pink-500">
+                                  ({cookie.reviews})
+                                </span>
+                              </div>
+                            )}
                             <p className="text-lg font-bold text-pink-700">${price.toFixed(2)} each</p>
                             {stockQuantity <= 5 && stockData.length > 0 && (
                               <p className="text-xs text-orange-600 font-medium">⚠️ Limited stock remaining!</p>

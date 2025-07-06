@@ -26,9 +26,11 @@ export async function GET(
       );
     }
 
-    // Get available flavors based on product's flavor size
+    // Get available flavors based on product's flavor size with review statistics
     const flavorsResult = await databaseService.query(
       `SELECT f.*, 
+        COALESCE(f.total_reviews, 0) as total_reviews,
+        COALESCE(f.average_rating, 0.00) as average_rating,
         COALESCE(
           JSON_ARRAYAGG(
             JSON_OBJECT(
@@ -66,7 +68,9 @@ export async function GET(
         price: price,
         image_url: coverImage?.image_url || '/images/placeholder.png',
         category: flavor.category,
-        is_active: Boolean(flavor.is_active)
+        is_active: Boolean(flavor.is_active),
+        total_reviews: parseInt(flavor.total_reviews) || 0,
+        average_rating: parseFloat(flavor.average_rating) || 0
       };
     });
 

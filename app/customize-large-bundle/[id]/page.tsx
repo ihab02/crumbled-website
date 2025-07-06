@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, PlusIcon, MinusIcon, ShoppingCart } from "lucide-react"
+import { ArrowLeft, PlusIcon, MinusIcon, ShoppingCart, Star } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { bundleProducts } from "@/lib/data"
 
@@ -312,6 +312,30 @@ export default function CustomizeLargeBundlePage() {
                         </div>
 
                         <p className="text-sm text-pink-600 mb-3 line-clamp-2">{flavor.description}</p>
+                        
+                        {/* Reviews Display */}
+                        {(flavor.reviews && flavor.reviews > 0) && (
+                          <div className="flex items-center gap-1 mb-3">
+                            <div className="flex items-center gap-0.5">
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`h-3 w-3 ${
+                                    i < Math.floor(flavor.rating || 0) 
+                                      ? "text-yellow-400 fill-current" 
+                                      : "text-gray-300"
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs text-pink-600 font-medium">
+                              {flavor.rating?.toFixed(1) || '0.0'}
+                            </span>
+                            <span className="text-xs text-pink-500">
+                              ({flavor.reviews})
+                            </span>
+                          </div>
+                        )}
 
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">

@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check, AlertTriangle, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
 import {
@@ -37,6 +37,8 @@ interface Flavor {
   image_url: string | null;
   category?: string;
   is_active?: boolean;
+  total_reviews?: number;
+  average_rating?: number;
   stock?: {
     mini: number;
     medium: number;
@@ -58,6 +60,8 @@ type OrderMode = 'stock_based' | 'preorder';
 export default function PackProductPage() {
   const { id } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectFlavorId = searchParams.get('preselect');
   const [product, setProduct] = useState<Product | null>(null);
   const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
   const [selectedFlavors, setSelectedFlavors] = useState<SelectedFlavor[]>([]);
@@ -76,6 +80,26 @@ export default function PackProductPage() {
       fetchFlavorsWithStock();
     }
   }, [orderMode, product]);
+
+  // Preselect flavor if specified in URL
+  useEffect(() => {
+    if (preselectFlavorId && availableFlavors.length > 0 && product) {
+      const flavorToPreselect = availableFlavors.find(f => f.id.toString() === preselectFlavorId);
+      if (flavorToPreselect && selectedFlavors.length === 0) {
+        // Add the preselected flavor to the selection
+        const flavorSize = product.flavor_size || 'Medium';
+        const flavorPrice = getFlavorPrice(flavorToPreselect, flavorSize) || 0;
+        
+        setSelectedFlavors([{
+          id: flavorToPreselect.id,
+          name: flavorToPreselect.name,
+          price: flavorPrice,
+          quantity: 1,
+          size: flavorSize
+        }]);
+      }
+    }
+  }, [preselectFlavorId, availableFlavors, product, selectedFlavors.length]);
 
   const fetchOrderMode = async () => {
     try {
@@ -469,6 +493,13 @@ export default function PackProductPage() {
               <p className="text-base sm:text-lg text-pink-600">
                 Choose {product.count} flavors for your {product.name}. You can select multiple quantities of the same flavor.
               </p>
+              {preselectFlavorId && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-700">
+                    ✨ A flavor has been preselected for you! You can modify your selection below.
+                  </p>
+                </div>
+              )}
               <p className="text-xs sm:text-sm text-pink-500 mt-2">
                 {orderMode === 'stock_based' 
                   ? '💡 Stock levels are shown when less than 3 items are available. Out-of-stock items are disabled unless available for preorder.'
@@ -484,6 +515,7 @@ export default function PackProductPage() {
                   const flavorSize = product.flavor_size || 'Medium';
                   const flavorPrice = getFlavorPrice(flavor, flavorSize) || 0;
                   const isSelected = selectedCount > 0;
+                  const isPreselected = preselectFlavorId && flavor.id.toString() === preselectFlavorId;
                   const canAddMore = totalSelectedCount < product.count;
                   const isAvailable = isFlavorAvailable(flavor, flavorSize);
                   const maxSelectable = getMaxSelectableQuantity(flavor, flavorSize);
@@ -497,6 +529,8 @@ export default function PackProductPage() {
                           ? "border-gray-300 bg-gray-50 opacity-60 cursor-not-allowed"
                           : isSelected
                           ? "border-pink-400 bg-gradient-to-br from-pink-50 to-rose-50 shadow-md"
+                          : isPreselected
+                          ? "border-green-400 bg-gradient-to-br from-green-50 to-emerald-50 shadow-md"
                           : "border-pink-200 bg-white hover:border-pink-300"
                       }`}
                     >
@@ -524,6 +558,14 @@ export default function PackProductPage() {
                             <h3 className="font-bold text-base sm:text-xl text-pink-800 group-hover:text-pink-600 transition-colors">
                               {flavor.name}
                             </h3>
+                            {isPreselected && (
+                              <Badge 
+                                variant="secondary"
+                                className="text-xs bg-green-100 text-green-800 border-green-200"
+                              >
+                                ✨ Preselected
+                              </Badge>
+                            )}
                             {orderMode === 'stock_based' && currentStock > 0 && currentStock < 3 && (
                               <Badge 
                                 variant="secondary"
@@ -543,6 +585,29 @@ export default function PackProductPage() {
                           </div>
                           {flavor.description && (
                             <p className="text-xs sm:text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
+                          )}
+                          {/* Reviews Display */}
+                          {(flavor.total_reviews && flavor.total_reviews > 0) && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <div className="flex items-center gap-0.5">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className={`h-3 w-3 ${
+                                      i < Math.floor(flavor.average_rating || 0) 
+                                        ? "text-yellow-400 fill-current" 
+                                        : "text-gray-300"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-xs text-pink-600 font-medium">
+                                {flavor.average_rating?.toFixed(1) || '0.0'}
+                              </span>
+                              <span className="text-xs text-pink-500">
+                                ({flavor.total_reviews})
+                              </span>
+                            </div>
                           )}
                           <div className="text-base sm:text-lg font-bold text-pink-700 mt-1">+{Number(flavorPrice).toFixed(2)} EGP</div>
                         </div>

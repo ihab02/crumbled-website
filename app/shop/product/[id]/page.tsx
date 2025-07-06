@@ -7,6 +7,7 @@ import { Minus, Plus, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { ProductReviews } from '@/components/ProductReviews';
 
 interface Product {
   id: number;
@@ -168,6 +169,16 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             </Button>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Reviews Section */}
+      <div className="mt-16">
+        <ProductReviews
+          productId={product.id}
+          productName={product.name}
+          customerId={1} // This should come from authentication
+          orderId={undefined} // This should come from order history
+        />
       </div>
     </div>
   );
