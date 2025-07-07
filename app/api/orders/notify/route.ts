@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { smsService } from "@/lib/sms-service"
-import pool from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,21 +11,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Get order details
-    const [orderResult] = await pool.query(
-      `SELECT 
+    const orderResult = await sql`
+      SELECT 
         o.*,
         u.phone as customer_phone
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
-      WHERE o.id = ?`,
-      [orderId]
-    )
+      WHERE o.id = ${orderId}
+    `
 
-    if (!Array.isArray(orderResult) || orderResult.length === 0) {
+    if (orderResult.length === 0) {
       return NextResponse.json({ success: false, error: "Order not found" }, { status: 404 })
     }
 
-    const order = orderResult[0] as any
+    const order = orderResult[0]
     const phone = order.customer_phone || order.phone
 
     if (!phone) {
@@ -37,27 +35,33 @@ export async function POST(request: NextRequest) {
     try {
       switch (type) {
         case "confirmation":
-          smsResult = await smsService.sendSMS(phone, `Order ${order.order_number} confirmed!`)
+          smsResult = await smsService.sendOrderConfirmation(phone, order.order_number)
           break
         case "status_update":
-          smsResult = await smsService.sendSMS(phone, `Order ${order.order_number} status: ${order.status}`)
+          smsResult = await smsService.sendOrderStatusUpdate(phone, order.order_number, order.status)
           break
         default:
           return NextResponse.json({ success: false, error: "Invalid notification type" }, { status: 400 })
       }
 
       // Log the notification
-      await pool.query(
-        `INSERT INTO order_notifications (
+      await sql`
+        INSERT INTO order_notifications (
           order_id,
           phone,
           notification_type,
           sms_message_id,
           status,
           sent_at
-        ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [orderId, phone, type, smsResult.messageId, smsResult.status]
-      )
+        ) VALUES (
+          ${orderId},
+          ${phone},
+          ${type},
+          ${smsResult.messageId},
+          ${smsResult.status},
+          CURRENT_TIMESTAMP
+        )
+      `
 
       return NextResponse.json({
         success: true,

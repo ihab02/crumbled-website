@@ -2,11 +2,6 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
-import pool from '@/lib/db';
-import { cookies } from 'next/headers';
-import { sign } from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export async function POST(request: Request) {
   try {
@@ -21,12 +16,12 @@ export async function POST(request: Request) {
     }
 
     // Check if email already exists
-    const [existingCustomer] = await pool.query(
+    const [existingCustomer] = await db.query<Customer[]>(
       'SELECT id FROM customers WHERE email = ?',
       [email]
     );
 
-    if (Array.isArray(existingCustomer) && existingCustomer.length > 0) {
+    if (existingCustomer.length > 0) {
       return NextResponse.json(
         { error: 'Email already registered' },
         { status: 400 }
@@ -34,19 +29,19 @@ export async function POST(request: Request) {
     }
 
     // Start a transaction
-    await pool.query('START TRANSACTION');
+    await db.query('START TRANSACTION');
 
     try {
       // Insert new customer
-      const [result] = await pool.query(
+      const [result] = await db.query<ResultSetHeader>(
         'INSERT INTO customers (first_name, last_name, email, phone, password, mobile_verified, email_verified, type) VALUES (?, ?, ?, ?, ?, true, true, "registered")',
         [firstName, lastName, email, phone, password]
       );
 
-      const customerId = (result as any).insertId;
+      const customerId = result.insertId;
 
       // Add address
-      await pool.query(
+      await db.query(
         'INSERT INTO addresses (customer_id, city_id, zone_id, street_address, is_default) VALUES (?, ?, ?, ?, true)',
         [customerId, cityId, zoneId, address]
       );
@@ -83,7 +78,7 @@ export async function POST(request: Request) {
       });
 
       // Commit the transaction
-      await pool.query('COMMIT');
+      await db.query('COMMIT');
 
       return NextResponse.json({
         message: 'Registration successful',
@@ -97,7 +92,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       // Rollback the transaction on error
-      await pool.query('ROLLBACK');
+      await db.query('ROLLBACK');
       throw error;
     }
   } catch (error) {

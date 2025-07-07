@@ -1,33 +1,15 @@
 import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
-import { NextRequest } from 'next/server';
-import { verifyJWT } from '@/lib/middleware/auth';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 import pool from '@/lib/db';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   let connection;
   try {
-    // Check for admin token in cookies
-    const adminToken = request.cookies.get('adminToken');
-    
-    if (!adminToken?.value) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Verify admin token
-    let isAdmin = false;
-    try {
-      const decoded = verifyJWT(adminToken.value, 'admin');
-      isAdmin = true; // If verifyJWT doesn't throw, it's a valid admin token
-    } catch (error) {
-      console.error('Token verification error:', error);
-      isAdmin = false;
-    }
-
-    if (!isAdmin) {
+    // Check authentication
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.isAdmin) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -59,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Get SMS statistics
     let statsQuery;
     if (phone) {
-      const [stats] = await connection.query(
+      const [stats] = await connection.query<mysql.RowDataPacket[]>(
         `SELECT 
           COUNT(*) as total_sent,
           SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
@@ -72,7 +54,7 @@ export async function GET(request: NextRequest) {
       );
       statsQuery = stats[0];
     } else {
-      const [stats] = await connection.query(
+      const [stats] = await connection.query<mysql.RowDataPacket[]>(
         `SELECT 
           COUNT(*) as total_sent,
           SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
@@ -85,7 +67,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get rate limit statistics
-    const [rateLimits] = await connection.query(
+    const [rateLimits] = await connection.query<mysql.RowDataPacket[]>(
       `SELECT 
         COUNT(*) as total_limited,
         COUNT(DISTINCT phone) as unique_limited_phones
@@ -94,7 +76,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Get top error messages
-    const [errors] = await connection.query(
+    const [errors] = await connection.query<mysql.RowDataPacket[]>(
       `SELECT 
         error_message,
         COUNT(*) as count
@@ -107,7 +89,7 @@ export async function GET(request: NextRequest) {
     );
 
     // Get hourly distribution (MySQL equivalent of DATE_TRUNC)
-    const [hourly] = await connection.query(
+    const [hourly] = await connection.query<mysql.RowDataPacket[]>(
       `SELECT 
         DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00') as hour,
         COUNT(*) as count,

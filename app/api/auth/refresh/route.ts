@@ -56,7 +56,6 @@ export async function POST(request: NextRequest) {
     if (payload.userType === 'admin') {
       newAccessToken = generateToken({
         type: 'admin',
-        id: parseInt(session.userId),
         username: session.userId,
         email: session.userId,
         sessionId: payload.sessionId

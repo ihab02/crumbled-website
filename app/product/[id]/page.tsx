@@ -13,7 +13,7 @@ import { products } from "@/lib/data"
 
 export default function ProductDetailPage() {
   const params = useParams()
-  const productId = params.id as string
+  const productId = Number.parseInt(params.id as string)
   const product = products.find((p) => p.id === productId)
 
   const [quantity, setQuantity] = useState(1)
@@ -53,8 +53,8 @@ export default function ProductDetailPage() {
         image: product.image,
         isBundle: true,
         bundleSize: product.bundleSize,
-        bundleItems: product.bundleContents?.map((item, index) => ({
-          id: `${product.id}-${index}`,
+        bundleItems: product.bundleContents?.map((item) => ({
+          id: Math.random(),
           name: item.name,
           price: item.price,
           image: "/placeholder.svg",

@@ -37,23 +37,9 @@ export const authConfig = {
   }
 };
 
-// Track if we've already logged the environment check
-let hasLoggedEnvCheck = false;
-
 // Validate environment variables
 export function validateAuthConfig() {
   const errors: string[] = [];
-  
-  // Only log environment variables once
-  if (!hasLoggedEnvCheck) {
-    console.log('🔍 [DEBUG] Environment variables check:');
-    console.log('🔍 [DEBUG] NODE_ENV:', process.env.NODE_ENV);
-    console.log('🔍 [DEBUG] CUSTOMER_JWT_SECRET exists:', !!process.env.CUSTOMER_JWT_SECRET);
-    console.log('🔍 [DEBUG] ADMIN_JWT_SECRET exists:', !!process.env.ADMIN_JWT_SECRET);
-    console.log('🔍 [DEBUG] authConfig.customerJwtSecret:', !!authConfig.customerJwtSecret);
-    console.log('🔍 [DEBUG] authConfig.adminJwtSecret:', !!authConfig.adminJwtSecret);
-    hasLoggedEnvCheck = true;
-  }
   
   if (!authConfig.customerJwtSecret && process.env.NODE_ENV === 'production') {
     errors.push('CUSTOMER_JWT_SECRET environment variable is required in production');
@@ -64,20 +50,8 @@ export function validateAuthConfig() {
   }
   
   if (errors.length > 0) {
-    // Only log the warning once
-    if (!hasLoggedEnvCheck) {
-      console.error('⚠️ [WARNING] Authentication configuration errors:', errors);
-      if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
-        console.warn('⚠️ [WARNING] Using fallback secrets in production - this is not secure!');
-      }
-    }
-    return false;
+    throw new Error(`Authentication configuration errors:\n${errors.join('\n')}`);
   }
-  
-  if (!hasLoggedEnvCheck) {
-    console.log('✅ [DEBUG] Authentication configuration is valid');
-  }
-  return true;
 }
 
 // Get JWT secret based on user type

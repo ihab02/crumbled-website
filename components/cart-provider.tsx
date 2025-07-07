@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useState, type ReactNode } from "react"
-import { Product } from "@/lib/data"
 
 interface BundleItem {
   id?: string

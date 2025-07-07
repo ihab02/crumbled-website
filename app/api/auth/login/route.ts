@@ -5,8 +5,6 @@ import db from '@/lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-type CustomerRow = { id: number; email: string; password: string };
-
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
@@ -25,14 +23,14 @@ export async function POST(request: Request) {
       [email]
     );
 
-    if (!Array.isArray(customers) || customers.length === 0 || !(customers[0] as CustomerRow)?.password) {
+    if (!Array.isArray(customers) || customers.length === 0) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       );
     }
 
-    const customer = customers[0] as CustomerRow;
+    const customer = customers[0];
 
     // Plain text password comparison (NOT recommended for production)
     if (password !== customer.password) {

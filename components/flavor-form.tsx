@@ -8,7 +8,7 @@ interface FlavorFormData {
   description: string;
   image_url: string;
   category: string;
-  type: "large" | "mini" | "regular";
+  type: string;
   in_stock: boolean;
   stock: number;
 }
@@ -29,12 +29,7 @@ export function FlavorForm({ flavor, onSubmit, onCancel, enhancedStockEnabled = 
     category: flavor?.category || "Classic",
     type: flavor?.type || "regular",
     in_stock: flavor?.in_stock !== undefined ? flavor.in_stock : true,
-    stock:
-      typeof flavor?.stock === "number"
-        ? flavor.stock
-        : typeof flavor?.stock === "object" && flavor?.stock !== null
-        ? (flavor.stock.mini?.quantity ?? flavor.stock.large?.quantity ?? 0)
-        : 0,
+    stock: flavor?.stock || 0,
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -42,8 +37,9 @@ export function FlavorForm({ flavor, onSubmit, onCancel, enhancedStockEnabled = 
     let newValue: string | number | boolean = value
     if (type === "number") {
       newValue = parseFloat(value) || 0
-    } else if (name === "in_stock" && e.target instanceof HTMLInputElement && e.target.type === "checkbox") {
-      newValue = e.target.checked;
+    } else if (name === "in_stock") {
+      const evt = e as React.ChangeEvent<HTMLInputElement>;
+      newValue = evt.checked;
     }
     setFormData((prev) => ({ ...prev, [name]: newValue }))
   }

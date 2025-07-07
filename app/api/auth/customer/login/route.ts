@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     connection = await pool.getConnection();
 
     // Get customer from database
-    const [customers] = await connection.query(
+    const [customers] = await connection.query<mysql.RowDataPacket[]>(
       'SELECT id, email, password, first_name, last_name, phone FROM customers WHERE email = ?',
       [email]
     );

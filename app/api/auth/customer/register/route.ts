@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     connection = await pool.getConnection();
 
     // Check if user already exists
-    const [existingUsers] = await connection.query(
+    const [existingUsers] = await connection.query<mysql.RowDataPacket[]>(
       'SELECT id FROM customers WHERE email = ?',
       [email]
     );
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     const passwordHash = await hash(password, 12);
 
     // Create new customer
-    const [result] = await connection.query(
+    const [result] = await connection.query<mysql.ResultSetHeader>(
       `INSERT INTO customers (email, password, first_name, last_name, phone)
        VALUES (?, ?, ?, ?, ?)`,
       [email, passwordHash, firstName, lastName, phone || null]
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     const customerId = result.insertId;
 
     // Get the created customer
-    const [customers] = await connection.query(
+    const [customers] = await connection.query<mysql.RowDataPacket[]>(
       'SELECT id, email, first_name, last_name, phone FROM customers WHERE id = ?',
       [customerId]
     );

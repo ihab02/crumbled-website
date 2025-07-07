@@ -35,6 +35,8 @@ export default function Header() {
   const navigation = [
     { name: "Home", href: "/" },
     { name: "View All Flavors", href: "/flavors" },
+    { name: "Mini Bundles", href: "/shop/bundles" },
+    { name: "Large Bundles", href: "/shop/large-bundles" },
     { name: "Contact", href: "/contact" },
   ]
 

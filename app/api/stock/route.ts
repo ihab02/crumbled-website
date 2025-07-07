@@ -8,7 +8,7 @@ export async function GET() {
     connection = await pool.getConnection();
 
     // First check if the stock table exists
-    const [tableCheck] = await connection.query(
+    const [tableCheck] = await connection.query<mysql.RowDataPacket[]>(
       "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'crumbled_nextDB' AND table_name = 'stock'"
     );
 
@@ -23,7 +23,7 @@ export async function GET() {
       )
     }
 
-    const [stock] = await connection.query(
+    const [stock] = await connection.query<mysql.RowDataPacket[]>(
       "SELECT * FROM stock ORDER BY product_name"
     );
 
@@ -51,7 +51,7 @@ export async function PUT(request: Request) {
     connection = await pool.getConnection();
 
     // First check if the stock table exists
-    const [tableCheck] = await connection.query(
+    const [tableCheck] = await connection.query<mysql.RowDataPacket[]>(
       "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'crumbled_nextDB' AND table_name = 'stock'"
     );
 
