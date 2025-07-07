@@ -255,11 +255,11 @@ class SessionManager {
 
       // Clean up memory cache
       const now = new Date();
-      for (const [hash, token] of this.blacklistedTokens.entries()) {
+      Array.from(this.blacklistedTokens.entries()).forEach(([hash, token]) => {
         if (now > token.expiresAt) {
           this.blacklistedTokens.delete(hash);
         }
-      }
+      });
     } catch (error) {
       console.error('Failed to cleanup sessions:', error);
     }

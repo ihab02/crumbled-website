@@ -3,18 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  BarChart,
-  Bar
-} from 'recharts';
 
 interface SMSStats {
   total_sent: number;
@@ -148,53 +136,57 @@ export default function SMSMonitoringPage() {
         </div>
       </div>
 
-      {/* Hourly Distribution Chart */}
+      {/* Hourly Distribution Table */}
       <div className="bg-white p-6 rounded-lg shadow mb-8">
         <h2 className="text-xl font-bold mb-4">Hourly Distribution</h2>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.hourlyDistribution}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="hour"
-                tickFormatter={(value) => new Date(value).toLocaleTimeString()}
-              />
-              <YAxis />
-              <Tooltip
-                labelFormatter={(value) => new Date(value).toLocaleString()}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="count"
-                stroke="#4F46E5"
-                name="Total Messages"
-              />
-              <Line
-                type="monotone"
-                dataKey="successful"
-                stroke="#10B981"
-                name="Successful Messages"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hour</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Messages</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Successful</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success Rate</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {data.hourlyDistribution.map((item, index) => (
+                <tr key={index}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {new Date(item.hour).toLocaleTimeString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">{item.successful}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {item.count > 0 ? ((item.successful / item.count) * 100).toFixed(1) : 0}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Top Errors Chart */}
+      {/* Top Errors Table */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-bold mb-4">Top Error Messages</h2>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.topErrors}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="error_message" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="count" fill="#EF4444" name="Error Count" />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error Message</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {data.topErrors.map((error, index) => (
+                <tr key={index}>
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-md truncate">{error.error_message}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">{error.count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

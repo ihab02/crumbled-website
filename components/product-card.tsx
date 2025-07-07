@@ -7,23 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PlusIcon, MinusIcon } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
-
-// Update the Product interface to include bundleType
-interface Product {
-  id: number
-  name: string
-  price: number
-  originalPrice?: number
-  description: string
-  image: string
-  category: string
-  inStock: boolean
-  rating: number
-  reviews: number
-  type?: string
-  bundleSize?: number
-  bundleType?: string
-}
+import { Product } from "@/lib/data"
 
 interface ProductCardProps {
   product: Product
@@ -76,13 +60,7 @@ export function ProductCard({ product }: ProductCardProps) {
     return (
       <Card className="overflow-hidden border-2 border-pink-200 transition-all hover:shadow-2xl rounded-3xl group bg-gradient-to-br from-white to-pink-50 hover:from-pink-50 hover:to-rose-50">
         <div className="relative">
-          <Link
-            href={
-              product.bundleType === "mini"
-                ? `/customize-bundle/${product.id}`
-                : `/customize-large-bundle/${product.id}`
-            }
-          >
+          <Link href="/shop">
             <div className="aspect-square overflow-hidden">
               <img
                 src={product.image || "/placeholder.svg"}
@@ -97,13 +75,7 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
         <CardContent className="p-6 space-y-4">
           <div>
-            <Link
-              href={
-                product.bundleType === "mini"
-                  ? `/customize-bundle/${product.id}`
-                  : `/customize-large-bundle/${product.id}`
-              }
-            >
+            <Link href="/shop">
               <h3 className="font-bold text-lg text-pink-800 line-clamp-1 hover:text-pink-600 transition-colors">
                 {product.name}
               </h3>
@@ -122,14 +94,8 @@ export function ProductCard({ product }: ProductCardProps) {
             className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all"
             asChild
           >
-            <Link
-              href={
-                product.bundleType === "mini"
-                  ? `/customize-bundle/${product.id}`
-                  : `/customize-large-bundle/${product.id}`
-              }
-            >
-              Customize Bundle
+            <Link href="/shop">
+              View Shop
             </Link>
           </Button>
         </CardContent>

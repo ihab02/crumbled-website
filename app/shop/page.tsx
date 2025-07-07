@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Package, Cookie, ShoppingBag } from 'lucide-react';
@@ -29,7 +29,7 @@ interface ProductType {
   products: Product[];
 }
 
-export default function ShopPage() {
+function ShopPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectFlavorId = searchParams.get('preselect');
@@ -199,5 +199,28 @@ export default function ShopPage() {
         </div>
       ))}
     </div>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse space-y-8">
+          {[1, 2, 3].map((i) => (
+            <div key={i}>
+              <div className="h-8 w-48 bg-gray-200 rounded mb-4"></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className="h-64 bg-gray-200 rounded"></div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    }>
+      <ShopPageContent />
+    </Suspense>
   );
 }

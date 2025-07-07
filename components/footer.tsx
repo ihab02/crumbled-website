@@ -32,11 +32,7 @@ export function Footer() {
           <div>
             <h3 className="mb-6 font-bold text-xl text-pink-800">Products</h3>
             <ul className="space-y-3 text-base">
-              <li>
-                <Link href="/shop/best-sellers" className="text-pink-600 hover:text-pink-800 transition-colors">
-                  Best Sellers
-                </Link>
-              </li>
+
               <li>
                 <Link href="/shop/new-arrivals" className="text-pink-600 hover:text-pink-800 transition-colors">
                   New Arrivals

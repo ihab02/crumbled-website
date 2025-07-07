@@ -109,7 +109,10 @@ export async function middleware(request: NextRequest) {
   
   // Validate auth configuration
   try {
-    validateAuthConfig();
+    const isValid = validateAuthConfig();
+    if (!isValid) {
+      console.warn('⚠️ [WARNING] Auth configuration validation failed, but continuing...');
+    }
   } catch (error) {
     console.error('Auth configuration error:', error);
     // Continue with middleware but log the error

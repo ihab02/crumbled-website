@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     for (const item of items) {
       if (!item.isBundle) {
         // Check stock for regular items
-        const [stockCheck] = await connection.query<mysql.RowDataPacket[]>(
+        const [stockCheck] = await connection.query(
           "SELECT quantity, product_name FROM stock WHERE product_id = ?",
           [item.id]
         );
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         // Check stock for bundle items
         if (item.bundleItems && Array.isArray(item.bundleItems)) {
           for (const bundleItem of item.bundleItems) {
-            const [stockCheck] = await connection.query<mysql.RowDataPacket[]>(
+            const [stockCheck] = await connection.query(
               "SELECT quantity, product_name FROM stock WHERE product_id = ?",
               [bundleItem.id]
             );

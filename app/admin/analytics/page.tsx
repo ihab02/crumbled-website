@@ -22,6 +22,7 @@ import {
   Truck,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   XCircle,
   RefreshCw,
   BarChart3,
@@ -154,34 +155,43 @@ export default function AdminAnalyticsPage() {
   };
 
   const calculateAnalytics = (customers: any[], orders: any[]): AnalyticsData => {
-    const totalCustomers = customers.length;
-    const newCustomers = customers.filter(c => c.customer_lifecycle_stage === 'new').length;
-    const activeCustomers = customers.filter(c => c.customer_lifecycle_stage === 'active').length;
-    const churnedCustomers = customers.filter(c => c.customer_lifecycle_stage === 'churned').length;
+    // Ensure customers is an array and handle edge cases
+    const customersArray = Array.isArray(customers) ? customers : [];
+    const totalCustomers = customersArray.length;
+    const newCustomers = customersArray.filter(c => c.customer_lifecycle_stage === 'new').length;
+    const activeCustomers = customersArray.filter(c => c.customer_lifecycle_stage === 'active').length;
+    const churnedCustomers = customersArray.filter(c => c.customer_lifecycle_stage === 'churned').length;
     
-    const averageLifetimeValue = customers.reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / totalCustomers;
+    const averageLifetimeValue = totalCustomers > 0 
+      ? customersArray.reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / totalCustomers 
+      : 0;
     
     // Calculate customer growth rate (mock data for now)
     const customerGrowthRate = 12.5; // 12.5% growth
     
     // Segment distribution
-    const segmentCounts = customers.reduce((acc, customer) => {
+    const segmentCounts = customersArray.reduce((acc, customer) => {
       const segment = customer.customer_segment || 'unknown';
       acc[segment] = (acc[segment] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
     
-    const segmentDistribution = Object.entries(segmentCounts).map(([segment, count]) => ({
-      segment,
-      count,
-      percentage: (count / totalCustomers) * 100,
-      averageValue: customers
-        .filter(c => c.customer_segment === segment)
-        .reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / count
-    }));
+    const segmentDistribution = Object.entries(segmentCounts).map(([segment, count]) => {
+      const countNum = Number(count);
+      return {
+        segment,
+        count: countNum,
+        percentage: totalCustomers > 0 ? (countNum / totalCustomers) * 100 : 0,
+        averageValue: countNum > 0 
+          ? customersArray
+              .filter(c => c.customer_segment === segment)
+              .reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / countNum
+          : 0
+      };
+    });
     
     // Lifecycle distribution
-    const lifecycleCounts = customers.reduce((acc, customer) => {
+    const lifecycleCounts = customersArray.reduce((acc, customer) => {
       const stage = customer.customer_lifecycle_stage || 'unknown';
       acc[stage] = (acc[stage] || 0) + 1;
       return acc;
@@ -189,25 +199,30 @@ export default function AdminAnalyticsPage() {
     
     const lifecycleDistribution = Object.entries(lifecycleCounts).map(([stage, count]) => ({
       stage,
-      count,
-      percentage: (count / totalCustomers) * 100
+      count: Number(count),
+      percentage: totalCustomers > 0 ? (Number(count) / totalCustomers) * 100 : 0
     }));
     
     // Loyalty distribution
-    const loyaltyCounts = customers.reduce((acc, customer) => {
+    const loyaltyCounts = customersArray.reduce((acc, customer) => {
       const tier = customer.loyalty_tier || 'bronze';
       acc[tier] = (acc[tier] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
     
-    const loyaltyDistribution = Object.entries(loyaltyCounts).map(([tier, count]) => ({
-      tier,
-      count,
-      percentage: (count / totalCustomers) * 100,
-      averageValue: customers
-        .filter(c => c.loyalty_tier === tier)
-        .reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / count
-    }));
+    const loyaltyDistribution = Object.entries(loyaltyCounts).map(([tier, count]) => {
+      const countNum = Number(count);
+      return {
+        tier,
+        count: countNum,
+        percentage: totalCustomers > 0 ? (countNum / totalCustomers) * 100 : 0,
+        averageValue: countNum > 0 
+          ? customersArray
+              .filter(c => c.loyalty_tier === tier)
+              .reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / countNum
+          : 0
+      };
+    });
     
     // Communication metrics
     const emailSubscribers = customers.filter(c => c.marketing_emails_enabled).length;

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -25,7 +25,7 @@ interface Zone {
   deliveryFee: number;
 }
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
@@ -265,19 +265,17 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="flex justify-center">
-            <Image src="/logo-no-bg.png" alt="Crumbled Logo" width={180} height={90} className="h-16 w-auto" />
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 border border-pink-100">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-r from-pink-500 to-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-pink-800 mb-2">Create Account</h1>
+            <p className="text-pink-600">Join us and start your sweet journey!</p>
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
-            Create your account
-          </h2>
-          <p className="mt-2 text-pink-700">Join us and enjoy delicious cookies delivered to your door</p>
-        </div>
 
-        <div className="bg-white p-8 rounded-3xl shadow-xl border-2 border-pink-200">
           {error && (
             <Alert className="mb-6 border-red-200 bg-red-50">
               <AlertDescription className="text-red-700">{error}</AlertDescription>
@@ -290,183 +288,114 @@ export default function RegisterPage() {
             </Alert>
           )}
 
-          <form className="space-y-6" onSubmit={otpSent ? handleVerifyOTP : handleSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Label htmlFor="firstName" className="text-pink-700">
-                  First name
-                </Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  type="text"
-                  autoComplete="given-name"
-                  required
-                  className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
-                  placeholder="Enter your first name"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="lastName" className="text-pink-700">
-                  Last name
-                </Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  type="text"
-                  autoComplete="family-name"
-                  required
-                  className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
-                  placeholder="Enter your last name"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="email" className="text-pink-700">
-                Email address
-              </Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
-                placeholder="Enter your email"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="phone" className="text-pink-700">
-                Phone number
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                  className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 flex-1"
-                  placeholder="Enter your phone number"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  disabled={isLoading || otpVerified}
-                />
-                {!otpVerified && (
-                  <Button
-                    type="button"
-                    onClick={handleSendOTP}
-                    disabled={isLoading || otpTimer > 0}
-                    className="mt-1 whitespace-nowrap bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600"
-                  >
-                    {isLoading ? 'Sending...' : otpTimer > 0 ? `Resend (${formatTimer(otpTimer)})` : 'Send OTP'}
-                  </Button>
-                )}
-              </div>
-              {otpVerified && (
-                <p className="text-green-500 text-sm mt-1">✓ Phone number verified</p>
-              )}
-            </div>
-
-            {otpSent && !otpVerified && (
-              <div>
-                <Label htmlFor="otp" className="text-pink-700">
-                  Enter OTP
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="otp"
-                    name="otp"
-                    type="text"
-                    required
-                    className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 flex-1"
-                    placeholder="Enter 6-digit OTP"
-                    value={formData.otp}
-                    onChange={handleChange}
-                    maxLength={6}
-                    disabled={isLoading}
-                  />
-                  <Button
-                    type="submit"
-                    disabled={isLoading || !formData.otp || formData.otp.length !== 6}
-                    className="mt-1 whitespace-nowrap bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600"
-                  >
-                    {isLoading ? 'Verifying...' : 'Verify OTP'}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {!otpSent && (
-              <>
+          {!otpVerified ? (
+            <div className="space-y-6">
+              <form onSubmit={handleSendOTP} className="space-y-4">
                 <div>
-                  <Label htmlFor="password" className="text-pink-700">
-                    Password
-                  </Label>
-                  <div className="mt-1 relative">
+                  <Label htmlFor="firstName" className="text-pink-700">First Name</Label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    value={formData.firstName}
+                    onChange={handleChange}
+                    required
+                    className="border-pink-200 focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="lastName" className="text-pink-700">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    value={formData.lastName}
+                    onChange={handleChange}
+                    required
+                    className="border-pink-200 focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="email" className="text-pink-700">Email</Label>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    className="border-pink-200 focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="phone" className="text-pink-700">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    placeholder="01XXXXXXXXX"
+                    required
+                    className="border-pink-200 focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="password" className="text-pink-700">Password</Label>
+                  <div className="relative">
                     <Input
                       id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 pr-10"
-                      placeholder="Create a password"
                       value={formData.password}
                       onChange={handleChange}
-                      disabled={isLoading}
+                      required
+                      className="border-pink-200 focus:border-pink-500 pr-10"
                     />
                     <button
                       type="button"
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-pink-500 hover:text-pink-700"
                       onClick={() => setShowPassword(!showPassword)}
-                      disabled={isLoading}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
-                      {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                      {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-pink-600">Password must be at least 8 characters long</p>
                 </div>
 
                 <div>
-                  <Label htmlFor="confirmPassword" className="text-pink-700">
-                    Confirm Password
-                  </Label>
+                  <Label htmlFor="confirmPassword" className="text-pink-700">Confirm Password</Label>
                   <Input
                     id="confirmPassword"
                     name="confirmPassword"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    required
-                    className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
-                    placeholder="Confirm your password"
+                    type="password"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    disabled={isLoading}
+                    required
+                    className="border-pink-200 focus:border-pink-500"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="cityId" className="text-pink-700">
-                    City
-                  </Label>
-                  <Select
-                    value={formData.cityId}
-                    onValueChange={handleCityChange}
-                    disabled={isLoading}
-                  >
-                    <SelectTrigger className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400">
+                  <Label htmlFor="address" className="text-pink-700">Street Address</Label>
+                  <Input
+                    id="address"
+                    name="address"
+                    type="text"
+                    value={formData.address}
+                    onChange={handleChange}
+                    required
+                    className="border-pink-200 focus:border-pink-500"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="cityId" className="text-pink-700">City</Label>
+                  <Select value={formData.cityId} onValueChange={handleCityChange}>
+                    <SelectTrigger className="border-pink-200 focus:border-pink-500">
                       <SelectValue placeholder="Select your city" />
                     </SelectTrigger>
                     <SelectContent>
@@ -480,73 +409,131 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="zoneId" className="text-pink-700">
-                    Zone
-                  </Label>
-                  <Select
-                    value={formData.zoneId}
-                    onValueChange={handleZoneChange}
-                    disabled={isLoading || !formData.cityId}
-                  >
-                    <SelectTrigger className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400">
+                  <Label htmlFor="zoneId" className="text-pink-700">Zone</Label>
+                  <Select value={formData.zoneId} onValueChange={handleZoneChange} disabled={!formData.cityId}>
+                    <SelectTrigger className="border-pink-200 focus:border-pink-500">
                       <SelectValue placeholder="Select your zone" />
                     </SelectTrigger>
                     <SelectContent>
                       {zones.map((zone) => (
                         <SelectItem key={zone.id} value={zone.id.toString()}>
-                          {zone.name}
+                          {zone.name} (Delivery: {zone.deliveryFee} EGP)
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <Label htmlFor="address" className="text-pink-700">
-                    Address
-                  </Label>
-                  <Input
-                    id="address"
-                    name="address"
-                    type="text"
-                    required
-                    className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
-                    placeholder="Enter your address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    disabled={isLoading}
-                  />
-                </div>
-
                 <Button
                   type="submit"
-                  disabled={isLoading || !otpVerified}
-                  className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-rose-500 hover:from-purple-700 hover:via-pink-700 hover:to-rose-600 text-white rounded-full py-6 text-lg font-bold shadow-2xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:transform-none border-2 border-white/20 backdrop-blur-sm"
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Creating Account...
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending OTP...
                     </>
                   ) : (
-                    <>
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      Create Account
-                    </>
+                    "Send OTP"
                   )}
                 </Button>
-              </>
-            )}
+              </form>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {otpSent && !otpVerified && (
+                <form onSubmit={handleVerifyOTP} className="space-y-4">
+                  <div>
+                    <Label htmlFor="otp" className="text-pink-700">Enter OTP</Label>
+                    <Input
+                      id="otp"
+                      name="otp"
+                      type="text"
+                      value={formData.otp}
+                      onChange={handleChange}
+                      placeholder="Enter 6-digit OTP"
+                      maxLength={6}
+                      required
+                      className="border-pink-200 focus:border-pink-500 text-center text-lg tracking-widest"
+                    />
+                  </div>
 
-            <p className="text-center text-sm text-pink-600">
+                  {otpTimer > 0 && (
+                    <p className="text-sm text-pink-600 text-center">
+                      Resend OTP in {formatTimer(otpTimer)}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading || otpTimer > 0}
+                    className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      "Verify OTP"
+                    )}
+                  </Button>
+                </form>
+              )}
+
+              {otpVerified && (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <p className="text-green-700 text-center font-medium">
+                      ✅ Phone number verified successfully!
+                    </p>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating Account...
+                      </>
+                    ) : (
+                      "Create Account"
+                    )}
+                  </Button>
+                </form>
+              )}
+            </div>
+          )}
+
+          <div className="mt-8 text-center">
+            <p className="text-pink-600">
               Already have an account?{" "}
-              <Link href="/auth/login" className="font-medium text-pink-600 hover:text-pink-800">
+              <Link href="/auth/login" className="text-pink-500 hover:text-pink-600 font-semibold">
                 Sign in
               </Link>
             </p>
-          </form>
+          </div>
         </div>
       </div>
     </div>
   )
-} 
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-rose-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
+          <p className="text-pink-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <RegisterPageContent />
+    </Suspense>
+  )
+}

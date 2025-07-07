@@ -32,6 +32,9 @@ export interface ContentTemplate {
 }
 
 export interface CampaignRule {
+  id: string;
+  type: string;
+  priority: 'low' | 'medium' | 'high';
   segment: CustomerSegment[];
   conditions: {
     lastOrderDays?: number;
@@ -133,7 +136,20 @@ export class CommunicationOrchestrator {
       const channels = this.determineChannels(customer, campaign);
       
       for (const channel of channels) {
-        const content = this.generatePersonalizedContent(customer, campaign.actions, channel);
+        // Convert campaign.actions to ContentTemplate format
+        const template: ContentTemplate = {
+          email: {
+            subject: campaign.actions.emailTemplate,
+            body: campaign.actions.emailTemplate,
+            cta: 'Learn More'
+          },
+          sms: {
+            message: campaign.actions.smsTemplate,
+            cta: 'Learn More'
+          }
+        };
+        
+        const content = this.generatePersonalizedContent(customer, template, channel);
         const sendTime = this.getOptimalSendTime(customer, channel);
         
         await this.scheduleMessage({
