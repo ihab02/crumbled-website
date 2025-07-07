@@ -251,7 +251,7 @@ export class BehavioralScoringService {
           `;
           break;
 
-        case CustomerSegment.AT_RISK:
+        case CustomerSegment.LOW_VALUE_AT_RISK:
           query = `
             SELECT * FROM customers 
             WHERE churn_risk_score > 0.7 

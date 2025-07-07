@@ -74,32 +74,32 @@ export default function EditAddressPage() {
       if (citiesResponse.ok) {
         const citiesData = await citiesResponse.json()
         setCities(citiesData.cities || [])
-      }
-
-      // Fetch address details
-      const addressResponse = await fetch(`/api/user/addresses/${addressId}`)
-      if (addressResponse.ok) {
-        const addressData = await addressResponse.json()
-        setAddress(addressData.data)
-        setFormData({
-          street_address: addressData.data.street_address,
-          additional_info: addressData.data.additional_info || '',
-          is_default: addressData.data.is_default
-        })
-        setSelectedCity(addressData.data.city_id.toString())
-        setSelectedZone(addressData.data.zone_id.toString())
         
-        // Set delivery fee
-        const city = citiesData.cities?.find((c: City) => c.id === addressData.data.city_id)
-        if (city) {
-          const zone = city.zones.find((z: any) => z.id === addressData.data.zone_id)
-          if (zone) {
-            setDeliveryFee(zone.delivery_fee)
+        // Fetch address details
+        const addressResponse = await fetch(`/api/user/addresses/${addressId}`)
+        if (addressResponse.ok) {
+          const addressData = await addressResponse.json()
+          setAddress(addressData.data)
+          setFormData({
+            street_address: addressData.data.street_address,
+            additional_info: addressData.data.additional_info || '',
+            is_default: addressData.data.is_default
+          })
+          setSelectedCity(addressData.data.city_id.toString())
+          setSelectedZone(addressData.data.zone_id.toString())
+          
+          // Set delivery fee
+          const city = citiesData.cities?.find((c: City) => c.id === addressData.data.city_id)
+          if (city) {
+            const zone = city.zones.find((z: any) => z.id === addressData.data.zone_id)
+            if (zone) {
+              setDeliveryFee(zone.delivery_fee)
+            }
           }
+        } else {
+          toast.error('Address not found')
+          router.push('/account?tab=addresses')
         }
-      } else {
-        toast.error('Address not found')
-        router.push('/account?tab=addresses')
       }
     } catch (error) {
       console.error('Error fetching data:', error)

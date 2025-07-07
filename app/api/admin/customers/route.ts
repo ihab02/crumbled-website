@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { databaseService } from '@/lib/services/databaseService'
 import { verifyJWT } from '@/lib/middleware/auth'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 const db = databaseService
 
 // Helper function to safely extract arrays from database results

@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     if (payload.userType === 'admin') {
       newAccessToken = generateToken({
         type: 'admin',
+        id: parseInt(session.userId), // Convert userId to number for admin
         username: session.userId,
         email: session.userId,
         sessionId: payload.sessionId

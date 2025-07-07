@@ -1,23 +1,13 @@
 "use client"
 
 import { createContext, useContext, useState, type ReactNode } from "react"
-
-interface Product {
-  id: number
-  name: string
-  price: number
-  image: string
-  description: string
-  rating: number
-  reviews: number
-  inStock: boolean
-}
+import type { Product } from "@/lib/data"
 
 interface WishlistContextType {
   wishlist: Product[]
   addToWishlist: (product: Product) => void
-  removeFromWishlist: (productId: number) => void
-  isInWishlist: (productId: number) => boolean
+  removeFromWishlist: (productId: string) => void
+  isInWishlist: (productId: string) => boolean
 }
 
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined)
@@ -26,20 +16,17 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   const [wishlist, setWishlist] = useState<Product[]>([])
 
   const addToWishlist = (product: Product) => {
-    setWishlist((prev) => {
-      if (prev.find((item) => item.id === product.id)) {
-        return prev
-      }
-      return [...prev, product]
-    })
+    if (!isInWishlist(product.id.toString())) {
+      setWishlist((prev) => [...prev, product])
+    }
   }
 
-  const removeFromWishlist = (productId: number) => {
-    setWishlist((prev) => prev.filter((item) => item.id !== productId))
+  const removeFromWishlist = (productId: string) => {
+    setWishlist((prev) => prev.filter((item) => item.id.toString() !== productId))
   }
 
-  const isInWishlist = (productId: number) => {
-    return wishlist.some((item) => item.id === productId)
+  const isInWishlist = (productId: string) => {
+    return wishlist.some((item) => item.id.toString() === productId)
   }
 
   return (

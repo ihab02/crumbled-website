@@ -33,7 +33,8 @@ import {
   Target,
   MessageSquare,
   Mail,
-  Smartphone
+  Smartphone,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -171,14 +172,19 @@ export default function AdminAnalyticsPage() {
       return acc;
     }, {} as Record<string, number>);
     
-    const segmentDistribution = Object.entries(segmentCounts).map(([segment, count]) => ({
-      segment,
-      count,
-      percentage: (count / totalCustomers) * 100,
-      averageValue: customers
-        .filter(c => c.customer_segment === segment)
-        .reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / count
-    }));
+    const segmentDistribution = Object.entries(segmentCounts).map(([segment, count]) => {
+      const countNum = Number(count);
+      return {
+        segment,
+        count: countNum,
+        percentage: totalCustomers > 0 ? (countNum / totalCustomers) * 100 : 0,
+        averageValue: countNum > 0
+          ? Number(customers
+              .filter(c => c.customer_segment === segment)
+              .reduce((sum, c) => sum + (c.lifetime_value || 0), 0)) / countNum
+          : 0
+      };
+    });
     
     // Lifecycle distribution
     const lifecycleCounts = customers.reduce((acc, customer) => {
@@ -187,11 +193,14 @@ export default function AdminAnalyticsPage() {
       return acc;
     }, {} as Record<string, number>);
     
-    const lifecycleDistribution = Object.entries(lifecycleCounts).map(([stage, count]) => ({
-      stage,
-      count,
-      percentage: (count / totalCustomers) * 100
-    }));
+    const lifecycleDistribution = Object.entries(lifecycleCounts).map(([stage, count]) => {
+      const countNum = Number(count);
+      return {
+        stage,
+        count: countNum,
+        percentage: totalCustomers > 0 ? (countNum / totalCustomers) * 100 : 0
+      };
+    });
     
     // Loyalty distribution
     const loyaltyCounts = customers.reduce((acc, customer) => {
@@ -200,14 +209,19 @@ export default function AdminAnalyticsPage() {
       return acc;
     }, {} as Record<string, number>);
     
-    const loyaltyDistribution = Object.entries(loyaltyCounts).map(([tier, count]) => ({
-      tier,
-      count,
-      percentage: (count / totalCustomers) * 100,
-      averageValue: customers
-        .filter(c => c.loyalty_tier === tier)
-        .reduce((sum, c) => sum + (c.lifetime_value || 0), 0) / count
-    }));
+    const loyaltyDistribution = Object.entries(loyaltyCounts).map(([tier, count]) => {
+      const countNum = Number(count);
+      return {
+        tier,
+        count: countNum,
+        percentage: totalCustomers > 0 ? (countNum / totalCustomers) * 100 : 0,
+        averageValue: countNum > 0
+          ? Number(customers
+              .filter(c => c.loyalty_tier === tier)
+              .reduce((sum, c) => sum + (c.lifetime_value || 0), 0)) / countNum
+          : 0
+      };
+    });
     
     // Communication metrics
     const emailSubscribers = customers.filter(c => c.marketing_emails_enabled).length;

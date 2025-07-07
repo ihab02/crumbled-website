@@ -49,8 +49,13 @@ const nextConfig = {
     unoptimized: true,
   },
   
-  // Add output configuration
+  // Configure for dynamic rendering
   output: 'standalone',
+  
+  // Disable static generation for dynamic pages
+  trailingSlash: false,
+  
+
 }
 
 module.exports = nextConfig 

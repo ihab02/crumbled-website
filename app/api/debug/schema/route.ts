@@ -15,6 +15,8 @@ export async function GET() {
 
     // Get columns for each table
     for (const table of tables) {
+      if (!table.table_name) continue;
+      
       const columns = await databaseService.query(`
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns 
@@ -30,7 +32,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      tables: tables.map((t: any) => t.table_name),
+      tables: tables.filter((t: any) => t.table_name).map((t: any) => t.table_name),
       schema: schemaInfo,
     })
   } catch (error) {

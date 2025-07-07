@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 // Utility function to calculate delivery date based on working days
 function calculateDeliveryDate(orderDate: Date, deliveryDays: number, workingDays: string[]): Date {
   const deliveryDate = new Date(orderDate);

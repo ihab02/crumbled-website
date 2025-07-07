@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { verifyJWT } from '@/lib/middleware/auth';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 interface OrderModeRequest {
   orderMode?: 'stock_based' | 'preorder';
   timeWindowSettings?: {

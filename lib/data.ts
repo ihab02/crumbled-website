@@ -15,6 +15,13 @@ export interface Product {
   type: "large" | "mini" | "regular" | "bundle"
   bundleSize?: number
   bundleType?: string
+  bundleContents?: Array<{
+    id?: string
+    name: string
+    price: number
+    image?: string
+    quantity?: number
+  }>
 }
 
 export interface Flavor {

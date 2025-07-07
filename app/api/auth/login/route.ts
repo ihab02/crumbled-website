@@ -5,6 +5,12 @@ import db from '@/lib/db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
+interface Customer {
+  id: number;
+  email: string;
+  password: string;
+}
+
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
@@ -30,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const customer = customers[0];
+    const customer = customers[0] as Customer;
 
     // Plain text password comparison (NOT recommended for production)
     if (password !== customer.password) {

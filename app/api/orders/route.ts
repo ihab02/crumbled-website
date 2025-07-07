@@ -108,13 +108,7 @@ export async function POST(request: NextRequest) {
     // Send notifications
     try {
       // Send SMS notification
-      await sendOrderNotification({
-        orderId: result.toString(),
-        customerName: customer.name || 'Valued Customer',
-        customerPhone: customer.phone,
-        status: 'pending',
-        deliveryMethod: 'delivery'
-      })
+      await sendOrderNotification(customer.phone, result, 'pending')
 
       // Send email confirmation if email is provided
       if (customer.email) {

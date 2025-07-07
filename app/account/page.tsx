@@ -1,6 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -49,7 +52,7 @@ interface UserProfile {
   createdAt: string
 }
 
-export default function AccountPage() {
+function AccountPageContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -806,5 +809,13 @@ export default function AccountPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AccountPageContent />
+    </Suspense>
   )
 }

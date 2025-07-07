@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Package, Cookie, ShoppingBag } from 'lucide-react';
@@ -29,7 +32,7 @@ interface ProductType {
   products: Product[];
 }
 
-export default function ShopPage() {
+function ShopPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectFlavorId = searchParams.get('preselect');
@@ -199,5 +202,13 @@ export default function ShopPage() {
         </div>
       ))}
     </div>
+  );
+}
+
+export default function ShopPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ShopPageContent />
+    </Suspense>
   );
 }

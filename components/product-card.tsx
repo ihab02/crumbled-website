@@ -7,23 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PlusIcon, MinusIcon } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
-
-// Update the Product interface to include bundleType
-interface Product {
-  id: number
-  name: string
-  price: number
-  originalPrice?: number
-  description: string
-  image: string
-  category: string
-  inStock: boolean
-  rating: number
-  reviews: number
-  type?: string
-  bundleSize?: number
-  bundleType?: string
-}
+import type { Product } from "@/lib/data"
 
 interface ProductCardProps {
   product: Product

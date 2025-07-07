@@ -8,7 +8,7 @@ interface FlavorFormData {
   description: string;
   image_url: string;
   category: string;
-  type: string;
+  type: "large" | "mini" | "regular";
   in_stock: boolean;
   stock: number;
 }
@@ -20,6 +20,10 @@ interface FlavorFormProps {
   enhancedStockEnabled?: boolean
 }
 
+function toFlavorType(type: any): "large" | "mini" | "regular" {
+  return type === "large" || type === "mini" || type === "regular" ? type : "regular";
+}
+
 export function FlavorForm({ flavor, onSubmit, onCancel, enhancedStockEnabled = false }: FlavorFormProps) {
   const [formData, setFormData] = useState<FlavorFormData>({
     name: flavor?.name || "",
@@ -27,21 +31,25 @@ export function FlavorForm({ flavor, onSubmit, onCancel, enhancedStockEnabled = 
     description: flavor?.description || "",
     image_url: flavor?.image_url || "",
     category: flavor?.category || "Classic",
-    type: flavor?.type || "regular",
+    type: toFlavorType(flavor?.type),
     in_stock: flavor?.in_stock !== undefined ? flavor.in_stock : true,
-    stock: flavor?.stock || 0,
+    stock: typeof flavor?.stock === "number" ? flavor.stock : 0,
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
-    let newValue: string | number | boolean = value
+    let newValue: any = value
     if (type === "number") {
       newValue = parseFloat(value) || 0
-    } else if (name === "in_stock") {
-      const evt = e as React.ChangeEvent<HTMLInputElement>;
-      newValue = evt.checked;
+    } else if (name === "in_stock" && e.target instanceof HTMLInputElement) {
+      newValue = e.target.checked;
+    } else if (name === "type" && (value === "large" || value === "mini" || value === "regular")) {
+      newValue = toFlavorType(value);
     }
-    setFormData((prev) => ({ ...prev, [name]: newValue }))
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === "type" ? (newValue as "large" | "mini" | "regular") : newValue
+    }))
   }
 
   const handleSubmit = (e: React.FormEvent) => {

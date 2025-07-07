@@ -32,6 +32,9 @@ export interface ContentTemplate {
 }
 
 export interface CampaignRule {
+  id: string | number;
+  type: string;
+  priority?: string;
   segment: CustomerSegment[];
   conditions: {
     lastOrderDays?: number;
@@ -39,9 +42,7 @@ export interface CampaignRule {
     favoriteCategories?: string[];
     churnRisk?: { min: number; max: number };
   };
-  actions: {
-    emailTemplate: string;
-    smsTemplate: string;
+  actions: ContentTemplate & {
     discountCode?: string;
     productRecommendations?: boolean;
   };
