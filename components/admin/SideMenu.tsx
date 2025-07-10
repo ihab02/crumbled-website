@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -124,8 +125,9 @@ const menuItems = [
 export function SideMenu() {
   const pathname = usePathname();
   const { user, logout, loading } = useAdminAuth();
+  const { debugLog } = useDebugLogger();
 
-  console.log('SideMenu render:', { user, loading, pathname });
+  debugLog('SideMenu render:', { user, loading, pathname });
 
   const isActive = (href: string) => pathname === href;
   const isSettingsActive = pathname.startsWith('/admin/settings');
@@ -202,7 +204,7 @@ export function SideMenu() {
       <div className="border-t p-2">
         <button
           onClick={() => {
-            console.log('Logout button clicked');
+            debugLog('Logout button clicked');
             logout();
           }}
           disabled={loading}

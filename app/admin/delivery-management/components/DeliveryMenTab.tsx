@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import DeliveryManForm from './DeliveryManForm';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 
 interface DeliveryMan {
   id: number;
@@ -20,6 +21,7 @@ interface DeliveryMan {
 }
 
 export default function DeliveryMenTab() {
+  const { debugLog } = useDebugLogger();
   const [deliveryMen, setDeliveryMen] = useState<DeliveryMan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -34,10 +36,10 @@ export default function DeliveryMenTab() {
         throw new Error(errorData.error || 'Failed to fetch delivery men');
       }
       const responseData = await response.json();
-      console.log('API Response:', responseData);
+      debugLog('API Response:', responseData);
       
       const deliveryMenData = Array.isArray(responseData.data) ? responseData.data : [];
-      console.log('Delivery Men Data:', deliveryMenData);
+      debugLog('Delivery Men Data:', deliveryMenData);
       
       // Parse available_days from JSON string to array if needed
       const parsedDeliveryMen = deliveryMenData.map((deliveryMan: any) => {
@@ -57,7 +59,7 @@ export default function DeliveryMenTab() {
         };
       });
       
-      console.log('Parsed Delivery Men:', parsedDeliveryMen);
+      debugLog('Parsed Delivery Men:', parsedDeliveryMen);
       setDeliveryMen(parsedDeliveryMen);
     } catch (error) {
       console.error('Error fetching delivery men:', error);

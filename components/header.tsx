@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useDebugLogger } from "@/hooks/use-debug-mode"
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -22,6 +23,7 @@ export default function Header() {
   const pathname = usePathname()
   const [cartCount, setCartCount] = useState(0)
   const { data: session, status } = useSession()
+  const { debugLog } = useDebugLogger()
 
   const getTotalItems = () => {
     return cart.reduce((total, item) => {
@@ -64,7 +66,7 @@ export default function Header() {
 
   const handleSignOut = async () => {
     try {
-      console.log('🚪 Starting signout process...');
+      debugLog('🚪 Starting signout process...');
       
       // First, clear all authentication cookies
       const clearResponse = await fetch('/api/clear-auth', {
@@ -75,7 +77,7 @@ export default function Header() {
       });
       
       if (clearResponse.ok) {
-        console.log('🧹 Authentication cookies cleared');
+        debugLog('🧹 Authentication cookies cleared');
       }
       
       // Then use NextAuth signOut without redirect
@@ -139,7 +141,7 @@ export default function Header() {
         <div className="flex items-center gap-5">
           <Link href="/cart" className="text-pink-600 hover:text-pink-800 transition-all hover:scale-125 relative">
             <ShoppingBagIcon className="h-6 w-6" />
-            <span className="sr-only">Cart</span>
+            <span className="sr-only">My Bag</span>
             {cartCount > 0 && (
               <span className="absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-xs font-bold text-white animate-pulse shadow-lg">
                 {cartCount}

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { ViewService } from '@/lib/services/viewService';
 import db from '@/lib/db';
 import { cookies } from 'next/headers';
 import { verifyJWT } from '@/lib/middleware/auth';
@@ -132,18 +133,26 @@ export async function DELETE(
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
+    let decoded;
     try {
-      verifyJWT(adminToken, 'admin');
+      decoded = verifyJWT(adminToken, 'admin') as any;
     } catch (error) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
-    // Delete the flavor (flavor_images will be deleted automatically due to CASCADE)
-    await db.query('DELETE FROM flavors WHERE id = ?', [params.id]);
+    const adminUserId = decoded.id;
+    const flavorId = parseInt(params.id);
+
+    // Use ViewService to soft delete the flavor
+    const success = await ViewService.softDelete('flavors', flavorId, adminUserId, 'Deleted via admin interface');
+
+    if (!success) {
+      return new NextResponse('Failed to soft delete flavor', { status: 500 });
+    }
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error('Error deleting flavor:', error);
+    console.error('Error soft deleting flavor:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

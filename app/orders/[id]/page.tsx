@@ -42,10 +42,11 @@ interface Order {
     unit_price: number
     product_name: string
     product_type: string
-    flavors: Array<{
+    pack_size?: string
+    flavors?: Array<{
       flavor_name: string
-      flavor_quantity: number
-      size_label: string
+      size_name: string
+      quantity: number
     }>
   }>
 }
@@ -181,7 +182,9 @@ export default function OrderDetailsPage() {
                         <div className="flex justify-between items-start mb-3">
                           <div>
                             <h4 className="font-medium text-gray-900">{item.product_name}</h4>
-                            <p className="text-sm text-gray-600">{item.product_type}</p>
+                            <p className="text-sm text-gray-600">
+                              {item.product_type} {item.pack_size ? `- ${item.pack_size}` : ''}
+                            </p>
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-gray-900">
@@ -200,10 +203,10 @@ export default function OrderDetailsPage() {
                               {item.flavors.map((flavor, index) => (
                                 <div key={index} className="flex justify-between text-sm">
                                   <span className="text-gray-700">
-                                    {flavor.flavor_name} ({flavor.size_label})
+                                    {flavor.flavor_name} ({flavor.size_name})
                                   </span>
                                   <span className="text-gray-600">
-                                    {flavor.flavor_quantity}x
+                                    {flavor.quantity}x
                                   </span>
                                 </div>
                               ))}

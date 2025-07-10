@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS carts;
 CREATE TABLE IF NOT EXISTS cart_settings (
     id INT PRIMARY KEY AUTO_INCREMENT,
     cart_lifetime_days INT NOT NULL DEFAULT 2,
+    debug_mode BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -48,4 +49,4 @@ CREATE TABLE IF NOT EXISTS cart_item_flavors (
 );
 
 -- Insert default cart settings
-INSERT INTO cart_settings (cart_lifetime_days) VALUES (2); 
+INSERT INTO cart_settings (cart_lifetime_days, debug_mode) VALUES (2, FALSE); 

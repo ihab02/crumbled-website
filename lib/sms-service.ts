@@ -3,6 +3,7 @@
 
 import { databaseService } from './services/databaseService';
 import axios from 'axios';
+import { debugLog } from './debug-utils';
 
 interface CustomSMSConfig {
   baseUrl: string
@@ -32,7 +33,7 @@ class CustomSMSService {
       senderName: "Manex",
     }
 
-    console.log("SMS Service initialized with config:", {
+    debugLog("SMS Service initialized with config:", {
       baseUrl: this.config.baseUrl,
       senderName: this.config.senderName,
     })
@@ -45,11 +46,11 @@ class CustomSMSService {
       
       // In development, log to console instead of sending SMS
       if (process.env.NODE_ENV === 'development') {
-        console.log('📱 [DEV MODE] SMS would be sent:')
-        console.log('   To:', formattedPhone)
-        console.log('   Message:', message)
-        console.log('   Sender:', this.config.senderName)
-        console.log('   URL:', `${this.config.baseUrl}/sendSMS`)
+        debugLog('📱 [DEV MODE] SMS would be sent:')
+        debugLog('   To:', formattedPhone)
+        debugLog('   Message:', message)
+        debugLog('   Sender:', this.config.senderName)
+        debugLog('   URL:', `${this.config.baseUrl}/sendSMS`)
         
         return {
           success: true,
@@ -62,8 +63,8 @@ class CustomSMSService {
 
       const smsUrl = `${this.config.baseUrl}/sendSMS`
 
-      console.log(`🚀 Sending SMS to ${formattedPhone}`)
-      console.log(`📡 SMS URL: ${smsUrl}`)
+      debugLog(`🚀 Sending SMS to ${formattedPhone}`)
+      debugLog(`📡 SMS URL: ${smsUrl}`)
 
       const payload = {
         senderName: this.config.senderName,
@@ -73,7 +74,7 @@ class CustomSMSService {
         messageText: message,
       }
 
-      console.log("📦 SMS Payload:", JSON.stringify(payload, null, 2))
+      debugLog("📦 SMS Payload:", JSON.stringify(payload, null, 2))
 
       // Add timeout to the fetch request
       const controller = new AbortController()
@@ -81,7 +82,7 @@ class CustomSMSService {
 
       let response: Response
       try {
-        console.log("📤 Sending SMS request...")
+        debugLog("📤 Sending SMS request...")
         response = await fetch(smsUrl, {
           method: "POST",
           headers: {
@@ -92,7 +93,7 @@ class CustomSMSService {
           body: JSON.stringify(payload),
           signal: controller.signal,
         })
-        console.log("📥 Received SMS response")
+        debugLog("📥 Received SMS response")
       } catch (fetchError) {
         clearTimeout(timeoutId)
         console.error("❌ SMS request failed:", fetchError)
@@ -104,12 +105,12 @@ class CustomSMSService {
 
       clearTimeout(timeoutId)
 
-      console.log(`📨 SMS Response Status: ${response.status} ${response.statusText}`)
+      debugLog(`📨 SMS Response Status: ${response.status} ${response.statusText}`)
 
       let responseText: string
       try {
         responseText = await response.text()
-        console.log("📨 SMS Response Body:", responseText)
+        debugLog("📨 SMS Response Body:", responseText)
       } catch (textError) {
         console.error("❌ Failed to read SMS response:", textError)
         throw new Error("Failed to read SMS service response")
@@ -118,9 +119,9 @@ class CustomSMSService {
       let result: any
       try {
         result = JSON.parse(responseText)
-        console.log("✅ Parsed JSON response:", result)
+        debugLog("✅ Parsed JSON response:", result)
       } catch (parseError) {
-        console.log("⚠️ Response is not JSON, treating as text")
+        debugLog("⚠️ Response is not JSON, treating as text")
         result = {
           rawResponse: responseText,
           success: response.ok,
@@ -155,44 +156,44 @@ class CustomSMSService {
     // Remove all non-digit characters except +
     let cleaned = phone.replace(/[^\d+]/g, "")
 
-    console.log(`📞 Original phone: "${phone}" -> Cleaned: "${cleaned}"`)
+    debugLog(`📞 Original phone: "${phone}" -> Cleaned: "${cleaned}"`)
 
     // Handle different Egyptian phone number formats
     if (cleaned.startsWith("+20")) {
       cleaned = cleaned.substring(3)
-      console.log("🇪🇬 Removed +20 prefix:", cleaned)
+      debugLog("🇪🇬 Removed +20 prefix:", cleaned)
     } else if (cleaned.startsWith("20")) {
       cleaned = cleaned.substring(2)
-      console.log("🇪🇬 Removed 20 prefix:", cleaned)
+      debugLog("🇪🇬 Removed 20 prefix:", cleaned)
     }
 
     // Ensure it starts with 0 for Egyptian format
     if (!cleaned.startsWith("0")) {
       cleaned = "0" + cleaned
-      console.log("🔢 Added leading 0:", cleaned)
+      debugLog("🔢 Added leading 0:", cleaned)
     }
 
     // Validate Egyptian mobile number format (11 digits starting with 01)
     if (cleaned.length === 11 && cleaned.startsWith("01")) {
-      console.log("✅ Valid Egyptian mobile format:", cleaned)
+      debugLog("✅ Valid Egyptian mobile format:", cleaned)
       return cleaned
     }
 
     // If it's 10 digits starting with 1, add the 0
     if (cleaned.length === 10 && cleaned.startsWith("1")) {
       const formatted = "0" + cleaned
-      console.log("✅ Added 0 to 10-digit number:", formatted)
+      debugLog("✅ Added 0 to 10-digit number:", formatted)
       return formatted
     }
 
-    console.log("⚠️ Using phone as-is (might not be standard Egyptian format):", cleaned)
+    debugLog("⚠️ Using phone as-is (might not be standard Egyptian format):", cleaned)
     return cleaned
   }
 
   // Test method to verify SMS service is working
   async testConnection(): Promise<{ success: boolean; message: string; details?: any }> {
     try {
-      console.log("🧪 Testing SMS service connection...")
+      debugLog("🧪 Testing SMS service connection...")
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
@@ -213,7 +214,7 @@ class CustomSMSService {
       clearTimeout(timeoutId)
 
       const responseText = await testResponse.text()
-      console.log(`🧪 Test response: ${testResponse.status} - ${responseText}`)
+      debugLog(`🧪 Test response: ${testResponse.status} - ${responseText}`)
 
       return {
         success: testResponse.status < 500,
@@ -245,26 +246,26 @@ export async function sendVerificationCode(phoneNumber: string, existingOtp?: st
   try {
     // Format phone number
     const formattedPhone = phoneNumber.replace(/\D/g, "")
-    console.log('📱 [SMS Service] Original phone:', phoneNumber)
-    console.log('📱 [SMS Service] Formatted phone:', formattedPhone)
+    debugLog('📱 [SMS Service] Original phone:', phoneNumber)
+    debugLog('📱 [SMS Service] Formatted phone:', formattedPhone)
 
     // Use existing OTP or generate a new one
     const code = existingOtp || Math.floor(100000 + Math.random() * 900000).toString()
-    console.log('🔑 [SMS Service] OTP code:', code)
+    debugLog('🔑 [SMS Service] OTP code:', code)
 
     // Always send the SMS
     await smsService.sendVerificationCode(formattedPhone, code)
 
     // Store the verification code in MySQL (always store, whether existing or new)
-    console.log('⏰ [SMS Service] Storing OTP with 10-minute expiration');
-    console.log('💾 [SMS Service] Inserting into database:', { phone: formattedPhone, code })
+    debugLog('⏰ [SMS Service] Storing OTP with 10-minute expiration');
+    debugLog('💾 [SMS Service] Inserting into database:', { phone: formattedPhone, code })
 
     const result = await databaseService.query(
       'INSERT INTO phone_verification (phone, verification_code, expires_at) VALUES (?, ?, NOW() + INTERVAL 10 MINUTE)',
       [formattedPhone, code]
     );
     
-    console.log('✅ [SMS Service] Database insert result:', result)
+    debugLog('✅ [SMS Service] Database insert result:', result)
 
     return { success: true }
   } catch (error) {
@@ -356,7 +357,7 @@ async function isRateLimited(phone: string): Promise<boolean> {
     const record = result.rows[0] as RateLimitRecord;
     return record.request_count > RATE_LIMIT.maxRequests;
   } catch (error) {
-    console.error('Rate limit check error:', error);
+    debugLog('Rate limit check error:', error);
     // If there's an error checking rate limit, allow the request
     return false;
   }
@@ -445,7 +446,7 @@ async function sendSMSWithRetry(
       };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Unknown error');
-      console.error(`SMS sending attempt ${attempt} failed:`, error);
+      debugLog(`SMS sending attempt ${attempt} failed:`, error);
 
       // Log failed attempt
       await databaseService.query(

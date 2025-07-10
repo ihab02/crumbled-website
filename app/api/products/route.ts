@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { generatePackImage } from '@/utils/generatePackImage';
+import { ViewService } from '@/lib/services/viewService';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import { verifyJWT } from '@/lib/middleware/auth';
 
 interface Product {
   id: number;
@@ -21,32 +25,61 @@ interface Product {
   is_available: boolean;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    let connection;
-    try {
-      connection = await pool.getConnection();
-      const [products] = await connection.query(`
-        SELECT p.*, pt.name as product_type_name
-        FROM products p
-        JOIN product_types pt ON p.product_type_id = pt.id
-        ORDER BY p.display_order ASC
-      `);
-
-      // Convert base_price to number and add stock fields
-      const productsWithNumbers = products.map((p: Product) => ({
-        ...p,
-        base_price: typeof p.base_price === 'string' ? parseFloat(p.base_price) : p.base_price,
-        stock_quantity: parseInt(String(p.stock_quantity)) || 0,
-        is_available: Boolean(p.is_available)
-      }));
-
-      return NextResponse.json({ success: true, data: productsWithNumbers });
-    } finally {
-      if (connection) {
-        connection.release();
+    const { searchParams } = new URL(request.url);
+    const showDeleted = searchParams.get('show_deleted') === 'true';
+    
+    // Check if this is an admin request using both NextAuth and custom admin token
+    const session = await getServerSession(authOptions);
+    const adminToken = request.cookies.get('adminToken')?.value;
+    
+    let isAdmin = false;
+    let adminUser = null;
+    
+    // Check NextAuth session first
+    if (session?.user?.id && session?.user?.email?.includes('admin')) {
+      isAdmin = true;
+      adminUser = session.user;
+    }
+    
+    // Check custom admin token if NextAuth didn't work
+    if (!isAdmin && adminToken) {
+      try {
+        const decoded = await verifyJWT(adminToken, 'admin') as any;
+        isAdmin = decoded.type === 'admin';
+        adminUser = { id: decoded.id, email: decoded.email || 'admin@example.com' };
+      } catch (error) {
+        console.log('Admin token verification failed:', error);
       }
     }
+    
+    // Debug logging
+    console.log('Products API Debug:', {
+      session: session ? { id: session.user?.id, email: session.user?.email } : null,
+      adminToken: adminToken ? 'Present' : 'Not found',
+      isAdmin,
+      adminUser,
+      showDeleted,
+      shouldShowDeleted: isAdmin && showDeleted
+    });
+    
+    // For customer-facing requests, always use active view
+    // For admin requests, respect the show_deleted parameter
+    const shouldShowDeleted = isAdmin && showDeleted;
+    
+    // Get products using ViewService
+    const products = await ViewService.getProducts(shouldShowDeleted);
+    
+    // Convert base_price to number and add stock fields
+    const productsWithNumbers = products.map((p: Product) => ({
+      ...p,
+      base_price: typeof p.base_price === 'string' ? parseFloat(p.base_price) : p.base_price,
+      stock_quantity: parseInt(String(p.stock_quantity)) || 0,
+      is_available: Boolean(p.is_available)
+    }));
+
+    return NextResponse.json({ success: true, data: productsWithNumbers });
   } catch (error) {
     console.error('Error fetching products:', error);
     return NextResponse.json(
@@ -240,6 +273,57 @@ export async function PUT(request: Request) {
     }
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to update product' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Soft delete a product
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get('id');
+    const reason = searchParams.get('reason') || 'No reason provided';
+
+    if (!productId) {
+      return NextResponse.json(
+        { success: false, error: 'Product ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const success = await ViewService.softDelete(
+      'products',
+      parseInt(productId),
+      parseInt(session.user.id),
+      reason
+    );
+
+    if (success) {
+      revalidatePath('/admin/products');
+      return NextResponse.json({
+        success: true,
+        message: 'Product soft deleted successfully'
+      });
+    } else {
+      return NextResponse.json(
+        { success: false, error: 'Failed to soft delete product' },
+        { status: 500 }
+      );
+    }
+  } catch (error) {
+    console.error('Error soft deleting product:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to soft delete product' },
       { status: 500 }
     );
   }

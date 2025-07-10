@@ -10,6 +10,7 @@ import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft, RefreshCw } from "lucide-r
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import Image from "next/image"
+import { useDebugLogger } from "@/hooks/use-debug-mode"
 
 // Types matching the API response
 interface CartItemFlavor {
@@ -42,6 +43,7 @@ interface CartResponse {
 
 export default function CartPage() {
   const router = useRouter()
+  const { debugLog } = useDebugLogger()
   const [promoCode, setPromoCode] = useState('')
   const [discount, setDiscount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -58,25 +60,25 @@ export default function CartPage() {
     try {
       setIsLoading(true)
       const response = await fetch('/api/cart')
-      console.log('📡 Cart API response status:', response.status)
+      debugLog('📡 Cart API response status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log('📦 Cart data received:', data)
-        console.log('📦 Cart items count:', data.items?.length || 0)
-        console.log('💰 Cart total:', data.total)
+        debugLog('📦 Cart data received:', data)
+        debugLog('📦 Cart items count:', data.items?.length || 0)
+        debugLog('💰 Cart total:', data.total)
         
         if (data.items && data.items.length > 0) {
           setCartItems(data.items)
-          console.log('✅ Cart items set successfully:', data.items.length, 'items')
+          debugLog('✅ Cart items set successfully:', data.items.length, 'items')
           
           // Log each item for debugging
           data.items.forEach((item: any, index: number) => {
-            console.log(`📋 Item ${index + 1}:`, item)
+            debugLog(`📋 Item ${index + 1}:`, item)
           })
         } else {
           setCartItems([])
-          console.log('📭 Cart is empty')
+          debugLog('📭 Cart is empty')
         }
       } else {
         console.error('❌ Failed to fetch cart:', response.status)
@@ -98,7 +100,7 @@ export default function CartPage() {
 
   const handleRemoveItem = async (itemId: number) => {
     try {
-      console.log("🗑️ Removing item:", itemId)
+      debugLog("🗑️ Removing item:", itemId)
       
       const response = await fetch('/api/cart', {
         method: 'DELETE',
@@ -114,7 +116,7 @@ export default function CartPage() {
       }
 
       const data = await response.json()
-      console.log("🗑️ Remove response:", data)
+      debugLog("🗑️ Remove response:", data)
       
       if (data.success) {
         setCartItems(prev => prev.filter(item => item.id !== itemId))
@@ -161,7 +163,7 @@ export default function CartPage() {
     if (newQuantity < 1) return
 
     try {
-      console.log("🔄 Updating quantity for item:", itemId, "to:", newQuantity)
+      debugLog("🔄 Updating quantity for item:", itemId, "to:", newQuantity)
       
       const response = await fetch('/api/cart/update', {
         method: 'PUT',
@@ -180,7 +182,7 @@ export default function CartPage() {
       }
 
       const data = await response.json()
-      console.log("🔄 Update response:", data)
+      debugLog("🔄 Update response:", data)
       
       if (data.success) {
         // Update local state immediately for better UX
@@ -217,7 +219,7 @@ export default function CartPage() {
   }
 
   const hasItems = cartItems.length > 0
-  console.log("🎨 Render - hasItems:", hasItems, "cartItems length:", cartItems.length)
+  debugLog("🎨 Render - hasItems:", hasItems, "cartItems length:", cartItems.length)
 
   if (error) {
     return (
@@ -332,7 +334,7 @@ export default function CartPage() {
                 <div className="space-y-4 sm:space-y-6">
                   {cartItems.map((item, index) => {
                     const itemTotal = calculateItemTotal(item)
-                    console.log(`🎨 Rendering item ${item.id}:`, {
+                    debugLog(`🎨 Rendering item ${item.id}:`, {
                       name: item.name,
                       isPack: item.isPack,
                       flavorsCount: item.flavors?.length || 0,

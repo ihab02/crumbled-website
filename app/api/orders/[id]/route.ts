@@ -67,60 +67,54 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const itemsArray = Array.isArray(itemsResult) ? itemsResult : (itemsResult ? [itemsResult] : []);
 
-    // Get flavor details for each order item separately
+    // Get flavor details for each order item
     const itemsWithFlavors = await Promise.all(itemsArray.map(async (item: any) => {
-      const flavorResult = await databaseService.query(
-        `SELECT f.name, pif.quantity
-         FROM product_instance_flavor pif
-         JOIN flavors f ON pif.flavor_id = f.id
-         WHERE pif.product_instance_id = ?`,
-        [item.product_instance_id]
-      );
-
-      const flavorArray = Array.isArray(flavorResult) ? flavorResult : (flavorResult ? [flavorResult] : []);
-      const flavorDetails = flavorArray.map((f: any) => `${f.name} (${f.quantity}x)`).join(', ');
-
+      // Try to use the new columns if available
+      let flavors = [];
+      let isPack = item.product_type === 'pack';
+      if (isPack) {
+        // Try to get from product_instance_flavor (new columns)
+        const flavorResult = await databaseService.query(
+          `SELECT 
+            COALESCE(pif.flavor_name, f.name) as flavor_name,
+            COALESCE(pif.size_name, 
+              CASE pif.size_id WHEN 1 THEN 'Mini' WHEN 2 THEN 'Medium' WHEN 3 THEN 'Large' ELSE 'Unknown' END
+            ) as size_name,
+            pif.quantity
+           FROM product_instance_flavor pif
+           LEFT JOIN flavors f ON pif.flavor_id = f.id
+           WHERE pif.product_instance_id = ?`,
+          [item.product_instance_id]
+        );
+        flavors = (Array.isArray(flavorResult) ? flavorResult : (flavorResult ? [flavorResult] : []))
+          .map((f: any) => ({
+            flavor_name: f.flavor_name,
+            size_name: f.size_name,
+            quantity: f.quantity
+          }));
+      }
       return {
-        ...item,
-        flavor_details: flavorDetails
+        id: item.id,
+        product_name: item.product_name || item.product_name,
+        product_type: item.product_type,
+        pack_size: item.pack_size || null, // This comes from order_items table
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        flavors: isPack ? flavors : [],
       };
     }));
 
-    // Calculate totals from order items including flavor costs
+    // Calculate totals from order items
     let subtotal = 0;
     for (const item of itemsWithFlavors) {
-      // Get flavor details for this item to calculate total cost including flavors
-      const flavorResult = await databaseService.query(
-        `SELECT f.name, pif.quantity, 
-                CASE 
-                  WHEN pif.size_id = 1 THEN f.mini_price
-                  WHEN pif.size_id = 2 THEN f.medium_price
-                  WHEN pif.size_id = 3 THEN f.large_price
-                  ELSE f.large_price
-                END as flavor_price
-         FROM product_instance_flavor pif
-         JOIN flavors f ON pif.flavor_id = f.id
-         WHERE pif.product_instance_id = ?`,
-        [item.product_instance_id]
-      );
-
-      const flavorArray = Array.isArray(flavorResult) ? flavorResult : (flavorResult ? [flavorResult] : []);
-      
-      // Calculate flavor costs
-      const flavorCost = flavorArray.reduce((flavorSum: number, flavor: any) => {
-        return flavorSum + (Number(flavor.flavor_price) * Number(flavor.quantity));
-      }, 0);
-
-      // Total item cost = base price + flavor costs
-      const itemTotal = (Number(item.unit_price) * Number(item.quantity)) + flavorCost;
-      subtotal += itemTotal;
+      subtotal += Number(item.unit_price) * Number(item.quantity);
     }
 
     // Default values for missing columns
     const deliveryFee = order.delivery_fee || 30.00;
     const calculatedSubtotal = order.subtotal || subtotal;
 
-    // Format the order data with fallback values for missing columns
+    // Format the order data
     const formattedOrder = {
       id: order.id,
       order_status: order.status,
@@ -136,13 +130,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       total_amount: order.total, // Use the total from orders table
       payment_method: order.payment_method || 'cash',
       created_at: order.created_at,
-      items: itemsWithFlavors.map((item: any) => ({
-        id: item.id,
-        product_name: item.product_name || 'Unknown Product',
-        quantity: item.quantity,
-        price: item.unit_price,
-        flavor_details: item.flavor_details || 'No flavors specified'
-      }))
+      items: itemsWithFlavors
     };
 
     console.log('🔍 [DEBUG] Orders API - Formatted order data:', formattedOrder);

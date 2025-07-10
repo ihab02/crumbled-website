@@ -8,9 +8,11 @@ import { CheckCircle, Package, Mail, Copy, ExternalLink, MapPin, User, Phone, Al
 import Link from "next/link"
 import { buttonStyles } from "@/lib/button-styles"
 import { toast } from "react-hot-toast"
+import { useDebugLogger } from "@/hooks/use-debug-mode"
 
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams()
+  const { debugLog } = useDebugLogger()
   const [orderInfo, setOrderInfo] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,22 +26,22 @@ export default function CheckoutSuccessPage() {
         const orderId = searchParams.get('orderId')
         
         if (orderId) {
-          console.log('🔍 [DEBUG] Success page - Fetching order ID:', orderId)
+          debugLog('🔍 [DEBUG] Success page - Fetching order ID:', orderId)
           
           // Fetch order details from API
           const response = await fetch(`/api/orders/${orderId}`)
           const data = await response.json()
           
           if (response.ok && data.success) {
-            console.log('🔍 [DEBUG] Success page - Order data received:', data.order)
-            console.log('🔍 [DEBUG] Success page - Order items:', data.order.items)
-            console.log('🔍 [DEBUG] Success page - Order totals:', {
+            debugLog('🔍 [DEBUG] Success page - Order data received:', data.order)
+            debugLog('🔍 [DEBUG] Success page - Order items:', data.order.items)
+            debugLog('🔍 [DEBUG] Success page - Order totals:', {
               subtotal: data.order.subtotal,
               delivery_fee: data.order.delivery_fee,
               total_amount: data.order.total_amount,
               payment_method: data.order.payment_method
             })
-            console.log('🔍 [DEBUG] Success page - Delivery info:', {
+            debugLog('🔍 [DEBUG] Success page - Delivery info:', {
               address: data.order.delivery_address,
               additional_info: data.order.delivery_additional_info,
               city: data.order.delivery_city,
@@ -48,26 +50,26 @@ export default function CheckoutSuccessPage() {
             setOrderInfo(data.order)
             setError(null)
           } else {
-            console.error('❌ [DEBUG] Success page - Failed to load order details:', data.error)
+            debugLog('❌ [DEBUG] Success page - Failed to load order details:', data.error)
             setError(data.error || 'Failed to load order details')
             toast.error('Failed to load order details')
           }
         } else {
-          console.log('🔍 [DEBUG] Success page - No order ID in URL, checking localStorage')
+          debugLog('🔍 [DEBUG] Success page - No order ID in URL, checking localStorage')
           // Fallback to localStorage
           const savedOrderInfo = localStorage.getItem("lastOrder")
           if (savedOrderInfo) {
-            console.log('🔍 [DEBUG] Success page - Found order info in localStorage')
+            debugLog('🔍 [DEBUG] Success page - Found order info in localStorage')
             setOrderInfo(JSON.parse(savedOrderInfo))
             localStorage.removeItem("lastOrder") // Clean up
             setError(null)
           } else {
-            console.log('🔍 [DEBUG] Success page - No order info found anywhere')
+            debugLog('🔍 [DEBUG] Success page - No order info found anywhere')
             setError('No order information found')
           }
         }
       } catch (error) {
-        console.error('❌ [DEBUG] Success page - Error fetching order info:', error)
+        debugLog('❌ [DEBUG] Success page - Error fetching order info:', error)
         setError('Failed to load order details')
         toast.error('Failed to load order details')
       } finally {

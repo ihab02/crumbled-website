@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Pencil, Trash2, Check, X, GripVertical, Upload, Package, Cookie } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, GripVertical, Upload, Package, Cookie, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { ViewToggle } from '@/components/admin/ViewToggle';
+import { useViewPreferences } from '@/hooks/use-view-preferences';
 import {
   Dialog,
   DialogContent,
@@ -71,6 +73,10 @@ interface Product {
   display_order: number;
   created_at: string;
   updated_at: string;
+  status?: 'active' | 'disabled' | 'deleted';
+  deleted_at?: string;
+  deleted_by?: number;
+  deletion_reason?: string;
 }
 
 interface FormData {
@@ -85,10 +91,11 @@ interface FormData {
   image_url: string;
 }
 
-function SortableTableRow({ product, onEdit, onDelete }: { 
+function SortableTableRow({ product, onEdit, onDelete, onRestore }: { 
   product: Product; 
   onEdit: (product: Product) => void;
   onDelete: (id: number) => void;
+  onRestore: (id: number) => void;
 }) {
   const {
     attributes,
@@ -113,6 +120,11 @@ function SortableTableRow({ product, onEdit, onDelete }: {
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(product.id);
+  };
+
+  const handleRestoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRestore(product.id);
   };
 
   return (
@@ -163,24 +175,48 @@ function SortableTableRow({ product, onEdit, onDelete }: {
       <TableCell className="min-w-[120px] font-medium">
         {product.base_price.toFixed(2)} EGP
       </TableCell>
-      <TableCell className="w-[100px]">
+      <TableCell className="min-w-[100px]">
+        {product.status && (
+          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+            product.status === 'active' ? 'bg-green-100 text-green-800' :
+            product.status === 'disabled' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }`}>
+            {product.status}
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="w-[120px]">
         <div className="flex items-center space-x-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleEditClick}
-            className="hover:bg-gray-100"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDeleteClick}
-            className="hover:bg-gray-100"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {product.status !== 'deleted' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleEditClick}
+              className="hover:bg-gray-100"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+          {product.status === 'deleted' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRestoreClick}
+              className="hover:bg-green-100 text-green-600"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeleteClick}
+              className="hover:bg-red-100 text-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </TableCell>
     </TableRow>
@@ -194,6 +230,8 @@ export default function AdminProductsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { preferences, toggleShowDeleted } = useViewPreferences('products');
+  const [deletedCount, setDeletedCount] = useState(0);
   const [formData, setFormData] = useState<FormData>({
     name: '',
     description: '',
@@ -218,14 +256,17 @@ export default function AdminProductsPage() {
   useEffect(() => {
     fetchProducts();
     fetchProductTypes();
-  }, []);
+  }, [preferences.show_deleted]);
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/products');
+      const response = await fetch(`/api/products?show_deleted=${preferences.show_deleted}`);
       const data = await response.json();
       if (data.success) {
         setProducts(data.data || []);
+        // Count deleted items for the badge
+        const deletedItems = data.data.filter((p: Product) => p.status === 'deleted');
+        setDeletedCount(deletedItems.length);
       } else {
         setProducts([]);
       }
@@ -411,7 +452,7 @@ export default function AdminProductsPage() {
     }
 
     try {
-      const response = await fetch(`/api/products/${id}`, {
+      const response = await fetch(`/api/products?id=${id}`, {
         method: 'DELETE',
       });
 
@@ -427,10 +468,43 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleRestore = async (id: number) => {
+    if (!confirm('Are you sure you want to restore this product?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/products/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ productId: id }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to restore product');
+      }
+
+      toast.success('Product restored successfully');
+      fetchProducts();
+    } catch (error) {
+      console.error('Error restoring product:', error);
+      toast.error('Failed to restore product');
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Products</h1>
+        <div className="flex items-center space-x-4">
+          <h1 className="text-2xl font-bold">Products</h1>
+          <ViewToggle 
+            viewType="products" 
+            deletedCount={deletedCount}
+            onToggle={toggleShowDeleted}
+          />
+        </div>
         <Button onClick={() => {
           setEditingProduct(null);
           setFormData({
@@ -468,7 +542,8 @@ export default function AdminProductsPage() {
                   <TableHead className="min-w-[150px]">Type</TableHead>
                   <TableHead className="min-w-[150px]">Pack Info</TableHead>
                   <TableHead className="min-w-[120px]">Price</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
+                  <TableHead className="min-w-[100px]">Status</TableHead>
+                  <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -482,6 +557,7 @@ export default function AdminProductsPage() {
                       product={product}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
+                      onRestore={handleRestore}
                     />
                   ))}
                 </SortableContext>

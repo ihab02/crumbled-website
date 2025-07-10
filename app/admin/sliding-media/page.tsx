@@ -16,6 +16,7 @@ import Image from 'next/image';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 
 interface SlidingMedia {
   id: number;
@@ -146,6 +147,7 @@ function SortableMediaCard({ mediaItem, onEdit, onDelete, onToggleActive }: {
 }
 
 export default function SlidingMediaPage() {
+  const { debugLog } = useDebugLogger();
   const [media, setMedia] = useState<SlidingMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingMedia, setEditingMedia] = useState<SlidingMedia | null>(null);
@@ -470,7 +472,7 @@ export default function SlidingMediaPage() {
           ...item,
           display_order: index
         }));
-        console.log('Updated media order:', updatedMedia.map(item => ({ id: item.id, order: item.display_order })));
+        debugLog('Updated media order:', updatedMedia.map(item => ({ id: item.id, order: item.display_order })));
         setMedia(updatedMedia);
         setOrderChanged(true);
       }
@@ -480,7 +482,7 @@ export default function SlidingMediaPage() {
   const saveOrder = async () => {
     try {
       const updates = media.map((item, idx) => ({ id: item.id, display_order: idx }));
-      console.log('Saving order updates:', updates);
+      debugLog('Saving order updates:', updates);
       const response = await fetch('/api/admin/sliding-media', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

@@ -47,10 +47,11 @@ interface Order {
     unit_price: number;
     product_name: string;
     product_type: string;
+    pack_size?: string;
     flavors?: Array<{
       flavor_name: string;
-      flavor_quantity: number;
-      size_label: string;
+      size_name: string;
+      quantity: number;
     }>;
   }>;
 }
@@ -376,8 +377,7 @@ export default function AdminOrdersPage() {
                         ${item.flavors && item.flavors.length > 0 ? `
                           <div class="flavor-details">
                             ${item.flavors.map(flavor => `
-                              • ${flavor.flavor_name} (${flavor.flavor_quantity}x) - ${flavor.size_label}
-
+                              • ${flavor.flavor_name} (${flavor.quantity}x) - ${flavor.size_name}
                             `).join('')}
                           </div>
                         ` : ''}
@@ -1185,15 +1185,14 @@ export default function AdminOrdersPage() {
                                 {item.product_name || 'Unknown Product'}
                               </p>
                               <p className="text-sm text-gray-500">
-                                Type: {item.product_type} | Qty: {item.quantity}
+                                Type: {item.product_type} {item.pack_size ? `| Size: ${item.pack_size}` : ''} | Qty: {item.quantity}
                               </p>
                               {item.flavors && item.flavors.length > 0 && (
                                 <div className="mt-1">
                                   <p className="text-xs text-gray-500 font-medium">Flavors:</p>
                                   {item.flavors.map((flavor, flavorIndex) => (
                                     <p key={flavorIndex} className="text-xs text-gray-500 ml-2">
-                                      • {flavor.flavor_name} ({flavor.flavor_quantity}x) - {flavor.size_label}
-
+                                      • {flavor.flavor_name} ({flavor.quantity}x) - {flavor.size_name}
                                     </p>
                                   ))}
                                 </div>

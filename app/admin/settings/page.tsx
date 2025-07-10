@@ -4,14 +4,19 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { Mail, ShoppingCart, CreditCard } from 'lucide-react';
+import { Mail, ShoppingCart, CreditCard, Bug } from 'lucide-react';
+import { DebugDemo } from '@/components/debug-demo';
+import { DebugTest } from '@/components/debug-test';
+import { useDebugMode } from '@/hooks/use-debug-mode';
 
 export default function SettingsPage() {
   const [cartLifetime, setCartLifetime] = useState(2);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const { isDebugMode, setDebugMode } = useDebugMode();
 
   useEffect(() => {
     fetchSettings();
@@ -24,6 +29,7 @@ export default function SettingsPage() {
       
       if (data.success) {
         setCartLifetime(data.settings.cart_lifetime_days);
+        // Debug mode is managed by the context, no need to set it here
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -43,6 +49,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           cart_lifetime_days: cartLifetime,
+          debug_mode: isDebugMode,
         }),
       });
 
@@ -76,6 +83,9 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
+      
+      <DebugDemo />
+      <DebugTest />
       
       <div className="grid gap-6">
         <Card>
@@ -132,6 +142,33 @@ export default function SettingsPage() {
                   Manage Payment Methods
                 </Button>
               </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bug className="h-5 w-5" />
+              Debug Settings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Debug Mode
+                  </label>
+                  <p className="text-sm text-gray-500">
+                    Enable detailed logging for troubleshooting and development
+                  </p>
+                </div>
+                <Switch
+                  checked={isDebugMode}
+                  onCheckedChange={setDebugMode}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
