@@ -43,10 +43,7 @@ export interface CreateBatchData {
   order_ids: number[];
   priority?: BatchPriority;
   notes?: string;
-<<<<<<< HEAD
-=======
   created_by: number;
->>>>>>> softdeletion
 }
 
 export interface UpdateBatchData {
