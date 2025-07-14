@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     let whereConditions = ['n.kitchen_id = ?'];
-    const params: any[] = [authResult.kitchenId];
+    const params: any[] = [authResult.user.selectedKitchen.id];
     
     if (type) {
       whereConditions.push('n.type = ?');
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       UPDATE kitchen_notifications 
       SET is_read = true, read_at = NOW()
       WHERE id = ? AND kitchen_id = ?
-    `, [notificationId, authResult.kitchenId]);
+    `, [notificationId, authResult.user.selectedKitchen.id]);
 
     return NextResponse.json({
       success: true,

@@ -262,4 +262,7 @@ export class EmailService {
       throw error;
     }
   }
-} 
+}
+
+// Export a default instance
+export const emailService = EmailService;

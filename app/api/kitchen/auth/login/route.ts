@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const loginResult = await kitchenAuthService.login(username, password, kitchenId);
+    const loginResult = await kitchenAuthService.login(username, password);
     
     if (!loginResult.success) {
       return NextResponse.json(

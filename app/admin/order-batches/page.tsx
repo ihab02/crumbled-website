@@ -159,8 +159,8 @@ export default function OrderBatchesPage() {
     }
   };
 
-  const getStatusColor = (status: OrderBatch['status']) => {
-    switch (status) {
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'processing':

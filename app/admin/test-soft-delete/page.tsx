@@ -136,10 +136,11 @@ export default function TestSoftDeletePage() {
           <ViewToggle 
             viewType="products" 
             deletedCount={5}
-            onToggle={(showDeleted) => {
-              console.log('Toggle changed:', showDeleted);
-              testProductsAPI(showDeleted);
+            onToggle={() => {
+              console.log('Toggle changed');
+              testProductsAPI(true);
             }}
+            checked={false}
           />
         </CardContent>
       </Card>

@@ -21,17 +21,15 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     const filters: any = {
-      kitchenId: authResult.kitchenId
+      kitchenId: authResult.user.selectedKitchen.id
     };
     
     if (status) filters.status = status;
     if (priority) filters.priority = priority;
 
     const orders = await orderProcessingService.getKitchenOrders(
-      authResult.kitchenId,
-      filters,
-      limit,
-      offset
+      authResult.user.selectedKitchen.id,
+      filters
     );
     
     return NextResponse.json({
@@ -70,24 +68,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const updateResult = await orderProcessingService.updateOrderStatus(
+    const result = await orderProcessingService.updateOrderStatus(
       orderId,
-      status,
-      authResult.kitchenId,
-      authResult.userId,
-      notes
+      {
+        status,
+        notes
+      }
     );
 
-    if (!updateResult.success) {
+    if (!result.success) {
       return NextResponse.json(
-        { error: updateResult.error },
+        { error: result.error },
         { status: 400 }
       );
     }
 
     return NextResponse.json({
-      success: true,
-      data: updateResult.order
+      success: true
     });
 
   } catch (error) {

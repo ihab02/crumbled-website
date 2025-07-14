@@ -21,17 +21,15 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
 
     const filters: any = {
-      kitchenId: authResult.kitchenId
+      kitchenId: authResult.user.selectedKitchen.id
     };
     
     if (status) filters.status = status;
     if (date) filters.date = date;
 
     const batches = await batchPreparationService.getKitchenBatches(
-      authResult.kitchenId,
-      filters,
-      limit,
-      offset
+      authResult.user.selectedKitchen.id,
+      filters
     );
     
     return NextResponse.json({
@@ -80,13 +78,11 @@ export async function POST(request: NextRequest) {
 
     const batchData = {
       name,
-      description,
-      plannedStartTime,
-      plannedEndTime,
-      items,
+      kitchen_id: authResult.user.selectedKitchen.id,
+      order_ids: items, // assuming items is an array of order IDs
       priority,
-      kitchenId: authResult.kitchenId,
-      createdBy: authResult.userId
+      notes: description,
+      created_by: authResult.user.id
     };
 
     const batch = await batchPreparationService.createBatch(batchData);

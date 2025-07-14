@@ -43,6 +43,7 @@ export interface CreateBatchData {
   order_ids: number[];
   priority?: BatchPriority;
   notes?: string;
+  created_by: number;
 }
 
 export interface UpdateBatchData {

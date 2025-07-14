@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
-import { emailService } from '@/lib/services/emailService';
+import { sendOrderConfirmationEmail } from '@/lib/email-service';
 
 interface CheckoutPaymentRequest {
   cartId?: string;
@@ -479,9 +479,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         }
 
         // Send order confirmation email
-        await emailService.sendOrderConfirmationEmail(
+        await sendOrderConfirmationEmail(
           orderData.customerInfo.email, 
-          orderId.toString(), 
+          orderId, 
           {
             items: orderData.cart.items,
             subtotal: orderData.cart.subtotal,

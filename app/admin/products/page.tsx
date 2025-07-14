@@ -503,6 +503,7 @@ export default function AdminProductsPage() {
             viewType="products" 
             deletedCount={deletedCount}
             onToggle={toggleShowDeleted}
+            checked={preferences.show_deleted}
           />
         </div>
         <Button onClick={() => {
