@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
+import { clearDebugModeCache } from '@/lib/debug-utils';
 
 // Create a connection pool
 const pool = mysql.createPool({
@@ -33,19 +34,41 @@ export async function GET() {
 // POST /api/admin/settings
 export async function POST(request: Request) {
   try {
-    const { cart_lifetime_days } = await request.json();
+    const body = await request.json();
+    const { cart_lifetime_days, debug_mode } = body;
 
-    if (!cart_lifetime_days || cart_lifetime_days < 1 || cart_lifetime_days > 30) {
-      return NextResponse.json(
-        { success: false, error: 'Cart lifetime must be between 1 and 30 days' },
-        { status: 400 }
+    // Handle cart lifetime updates
+    if (cart_lifetime_days !== undefined) {
+      if (!cart_lifetime_days || cart_lifetime_days < 1 || cart_lifetime_days > 30) {
+        return NextResponse.json(
+          { success: false, error: 'Cart lifetime must be between 1 and 30 days' },
+          { status: 400 }
+        );
+      }
+
+      await pool.query(
+        'UPDATE cart_settings SET cart_lifetime_days = ? WHERE id = 1',
+        [cart_lifetime_days]
       );
     }
 
-    await pool.query(
-      'UPDATE cart_settings SET cart_lifetime_days = ? WHERE id = 1',
-      [cart_lifetime_days]
-    );
+    // Handle debug mode updates
+    if (debug_mode !== undefined) {
+      if (typeof debug_mode !== 'boolean') {
+        return NextResponse.json(
+          { success: false, error: 'Debug mode must be a boolean value' },
+          { status: 400 }
+        );
+      }
+
+      await pool.query(
+        'UPDATE cart_settings SET debug_mode = ? WHERE id = 1',
+        [debug_mode]
+      );
+
+      // Clear debug mode cache to ensure immediate effect
+      clearDebugModeCache();
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

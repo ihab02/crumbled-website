@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
 
 interface BundleItem {
   id?: string
@@ -24,19 +24,88 @@ interface CartItem {
 
 interface CartContextType {
   cart: CartItem[]
-  addToCart: (item: CartItem) => void
-  removeFromCart: (itemId: string) => void
-  updateQuantity: (itemId: string, quantity: number) => void
-  clearCart: () => void
+  cartCount: number
+  isLoading: boolean
+  addToCart: (item: CartItem) => Promise<void>
+  removeFromCart: (itemId: string) => Promise<void>
+  updateQuantity: (itemId: string, quantity: number) => Promise<void>
+  clearCart: () => Promise<void>
   getTotalPrice: () => number
+  refreshCart: () => Promise<void>
+  lastUpdated: Date | null
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
+// Cache configuration
+const CART_CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const DEBOUNCE_DELAY = 1000 // 1 second
+
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([])
+  const [cartCount, setCartCount] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  
+  // Refs for caching and debouncing
+  const cacheTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastFetchRef = useRef<Date | null>(null)
 
-  const addToCart = (item: CartItem) => {
+  // Calculate cart count from cart items
+  const calculateCartCount = useCallback((items: CartItem[]) => {
+    return items.reduce((total, item) => total + item.quantity, 0)
+  }, [])
+
+  // Fetch cart from API with caching
+  const fetchCart = useCallback(async (forceRefresh = false) => {
+    // Check cache first
+    const now = new Date()
+    const cacheValid = lastFetchRef.current && 
+      (now.getTime() - lastFetchRef.current.getTime()) < CART_CACHE_DURATION
+
+    if (!forceRefresh && cacheValid) {
+      console.log('🔄 Using cached cart data')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      console.log('🔄 Fetching cart from API...')
+      
+      const response = await fetch('/api/cart')
+      const data = await response.json()
+      
+      if (data.items) {
+        setCart(data.items)
+        setCartCount(calculateCartCount(data.items))
+        setLastUpdated(now)
+        lastFetchRef.current = now
+        console.log('✅ Cart updated successfully')
+      }
+    } catch (error) {
+      console.error('❌ Error fetching cart:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [calculateCartCount])
+
+  // Debounced cart update
+  const debouncedCartUpdate = useCallback((updateFn: () => Promise<void>) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current)
+    }
+    
+    debounceTimeoutRef.current = setTimeout(async () => {
+      await updateFn()
+      // Refresh cart after update
+      await fetchCart(true)
+    }, DEBOUNCE_DELAY)
+  }, [fetchCart])
+
+  // Add item to cart
+  const addToCart = useCallback(async (item: CartItem) => {
+    // Optimistic update
     setCart((prev) => {
       const existingItem = prev.find((cartItem) => cartItem.id === item.id && !cartItem.isBundle)
       if (existingItem && !item.isBundle) {
@@ -49,35 +118,165 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return [...prev, item]
       }
     })
-  }
 
-  const removeFromCart = (itemId: string) => {
+    // Update cart count immediately
+    setCartCount(prev => prev + item.quantity)
+
+    // Debounced API update
+    debouncedCartUpdate(async () => {
+      try {
+        const response = await fetch('/api/cart/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to add item to cart')
+        }
+      } catch (error) {
+        console.error('❌ Error adding to cart:', error)
+        // Revert optimistic update on error
+        await fetchCart(true)
+      }
+    })
+  }, [debouncedCartUpdate, fetchCart])
+
+  // Remove item from cart
+  const removeFromCart = useCallback(async (itemId: string) => {
+    const itemToRemove = cart.find(item => item.id === itemId)
+    
+    // Optimistic update
     setCart((prev) => prev.filter((item) => item.id !== itemId))
-  }
+    if (itemToRemove) {
+      setCartCount(prev => prev - itemToRemove.quantity)
+    }
 
-  const updateQuantity = (itemId: string, quantity: number) => {
+    // Debounced API update
+    debouncedCartUpdate(async () => {
+      try {
+        const response = await fetch(`/api/cart/remove`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId })
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to remove item from cart')
+        }
+      } catch (error) {
+        console.error('❌ Error removing from cart:', error)
+        // Revert optimistic update on error
+        await fetchCart(true)
+      }
+    })
+  }, [cart, debouncedCartUpdate, fetchCart])
+
+  // Update item quantity
+  const updateQuantity = useCallback(async (itemId: string, quantity: number) => {
     if (quantity <= 0) {
-      removeFromCart(itemId)
+      await removeFromCart(itemId)
       return
     }
+
+    const currentItem = cart.find(item => item.id === itemId)
+    if (!currentItem) return
+
+    const quantityDiff = quantity - currentItem.quantity
+
+    // Optimistic update
     setCart((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity } : item)))
-  }
+    setCartCount(prev => prev + quantityDiff)
 
-  const clearCart = () => {
+    // Debounced API update
+    debouncedCartUpdate(async () => {
+      try {
+        const response = await fetch('/api/cart/update', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId, quantity })
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to update cart item')
+        }
+      } catch (error) {
+        console.error('❌ Error updating cart:', error)
+        // Revert optimistic update on error
+        await fetchCart(true)
+      }
+    })
+  }, [cart, removeFromCart, debouncedCartUpdate, fetchCart])
+
+  // Clear cart
+  const clearCart = useCallback(async () => {
+    // Optimistic update
     setCart([])
-  }
+    setCartCount(0)
 
-  const getTotalPrice = () => {
+    // Debounced API update
+    debouncedCartUpdate(async () => {
+      try {
+        const response = await fetch('/api/cart/clear', {
+          method: 'DELETE'
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to clear cart')
+        }
+      } catch (error) {
+        console.error('❌ Error clearing cart:', error)
+        // Revert optimistic update on error
+        await fetchCart(true)
+      }
+    })
+  }, [debouncedCartUpdate, fetchCart])
+
+  // Manual refresh cart
+  const refreshCart = useCallback(async () => {
+    await fetchCart(true)
+  }, [fetchCart])
+
+  // Get total price
+  const getTotalPrice = useCallback(() => {
     return cart.reduce((total, item) => {
       if (item.isBundle) {
         return total + item.price
       }
       return total + item.price * item.quantity
     }, 0)
-  }
+  }, [cart])
+
+  // Initial cart fetch
+  useEffect(() => {
+    fetchCart()
+  }, [fetchCart])
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (cacheTimeoutRef.current) {
+        clearTimeout(cacheTimeoutRef.current)
+      }
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, getTotalPrice }}>
+    <CartContext.Provider value={{ 
+      cart, 
+      cartCount, 
+      isLoading, 
+      addToCart, 
+      removeFromCart, 
+      updateQuantity, 
+      clearCart, 
+      getTotalPrice, 
+      refreshCart,
+      lastUpdated 
+    }}>
       {children}
     </CartContext.Provider>
   )

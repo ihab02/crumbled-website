@@ -9,18 +9,22 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { LoadingLogo } from "@/components/ui/loading-logo"
 import { Package, User, LogOut, Clock, Truck, CheckCircle, AlertCircle, MapPin, Plus, Trash2, Edit, Calendar, CreditCard, Eye, Settings } from "lucide-react"
 import Link from "next/link"
 import { toast } from 'react-hot-toast'
 import { useSession } from 'next-auth/react'
+import { useDebugLogger } from '@/hooks/use-debug-mode'
 
 interface Order {
   id: number
-  customer_name: string
-  customer_email: string
-  total_amount: number
+  customer_name?: string
+  customer_email?: string
+  total_amount?: number
+  total?: number
   created_at: string
-  order_status: string
+  order_status?: string
+  status?: string
   items: any[]
 }
 
@@ -56,6 +60,7 @@ function AccountPageContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { debugLog } = useDebugLogger()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [orders, setOrders] = useState<Order[]>([])
@@ -101,24 +106,27 @@ function AccountPageContent() {
     try {
       setLoading(true)
       
-      // Fetch user profile
-      const profileResponse = await fetch('/api/user/profile')
-      if (profileResponse.ok) {
-        const profileData = await profileResponse.json()
-        setUserProfile(profileData.data)
+      debugLog('Fetching customer data...')
+      // Fetch customer data (includes profile and addresses)
+      const customerResponse = await fetch('/api/customers')
+      if (customerResponse.ok) {
+        const customerData = await customerResponse.json()
+        debugLog('Customer data received:', customerData)
+        setCustomer(customerData.customer)
         setFormData({
-          firstName: profileData.data.firstName || '',
-          lastName: profileData.data.lastName || '',
-          phone: profileData.data.phone || ''
+          firstName: customerData.customer.firstName || '',
+          lastName: customerData.customer.lastName || '',
+          phone: customerData.customer.phone || ''
         })
+      } else {
+        debugLog('Failed to fetch customer data:', customerResponse.status)
       }
 
-      // Fetch orders
-      const ordersResponse = await fetch('/api/user/orders')
-      if (ordersResponse.ok) {
-        const ordersData = await ordersResponse.json()
-        setOrders(ordersData.data || [])
-      }
+      // Fetch orders using the dedicated function
+      await fetchOrders()
+
+      // Fetch cities for address form
+      await fetchCities()
     } catch (error) {
       console.error('Error fetching user data:', error)
       toast.error('Failed to load account data')
@@ -129,54 +137,54 @@ function AccountPageContent() {
 
   const fetchOrders = async () => {
     try {
+      debugLog('Fetching orders...')
       const response = await fetch("/api/user/orders")
       const data = await response.json()
 
-      if (data.orders) {
-        const allOrders = data.orders
+      debugLog('Orders response:', data)
+
+      if (response.ok && data.success && data.data) {
+        const allOrders = data.data
+        debugLog('All orders:', allOrders)
         setOrders(allOrders)
 
-        // Separate current and past orders
+        // Separate current and past orders (case-insensitive)
         const current = allOrders.filter(
-          (order: Order) => order.order_status !== "Delivered" && order.order_status !== "Cancelled",
+          (order: Order) => {
+            const status = order.status?.toLowerCase() || order.order_status?.toLowerCase() || ''
+            debugLog(`Order ${order.id} status: "${status}"`)
+            return status !== "delivered" && status !== "cancelled"
+          }
         )
         const past = allOrders.filter(
-          (order: Order) => order.order_status === "Delivered" || order.order_status === "Cancelled",
+          (order: Order) => {
+            const status = order.status?.toLowerCase() || order.order_status?.toLowerCase() || ''
+            return status === "delivered" || status === "cancelled"
+          }
         )
+
+        debugLog('Current orders:', current)
+        debugLog('Past orders:', past)
+        debugLog(`Order categorization: ${current.length} current, ${past.length} past out of ${allOrders.length} total`)
 
         setCurrentOrders(current)
         setPastOrders(past)
+      } else {
+        debugLog('Failed to fetch orders:', data.error || 'Unknown error')
+        setOrders([])
+        setCurrentOrders([])
+        setPastOrders([])
       }
     } catch (error) {
+      debugLog('Error fetching orders:', error)
       console.error("Error fetching orders:", error)
+      setOrders([])
+      setCurrentOrders([])
+      setPastOrders([])
     }
   }
 
-  const fetchCustomerData = async () => {
-    try {
-      const response = await fetch('/api/customers')
-      const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch customer data')
-      }
-
-      setCustomer(data.customer)
-      setFormData({
-        firstName: data.customer.firstName,
-        lastName: data.customer.lastName,
-        phone: data.customer.phone || ''
-      })
-
-      // Ensure user has at least one address
-      if (!data.customer.addresses || data.customer.addresses.length === 0) {
-        toast.error('No addresses found. Please add at least one address to continue.')
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to fetch customer data')
-      router.push('/auth/login')
-    }
-  }
 
   const fetchCities = async () => {
     try {
@@ -228,7 +236,8 @@ function AccountPageContent() {
       }
 
       toast.success('Profile updated successfully')
-      fetchCustomerData()
+      setEditingProfile(false)
+      fetchUserData()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to update profile')
     } finally {
@@ -263,7 +272,7 @@ function AccountPageContent() {
         additionalInfo: '',
         isDefault: false
       })
-      fetchCustomerData()
+      fetchUserData()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to add address')
     } finally {
@@ -295,7 +304,7 @@ function AccountPageContent() {
       }
 
       toast.success('Address deleted successfully')
-      fetchCustomerData()
+      fetchUserData()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to delete address')
     } finally {
@@ -319,7 +328,9 @@ function AccountPageContent() {
     }
   }
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: string | undefined) => {
+    if (!status) return <Package className="h-4 w-4" />
+    
     switch (status.toLowerCase()) {
       case "processing":
         return <Clock className="h-4 w-4" />
@@ -335,7 +346,9 @@ function AccountPageContent() {
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | undefined) => {
+    if (!status) return "bg-gray-100 text-gray-800 border-gray-200"
+    
     switch (status.toLowerCase()) {
       case "processing":
         return "bg-blue-100 text-blue-800 border-blue-200"
@@ -354,10 +367,7 @@ function AccountPageContent() {
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <p className="text-pink-800">Loading account...</p>
-        </div>
+        <LoadingLogo size="lg" text="Loading account..." />
       </div>
     )
   }
@@ -371,7 +381,7 @@ function AccountPageContent() {
       <div className="container py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-pink-800">Welcome back, {user?.name?.split(" ")[0]}!</h1>
+            <h1 className="text-3xl font-bold text-pink-800">Welcome back, {customer?.firstName || 'User'}!</h1>
             <p className="text-pink-600 mt-1">Manage your account and track your orders</p>
           </div>
           <Button onClick={handleLogout} variant="outline" className="border-pink-300 text-pink-600 hover:bg-pink-50">
@@ -395,7 +405,7 @@ function AccountPageContent() {
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-pink-200 rounded-full">{getStatusIcon(order.order_status)}</div>
+                        <div className="p-2 bg-pink-200 rounded-full">{getStatusIcon(order.status || order.order_status)}</div>
                         <div>
                           <h3 className="font-bold text-pink-800 text-lg">Order #{order.id}</h3>
                           <p className="text-sm text-pink-600">
@@ -404,11 +414,11 @@ function AccountPageContent() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3 mt-3 md:mt-0">
-                        <Badge className={`${getStatusColor(order.order_status)} flex items-center gap-1`}>
-                          {getStatusIcon(order.order_status)}
-                          {order.order_status}
+                        <Badge className={`${getStatusColor(order.status || order.order_status)} flex items-center gap-1`}>
+                          {getStatusIcon(order.status || order.order_status)}
+                          {order.status || order.order_status}
                         </Badge>
-                        <p className="text-xl font-bold text-pink-800">${Number(order.total_amount).toFixed(2)}</p>
+                        <p className="text-xl font-bold text-pink-800">EGP {Number(order.total || order.total_amount).toFixed(2)}</p>
                       </div>
                     </div>
 
@@ -422,7 +432,7 @@ function AccountPageContent() {
                             <div className="flex-1">
                               <p className="font-medium text-pink-800">{item.product_name}</p>
                             </div>
-                            <p className="font-bold text-pink-700">${Number(item.price).toFixed(2)}</p>
+                            <p className="font-bold text-pink-700">EGP {Number(item.unit_price || item.price).toFixed(2)}</p>
                           </div>
                         ))}
                       {order.items && order.items.length > 3 && (
@@ -434,13 +444,6 @@ function AccountPageContent() {
                       <div className="text-sm text-pink-600">
                         <p>Estimated delivery: 2-3 business days</p>
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full"
-                        asChild
-                      >
-                        <Link href={`/account/orders/${order.id}`}>Track Order</Link>
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -449,12 +452,8 @@ function AccountPageContent() {
           </div>
         )}
 
-        <Tabs defaultValue="orders" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 bg-white p-1 rounded-xl shadow-sm">
-            <TabsTrigger value="orders" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Orders
-            </TabsTrigger>
+        <Tabs defaultValue="addresses" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2 bg-white p-1 rounded-xl shadow-sm">
             <TabsTrigger value="addresses" className="flex items-center gap-2">
               <MapPin className="h-4 w-4" />
               Addresses
@@ -463,87 +462,7 @@ function AccountPageContent() {
               <User className="h-4 w-4" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="orders">
-            <Card className="border-2 border-pink-200 rounded-3xl">
-              <CardHeader>
-                <CardTitle className="text-pink-800 flex items-center gap-2">
-                  <Package className="h-5 w-5" /> Past Orders
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {pastOrders.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-pink-600 mb-4">No past orders found.</p>
-                    <Button
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full"
-                      asChild
-                    >
-                      <Link href="/">Shop Now</Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {pastOrders.map((order) => (
-                      <div key={order.id} className="border border-pink-200 rounded-xl p-4 bg-white">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-pink-800">Order #{order.id}</h3>
-                              <Badge className={getStatusColor(order.order_status)}>{order.order_status}</Badge>
-                            </div>
-                            <p className="text-sm text-pink-600">
-                              Placed on {new Date(order.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <p className="text-xl font-bold text-pink-800 md:text-right">
-                            ${Number(order.total_amount).toFixed(2)}
-                          </p>
-                        </div>
-
-                        <div className="space-y-3">
-                          {order.items &&
-                            order.items.map((item, index) => (
-                              <div key={index} className="flex items-center gap-3 bg-pink-50 p-2 rounded-lg">
-                                <div className="w-10 h-10 bg-pink-200 rounded-md flex items-center justify-center">
-                                  <span className="font-bold text-pink-700">{item.quantity}</span>
-                                </div>
-                                <div className="flex-1">
-                                  <p className="font-medium text-pink-800">{item.product_name}</p>
-                                  {item.is_bundle && (
-                                    <p className="text-xs text-pink-600">Bundle of {item.bundle_size}</p>
-                                  )}
-                                </div>
-                                <p className="font-bold text-pink-700">${Number(item.price).toFixed(2)}</p>
-                              </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-pink-100 flex justify-between items-center">
-                          <p className="text-sm text-pink-600">
-                            Payment: <span className="font-medium">Cash on Delivery</span>
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-pink-300 text-pink-600 hover:bg-pink-50"
-                            asChild
-                          >
-                            <Link href={`/account/orders/${order.id}`}>View Details</Link>
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="addresses">
             <Card className="border-2 border-pink-200 rounded-3xl">
@@ -707,30 +626,86 @@ function AccountPageContent() {
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-medium text-sm text-pink-600 mb-1">Name</h3>
-                      <p className="text-lg font-bold text-pink-800">{user?.name}</p>
+                      <h3 className="font-medium text-sm text-pink-600 mb-1">First Name</h3>
+                      <p className="text-lg font-bold text-pink-800">{customer?.firstName || 'Not set'}</p>
                     </div>
                     <div>
-                      <h3 className="font-medium text-sm text-pink-600 mb-1">Email</h3>
-                      <p className="text-lg font-bold text-pink-800">{user?.email}</p>
+                      <h3 className="font-medium text-sm text-pink-600 mb-1">Last Name</h3>
+                      <p className="text-lg font-bold text-pink-800">{customer?.lastName || 'Not set'}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <h3 className="font-medium text-sm text-pink-600 mb-1">Total Orders</h3>
-                      <p className="text-2xl font-bold text-pink-800">{orders.length}</p>
+                      <h3 className="font-medium text-sm text-pink-600 mb-1">Email</h3>
+                      <p className="text-lg font-bold text-pink-800">{customer?.email || 'Not set'}</p>
                     </div>
                     <div>
-                      <h3 className="font-medium text-sm text-pink-600 mb-1">Active Orders</h3>
-                      <p className="text-2xl font-bold text-pink-800">{currentOrders.length}</p>
+                      <h3 className="font-medium text-sm text-pink-600 mb-1">Phone</h3>
+                      <p className="text-lg font-bold text-pink-800">{customer?.phone || 'Not set'}</p>
                     </div>
                   </div>
 
                   <div className="pt-4 border-t border-pink-200">
-                    <Button className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full">
-                      Edit Profile
-                    </Button>
+                    {editingProfile ? (
+                      <form onSubmit={handleProfileUpdate} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-pink-700 mb-1">First Name</label>
+                            <input
+                              type="text"
+                              value={formData.firstName}
+                              onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                              className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-pink-700 mb-1">Last Name</label>
+                            <input
+                              type="text"
+                              value={formData.lastName}
+                              onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                              className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-pink-700 mb-1">Phone</label>
+                          <input
+                            type="tel"
+                            value={formData.phone}
+                            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                            className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="flex gap-3">
+                          <Button
+                            type="submit"
+                            disabled={loading}
+                            className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full"
+                          >
+                            {loading ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setEditingProfile(false)}
+                            className="border-pink-300 text-pink-600 hover:bg-pink-50 rounded-full"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <Button 
+                        onClick={() => setEditingProfile(true)}
+                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full"
+                      >
+                        Edit Profile
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>

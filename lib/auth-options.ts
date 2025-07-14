@@ -42,36 +42,57 @@ export const authOptions: NextAuthOptions = {
         password: { label: 'Password', type: 'password' }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
-
-        const [rows] = await db.query(
-          'SELECT * FROM customers WHERE email = ?',
-          [credentials.email]
-        );
-
-        const user = (rows as any[])[0];
-
-        if (!user) {
-          return null;
-        }
-
-        // Compare password with bcrypt
-        const isPasswordValid = await compare(credentials.password, user.password);
+        console.log('NextAuth authorize called with email:', credentials?.email);
         
-        if (!isPasswordValid) {
+        if (!credentials?.email || !credentials?.password) {
+          console.log('Missing credentials');
           return null;
         }
 
-        return {
-          id: user.id.toString(),
-          email: user.email,
-          name: `${user.first_name} ${user.last_name}`,
-          firstName: user.first_name,
-          lastName: user.last_name,
-          phone: user.phone
-        };
+        try {
+          const [rows] = await db.query(
+            'SELECT * FROM customers WHERE email = ?',
+            [credentials.email]
+          );
+
+          const user = (rows as any[])[0];
+          console.log('User found:', !!user);
+
+          if (!user) {
+            console.log('No user found with email:', credentials.email);
+            return null;
+          }
+
+          console.log('User data:', {
+            id: user.id,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            hasPassword: !!user.password
+          });
+
+          // Compare password with bcrypt
+          const isPasswordValid = await compare(credentials.password, user.password);
+          console.log('Password valid:', isPasswordValid);
+          
+          if (!isPasswordValid) {
+            console.log('Invalid password for user:', credentials.email);
+            return null;
+          }
+
+          console.log('Authentication successful for user:', credentials.email);
+          return {
+            id: user.id.toString(),
+            email: user.email,
+            name: `${user.first_name} ${user.last_name}`,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            phone: user.phone
+          };
+        } catch (error) {
+          console.error('NextAuth authorize error:', error);
+          return null;
+        }
       }
     })
   ],

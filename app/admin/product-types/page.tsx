@@ -41,6 +41,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { ViewToggle } from '@/components/admin/ViewToggle';
+import { useViewPreferences } from '@/hooks/use-view-preferences';
+import { Badge } from '@/components/ui/badge';
 
 interface ProductType {
   id: number;
@@ -50,6 +53,8 @@ interface ProductType {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
+  status?: string;
 }
 
 function SortableTableRow({ productType, onEdit, onDelete }: { 
@@ -73,7 +78,7 @@ function SortableTableRow({ productType, onEdit, onDelete }: {
   };
 
   return (
-    <TableRow ref={setNodeRef} style={style}>
+    <TableRow ref={setNodeRef} style={style} className={productType.deleted_at ? 'opacity-60 bg-red-50' : ''}>
       <TableCell>
         <div className="flex items-center space-x-2">
           <button
@@ -83,7 +88,14 @@ function SortableTableRow({ productType, onEdit, onDelete }: {
           >
             <GripVertical className="h-4 w-4 text-gray-500" />
           </button>
-          <span>{productType.name}</span>
+          <div>
+            <span className={productType.deleted_at ? 'line-through' : ''}>{productType.name}</span>
+            {productType.deleted_at && (
+              <Badge variant="destructive" className="ml-2 text-xs">
+                Deleted
+              </Badge>
+            )}
+          </div>
         </div>
       </TableCell>
       <TableCell>{productType.description}</TableCell>
@@ -92,12 +104,19 @@ function SortableTableRow({ productType, onEdit, onDelete }: {
         <div className="flex items-center space-x-2">
           <span
             className={`inline-flex items-center px-3 py-1 text-sm font-semibold rounded-full ${
-              productType.is_active 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-red-100 text-red-800'
+              productType.deleted_at 
+                ? 'bg-red-100 text-red-800'
+                : productType.is_active 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-gray-100 text-gray-800'
             }`}
           >
-            {productType.is_active ? (
+            {productType.deleted_at ? (
+              <>
+                <X className="h-4 w-4 mr-1" />
+                Deleted
+              </>
+            ) : productType.is_active ? (
               <>
                 <Check className="h-4 w-4 mr-1" />
                 Active
@@ -145,6 +164,8 @@ export default function AdminProductTypesPage() {
     display_order: 0,
     is_active: true
   });
+  // LIFT useViewPreferences to the page
+  const { preferences, toggleShowDeleted } = useViewPreferences('product_types');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -155,11 +176,11 @@ export default function AdminProductTypesPage() {
 
   useEffect(() => {
     fetchProductTypes();
-  }, []);
+  }, [preferences.show_deleted]);
 
   const fetchProductTypes = async () => {
     try {
-      const response = await fetch('/api/product-types');
+      const response = await fetch(`/api/product-types?show_deleted=${preferences.show_deleted}`);
       const data = await response.json();
       if (data.success && Array.isArray(data.productTypes)) {
         setProductTypes(data.productTypes);
@@ -304,87 +325,94 @@ export default function AdminProductTypesPage() {
     <div className="container mx-auto py-10">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Product Types</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => {
-              resetForm();
-              setIsDialogOpen(true);
-            }}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Product Type
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingProductType ? 'Edit Product Type' : 'Add Product Type'}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="display_order">Display Order</Label>
-                <Input
-                  id="display_order"
-                  type="number"
-                  value={formData.display_order}
-                  onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
-                />
-              </div>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is_active"
-                    checked={formData.is_active}
-                    onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                    className="data-[state=checked]:bg-green-500"
+        <div className="flex items-center gap-4">
+          <ViewToggle 
+            checked={!!preferences.show_deleted}
+            onToggle={toggleShowDeleted}
+            viewType="product_types"
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => {
+                resetForm();
+                setIsDialogOpen(true);
+              }}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Product Type
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingProductType ? 'Edit Product Type' : 'Add Product Type'}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
                   />
-                  <Label htmlFor="is_active" className="text-lg font-medium">
-                    {formData.is_active ? 'Active' : 'Inactive'}
-                  </Label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  {formData.is_active ? (
-                    <Check className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <X className="h-5 w-5 text-red-500" />
-                  )}
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
                 </div>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsDialogOpen(false);
-                    resetForm();
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingProductType ? 'Update' : 'Create'}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <div>
+                  <Label htmlFor="display_order">Display Order</Label>
+                  <Input
+                    id="display_order"
+                    type="number"
+                    value={formData.display_order}
+                    onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
+                  />
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="is_active"
+                      checked={formData.is_active}
+                      onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                      className="data-[state=checked]:bg-green-500"
+                    />
+                    <Label htmlFor="is_active" className="text-lg font-medium">
+                      {formData.is_active ? 'Active' : 'Inactive'}
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {formData.is_active ? (
+                      <Check className="h-5 w-5 text-green-500" />
+                    ) : (
+                      <X className="h-5 w-5 text-red-500" />
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsDialogOpen(false);
+                      resetForm();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    {editingProductType ? 'Update' : 'Create'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {isLoading ? (

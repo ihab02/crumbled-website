@@ -176,9 +176,6 @@ export default function CheckoutSuccessPage() {
                     Don't worry! Your order has been successfully placed. You will receive a confirmation email shortly.
                   </p>
                   <div className="space-y-4">
-                    <Button asChild className="w-full h-12 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:from-pink-600 hover:via-rose-600 hover:to-pink-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 border-0">
-                      <Link href="/track-order">Track Your Order</Link>
-                    </Button>
                     <Button asChild className="w-full h-12 border-2 border-pink-300 text-pink-700 hover:bg-pink-50 hover:border-pink-400 font-semibold rounded-2xl shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300">
                       <Link href="/contact">Contact Support</Link>
                     </Button>
@@ -338,13 +335,7 @@ export default function CheckoutSuccessPage() {
                         </Button>
                       )}
 
-                      <Button asChild className="w-full h-12 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:from-pink-600 hover:via-rose-600 hover:to-pink-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 border-0">
-                        <Link href={`/track-order?orderId=${orderInfo.id}`}>
-                          <Package className="h-5 w-5 mr-2" />
-                          Track Your Order
-                          <ExternalLink className="h-4 w-4 ml-2" />
-                        </Link>
-                      </Button>
+
                     </div>
                   </div>
                 )}
@@ -352,9 +343,6 @@ export default function CheckoutSuccessPage() {
                 {!orderInfo && !error && (
                   <div className="space-y-4">
                     <p className="text-pink-600">Your order has been placed successfully!</p>
-                    <Button asChild className="w-full h-12 bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:from-pink-600 hover:via-rose-600 hover:to-pink-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 border-0">
-                      <Link href="/track-order">Track Your Order</Link>
-                    </Button>
                   </div>
                 )}
               </CardContent>

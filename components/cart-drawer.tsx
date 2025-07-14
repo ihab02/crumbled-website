@@ -39,7 +39,7 @@ export function CartDrawer({ isOpen, onClose, cart, removeItem, totalPrice }: Ca
                 <ShoppingBag className="h-6 w-6 text-pastel-pink-600" />
                 <SparklesIcon className="h-3 w-3 text-pastel-pink-500 absolute -top-1 -right-1 animate-pulse" />
               </div>
-              <h2 className="text-xl font-bold text-pastel-pink-800">Your Cookie Cart</h2>
+              <h2 className="text-xl font-bold text-pastel-pink-800">Your Cookie Bag</h2>
             </div>
             <button
               onClick={onClose}
@@ -56,7 +56,7 @@ export function CartDrawer({ isOpen, onClose, cart, removeItem, totalPrice }: Ca
                 <ShoppingBag className="h-12 w-12 text-pastel-pink-600" />
               </div>
               <div className="text-center">
-                <h3 className="text-2xl font-bold text-pastel-pink-800 mb-2">Your cart is empty</h3>
+                <h3 className="text-2xl font-bold text-pastel-pink-800 mb-2">Your bag is empty</h3>
                 <p className="text-lg text-pastel-pink-600">Add some delicious cookies to get started!</p>
               </div>
               <Button

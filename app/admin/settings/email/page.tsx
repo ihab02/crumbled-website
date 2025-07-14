@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, Lock, CheckCircle, XCircle } from 'lucide-react';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 
 interface EmailSettings {
   id: number;
@@ -26,6 +27,7 @@ interface EmailSettings {
 
 export default function EmailSettingsPage() {
   const router = useRouter();
+  const { debugLog } = useDebugLogger();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testEmail, setTestEmail] = useState('');
@@ -53,21 +55,21 @@ export default function EmailSettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      console.log('🔍 Fetching email settings...');
+      debugLog('🔍 Fetching email settings...');
       const response = await fetch('/api/admin/settings/email');
       const data = await response.json();
 
-      console.log('🔍 Email settings response:', data);
+      debugLog('🔍 Email settings response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch email settings');
       }
 
       if (data.settings) {
-        console.log('✅ Email settings loaded:', data.settings);
+        debugLog('✅ Email settings loaded:', data.settings);
         setSettings(data.settings);
       } else {
-        console.log('⚠️ No email settings found, using defaults');
+        debugLog('⚠️ No email settings found, using defaults');
       }
     } catch (error) {
       console.error('❌ Error fetching email settings:', error);
@@ -88,7 +90,7 @@ export default function EmailSettingsPage() {
     setLoading(true);
 
     try {
-      console.log('💾 Saving email settings:', settings);
+      debugLog('💾 Saving email settings:', settings);
       const response = await fetch('/api/admin/settings/email', {
         method: 'POST',
         headers: {
@@ -98,7 +100,7 @@ export default function EmailSettingsPage() {
       });
 
       const data = await response.json();
-      console.log('💾 Save response:', data);
+      debugLog('💾 Save response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to save email settings');

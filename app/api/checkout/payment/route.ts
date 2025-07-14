@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
-import { emailService } from '@/lib/services/emailService';
+import { sendOrderConfirmationEmail } from '@/lib/email-service';
 
 interface CheckoutPaymentRequest {
   cartId?: string;
@@ -340,16 +340,24 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
             productInstanceId = (packInstanceResult as any).insertId;
             console.log(`🔍 [DEBUG] Payment API - Created product_instance for pack with ID: ${productInstanceId}`)
             
-            // Create product_instance_flavor records for each flavor
+            // Create product_instance_flavor records for each flavor with enhanced data storage
             console.log(`🔍 [DEBUG] Payment API - Creating flavor records for ${item.flavors.length} flavors`)
             for (const flavor of item.flavors) {
               await connection.query(
-                `INSERT INTO product_instance_flavor (product_instance_id, flavor_id, size_id, quantity) 
-                 VALUES (?, ?, ?, ?)`,
+                `INSERT INTO product_instance_flavor (
+                  product_instance_id, 
+                  flavor_id, 
+                  flavor_name,
+                  size_id,
+                  size_name,
+                  quantity
+                ) VALUES (?, ?, ?, ?, ?, ?)`,
                 [
                   productInstanceId,
                   flavor.id,
+                  flavor.name, // Store flavor name at order time
                   flavor.size === 'Mini' ? 1 : flavor.size === 'Medium' ? 2 : 3, // Map size to size_id
+                  flavor.size, // Store size name at order time
                   flavor.quantity
                 ]
               );
@@ -371,14 +379,39 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
             console.log(`🔍 [DEBUG] Payment API - Created product_instance for product with ID: ${productInstanceId}`)
           }
           
-          // Create order_item record with unit_price
+          // Create order_item record with enhanced data storage
           console.log(`🔍 [DEBUG] Payment API - Creating order_item with productInstanceId: ${productInstanceId}, quantity: ${item.quantity}, unit_price: ${item.basePrice}`)
+          
+          // Prepare flavor details JSON for packs
+          let flavorDetailsJson = null;
+          if (item.isPack && item.flavors && item.flavors.length > 0) {
+            flavorDetailsJson = JSON.stringify(item.flavors.map(flavor => ({
+              id: flavor.id,
+              name: flavor.name,
+              quantity: flavor.quantity,
+              size: flavor.size,
+              price: flavor.price
+            })));
+          }
+          
           await connection.query(
-            `INSERT INTO order_items (order_id, product_instance_id, quantity, unit_price) 
-             VALUES (?, ?, ?, ?)`,
+            `INSERT INTO order_items (
+              order_id, 
+              product_instance_id, 
+              product_name,
+              product_type,
+              pack_size,
+              flavor_details,
+              quantity, 
+              unit_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               orderId,
               productInstanceId,
+              item.name, // Store product name at order time
+              item.isPack ? 'pack' : 'individual', // Store product type
+              item.isPack ? item.packSize : null, // Store pack size
+              flavorDetailsJson, // Store flavor details as JSON
               item.quantity,
               item.basePrice
             ]
@@ -446,9 +479,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         }
 
         // Send order confirmation email
-        await emailService.sendOrderConfirmationEmail(
+        await sendOrderConfirmationEmail(
           orderData.customerInfo.email, 
-          orderId.toString(), 
+          orderId, 
           {
             items: orderData.cart.items,
             subtotal: orderData.cart.subtotal,

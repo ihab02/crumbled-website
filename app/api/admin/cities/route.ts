@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
+import { verifyJWT } from '@/lib/middleware/auth';
 
 export async function GET() {
   try {
@@ -19,6 +20,18 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const token = request.cookies.get('adminToken')?.value;
+    
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const decoded = await verifyJWT(token, 'admin');
+    if (!decoded || decoded.type !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { name, is_active = true } = await request.json();
 
     if (!name) {

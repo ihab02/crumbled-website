@@ -168,7 +168,7 @@ export async function GET(request: Request) {
           isDefault: addr.is_default,
           city: addr.city_name,
           zone: addr.zone_name,
-          deliveryFee: addr.delivery_fee
+          deliveryFee: Number(addr.delivery_fee || 0)
         }))
       }
     });

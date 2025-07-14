@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -23,7 +24,15 @@ import {
   User,
   Truck,
   Image,
-  Target
+  Target,
+  ChefHat,
+  Shield,
+  Clock,
+  Bell,
+  MapPin,
+  Users2,
+  ClipboardList,
+  TrendingUp
 } from 'lucide-react';
 
 const menuItems = [
@@ -33,9 +42,65 @@ const menuItems = [
     icon: LayoutDashboard
   },
   {
-    title: 'Orders',
+    title: 'Kitchen Management',
+    href: '/admin/kitchen-management',
+    icon: ChefHat,
+    submenu: [
+      {
+        title: 'Kitchen Management',
+        href: '/admin/kitchen-management',
+        icon: ChefHat
+      },
+      {
+        title: 'Kitchen Production',
+        href: '/admin/kitchen-production',
+        icon: Clock
+      },
+      {
+        title: 'Kitchen Roles',
+        href: '/admin/role-management',
+        icon: Shield
+      }
+    ]
+  },
+  {
+    title: 'Order Processing',
     href: '/admin/orders',
-    icon: ShoppingCart
+    icon: ShoppingCart,
+    submenu: [
+      {
+        title: 'All Orders',
+        href: '/admin/orders',
+        icon: ShoppingCart
+      },
+      {
+        title: 'Order Batches',
+        href: '/admin/order-batches',
+        icon: ClipboardList
+      },
+      {
+        title: 'Order Routing',
+        href: '/admin/order-routing',
+        icon: MapPin
+      }
+    ]
+  },
+  {
+    title: 'Production Management',
+    href: '/admin/kitchen-production',
+    icon: Clock,
+    submenu: [
+      {
+        title: 'Production Dashboard',
+        href: '/admin/kitchen-production',
+        icon: Clock
+      },
+      {
+        title: 'Kitchen Management',
+        href: '/admin/kitchen-management',
+        icon: ChefHat
+      }
+    ]
   },
   {
     title: 'Delivery Management',
@@ -43,59 +108,83 @@ const menuItems = [
     icon: Truck
   },
   {
+    title: 'Locations',
+    href: '/admin/locations',
+    icon: MapPin
+  },
+  {
+    title: 'Promo Codes',
+    href: '/admin/promo-codes',
+    icon: Tag
+  },
+  {
     title: 'Stock Management',
     href: '/admin/stock',
     icon: Warehouse
   },
   {
-    title: 'Products',
+    title: 'Product Management',
     href: '/admin/products',
-    icon: Package
+    icon: Package,
+    submenu: [
+      {
+        title: 'Products',
+        href: '/admin/products',
+        icon: Package
+      },
+      {
+        title: 'Flavors',
+        href: '/admin/flavors',
+        icon: Cookie
+      },
+      {
+        title: 'Product Types',
+        href: '/admin/product-types',
+        icon: Tag
+      },
+      {
+        title: 'Sliding Media',
+        href: '/admin/sliding-media',
+        icon: Image
+      }
+    ]
   },
   {
-    title: 'Flavors',
-    href: '/admin/flavors',
-    icon: Cookie
-  },
-  {
-    title: 'Product Types',
-    href: '/admin/product-types',
-    icon: Tag
-  },
-  {
-    title: 'Sliding Media',
-    href: '/admin/sliding-media',
-    icon: Image
-  },
-  {
-    title: 'Customers',
+    title: 'Customer Management',
     href: '/admin/customers',
-    icon: Users
+    icon: Users,
+    submenu: [
+      {
+        title: 'Customers',
+        href: '/admin/customers',
+        icon: Users
+      },
+      {
+        title: 'Customer Insights',
+        href: '/admin/customer-insights',
+        icon: Target
+      },
+      {
+        title: 'Messages',
+        href: '/admin/messages',
+        icon: MessageSquare
+      },
+      {
+        title: 'Reviews',
+        href: '/admin/reviews',
+        icon: MessageSquare
+      }
+    ]
   },
   {
-    title: 'Categories',
-    href: '/admin/categories',
-    icon: Store
-  },
-  {
-    title: 'Analytics',
+    title: 'Analytics & Reports',
     href: '/admin/analytics',
     icon: BarChart
   },
   {
-    title: 'Customer Insights',
-    href: '/admin/customer-insights',
-    icon: Target
-  },
-  {
-    title: 'Messages',
-    href: '/admin/messages',
+    title: 'SMS Monitoring',
+    href: '/admin/sms-monitoring',
     icon: MessageSquare
-  },
-  {
-    title: 'Reports',
-    href: '/admin/reports',
-    icon: FileText
   },
   {
     title: 'Settings',
@@ -116,6 +205,11 @@ const menuItems = [
         title: 'Order Mode',
         href: '/admin/order-mode',
         icon: Database
+      },
+      {
+        title: 'Kitchen Settings',
+        href: '/admin/kitchen-settings',
+        icon: ChefHat
       }
     ]
   }
@@ -124,11 +218,18 @@ const menuItems = [
 export function SideMenu() {
   const pathname = usePathname();
   const { user, logout, loading } = useAdminAuth();
+  const { debugLog } = useDebugLogger();
 
-  console.log('SideMenu render:', { user, loading, pathname });
+  debugLog('SideMenu render:', { user, loading, pathname });
 
   const isActive = (href: string) => pathname === href;
   const isSettingsActive = pathname.startsWith('/admin/settings');
+  const isKitchenActive = pathname.startsWith('/admin/kitchen-management') || pathname.startsWith('/admin/kitchen-production') || pathname.startsWith('/admin/role-management');
+  const isOrderActive = pathname.startsWith('/admin/orders') || pathname.startsWith('/admin/order-');
+  const isProductionActive = pathname.startsWith('/admin/kitchen-production') || pathname.startsWith('/admin/kitchen-management');
+  const isProductActive = pathname.startsWith('/admin/products') || pathname.startsWith('/admin/flavors') || pathname.startsWith('/admin/product-') || pathname.startsWith('/admin/sliding-');
+  const isCustomerActive = pathname.startsWith('/admin/customers') || pathname.startsWith('/admin/customer-') || pathname.startsWith('/admin/messages');
+  const isAnalyticsActive = pathname.startsWith('/admin/analytics');
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-white">
@@ -150,10 +251,19 @@ export function SideMenu() {
         </div>
       )}
       
-      <nav className="flex-1 space-y-1 p-2">
+      <nav className="flex-1 space-y-1 p-2 overflow-y-auto">
         {menuItems.map((item) => {
           const isItemActive = isActive(item.href);
-          const showSubmenu = item.submenu && (isItemActive || isSettingsActive);
+          const showSubmenu = item.submenu && (
+            isItemActive || 
+            isSettingsActive || 
+            isKitchenActive || 
+            isOrderActive || 
+            isProductionActive || 
+            isProductActive || 
+            isCustomerActive || 
+            isAnalyticsActive
+          );
 
           return (
             <div key={item.href}>
@@ -202,7 +312,7 @@ export function SideMenu() {
       <div className="border-t p-2">
         <button
           onClick={() => {
-            console.log('Logout button clicked');
+            debugLog('Logout button clicked');
             logout();
           }}
           disabled={loading}

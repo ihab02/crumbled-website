@@ -31,6 +31,7 @@ import {
   Save
 } from "lucide-react"
 import DeliveryDatePicker from "@/components/DeliveryDatePicker"
+import { useDebugLogger } from "@/hooks/use-debug-mode"
 
 interface CheckoutData {
   userType: 'registered' | 'guest';
@@ -105,6 +106,7 @@ interface PaymentMethod {
 export default function NewCheckoutPage() {
   const router = useRouter()
   const { data: session, status } = useSession()
+  const { debugLog } = useDebugLogger()
   const [loading, setLoading] = useState(true)
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
   const [guestData, setGuestData] = useState<GuestData>({
@@ -251,19 +253,19 @@ export default function NewCheckoutPage() {
       const response = await fetch('/api/payment-methods')
       const data = await response.json()
       
-      console.log('🔍 [DEBUG] Frontend - Payment methods response:', JSON.stringify(data, null, 2))
+      debugLog('🔍 [DEBUG] Frontend - Payment methods response:', JSON.stringify(data, null, 2))
       
       if (data.success) {
         setEnabledPaymentMethods(data.paymentMethods)
-        console.log('🔍 [DEBUG] Frontend - Set enabled payment methods:', JSON.stringify(data.paymentMethods, null, 2))
+        debugLog('🔍 [DEBUG] Frontend - Set enabled payment methods:', JSON.stringify(data.paymentMethods, null, 2))
         
         // Set default payment method to first available one
         const methodKeys = Object.keys(data.paymentMethods)
-        console.log('🔍 [DEBUG] Frontend - Available method keys:', methodKeys)
+        debugLog('🔍 [DEBUG] Frontend - Available method keys:', methodKeys)
         
         if (methodKeys.length > 0) {
           setPaymentMethod(methodKeys[0] as 'cod' | 'paymob')
-          console.log('🔍 [DEBUG] Frontend - Set default payment method to:', methodKeys[0])
+          debugLog('🔍 [DEBUG] Frontend - Set default payment method to:', methodKeys[0])
         }
       }
     } catch (error) {
@@ -498,7 +500,7 @@ export default function NewCheckoutPage() {
         deliveryDate: selectedDeliveryDate
       }
 
-      console.log('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
+      debugLog('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
 
       const confirmResponse = await fetch('/api/checkout/confirm', {
         method: 'POST',

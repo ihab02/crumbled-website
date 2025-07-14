@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { ViewService } from '@/lib/services/viewService';
+import { databaseService } from '@/lib/services/databaseService';
+import { cookies } from 'next/headers';
+import { verifyJWT } from '@/lib/middleware/auth';
 import { revalidatePath } from 'next/cache';
 
 // GET single product type
@@ -8,37 +11,28 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    let connection;
-    try {
-      connection = await pool.getConnection();
-      const [productTypes] = await connection.query(
-        'SELECT * FROM product_types WHERE id = ?',
-        [params.id]
+    const productType = await databaseService.query(
+      'SELECT * FROM product_types WHERE id = ?',
+      [params.id]
+    );
+
+    if (!productType || productType.length === 0) {
+      return NextResponse.json(
+        { error: 'Product type not found' },
+        { status: 404 }
       );
-
-      const productType = productTypes[0];
-      if (!productType) {
-        return NextResponse.json(
-          { error: 'Product type not found' },
-          { status: 404 }
-        );
-      }
-
-      // Convert is_active from number to boolean
-      const processedProductType = {
-        ...productType,
-        is_active: Boolean(productType.is_active)
-      };
-
-      return NextResponse.json({
-        success: true,
-        productType: processedProductType
-      });
-    } finally {
-      if (connection) {
-        connection.release();
-      }
     }
+
+    // Convert is_active from number to boolean
+    const processedProductType = {
+      ...productType[0],
+      is_active: Boolean(productType[0].is_active)
+    };
+
+    return NextResponse.json({
+      success: true,
+      productType: processedProductType
+    });
   } catch (error) {
     console.error('Error fetching product type:', error);
     return NextResponse.json(
@@ -64,38 +58,28 @@ export async function PUT(
       );
     }
 
-    let connection;
-    try {
-      connection = await pool.getConnection();
-      await connection.query(
-        'UPDATE product_types SET name = ?, description = ?, display_order = ?, is_active = ? WHERE id = ?',
-        [name, description || null, display_order || 0, is_active ? 1 : 0, params.id]
-      );
+    await databaseService.query(
+      'UPDATE product_types SET name = ?, description = ?, display_order = ?, is_active = ? WHERE id = ?',
+      [name, description || null, display_order || 0, is_active ? 1 : 0, params.id]
+    );
 
-      const [updatedProductTypes] = await connection.query(
-        'SELECT * FROM product_types WHERE id = ?',
-        [params.id]
-      );
+    const updatedProductType = await databaseService.query(
+      'SELECT * FROM product_types WHERE id = ?',
+      [params.id]
+    );
 
-      const updatedProductType = updatedProductTypes[0];
+    // Convert is_active from number to boolean
+    const processedProductType = {
+      ...updatedProductType[0],
+      is_active: Boolean(updatedProductType[0].is_active)
+    };
 
-      // Convert is_active from number to boolean
-      const processedProductType = {
-        ...updatedProductType,
-        is_active: Boolean(updatedProductType.is_active)
-      };
-
-      revalidatePath('/admin/product-types');
-      return NextResponse.json({
-        success: true,
-        message: 'Product type updated successfully',
-        productType: processedProductType
-      });
-    } finally {
-      if (connection) {
-        connection.release();
-      }
-    }
+    revalidatePath('/admin/product-types');
+    return NextResponse.json({
+      success: true,
+      message: 'Product type updated successfully',
+      productType: processedProductType
+    });
   } catch (error) {
     console.error('Error updating product type:', error);
     return NextResponse.json(
@@ -105,34 +89,48 @@ export async function PUT(
   }
 }
 
-// DELETE product type
+// DELETE product type (soft delete)
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    let connection;
-    try {
-      connection = await pool.getConnection();
-      await connection.query(
-        'DELETE FROM product_types WHERE id = ?',
-        [params.id]
-      );
+    const cookieStore = cookies();
+    const adminToken = cookieStore.get('adminToken')?.value;
 
-      revalidatePath('/admin/product-types');
-      return NextResponse.json({
-        success: true,
-        message: 'Product type deleted successfully'
-      });
-    } finally {
-      if (connection) {
-        connection.release();
-      }
+    if (!adminToken) {
+      return new NextResponse('Unauthorized', { status: 401 });
     }
+
+    let decoded;
+    try {
+      decoded = verifyJWT(adminToken, 'admin') as any;
+    } catch (error) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    const adminUserId = decoded.id;
+    const productTypeId = parseInt(params.id);
+
+    // Use ViewService to soft delete the product type
+    const success = await ViewService.softDelete('product_types', productTypeId, adminUserId, 'Deleted via admin interface');
+
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Failed to soft delete product type' },
+        { status: 500 }
+      );
+    }
+
+    revalidatePath('/admin/product-types');
+    return NextResponse.json({
+      success: true,
+      message: 'Product type soft deleted successfully'
+    });
   } catch (error) {
-    console.error('Error deleting product type:', error);
+    console.error('Error soft deleting product type:', error);
     return NextResponse.json(
-      { error: 'Failed to delete product type' },
+      { error: 'Failed to soft delete product type' },
       { status: 500 }
     );
   }

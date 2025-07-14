@@ -78,13 +78,13 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/auth/signup" className="text-pink-600 hover:text-pink-800 transition-colors">
+                <Link href="/auth/register" className="text-pink-600 hover:text-pink-800 transition-colors">
                   Create Account
                 </Link>
               </li>
               <li>
-                <Link href="/cart" className="text-pink-600 hover:text-pink-800 transition-colors">
-                  Shopping Cart
+                        <Link href="/cart" className="text-pink-600 hover:text-pink-800 transition-colors">
+          My Bag
                 </Link>
               </li>
               <li>

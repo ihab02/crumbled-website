@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ShoppingBagIcon, MenuIcon, XIcon, UserIcon, LogOutIcon } from "lucide-react"
+import { ShoppingBagIcon, MenuIcon, XIcon, UserIcon, LogOutIcon, LockIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/cart-provider"
 import { usePathname } from "next/navigation"
@@ -15,56 +15,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useDebugLogger } from "@/hooks/use-debug-mode"
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { cart } = useCart()
+  const { cart, cartCount, isLoading } = useCart()
   const pathname = usePathname()
-  const [cartCount, setCartCount] = useState(0)
   const { data: session, status } = useSession()
-
-  const getTotalItems = () => {
-    return cart.reduce((total, item) => {
-      if (item.isBundle) {
-        return total + 1
-      }
-      return total + item.quantity
-    }, 0)
-  }
+  const { debugLog } = useDebugLogger()
 
   const navigation = [
-    { name: "Home", href: "/" },
-    { name: "View All Flavors", href: "/flavors" },
-    { name: "Mini Bundles", href: "/shop/bundles" },
-    { name: "Large Bundles", href: "/shop/large-bundles" },
-    { name: "Contact", href: "/contact" },
+    // Navigation links removed as requested
   ]
 
-  useEffect(() => {
-    const fetchCart = async () => {
-      try {
-        const response = await fetch('/api/cart')
-        const data = await response.json()
-        if (data.items) {
-          const totalItems = data.items.reduce((total: number, item: any) => total + item.quantity, 0)
-          setCartCount(totalItems)
-        }
-      } catch (error) {
-        console.error('Error fetching cart:', error)
-      }
-    }
-
-    fetchCart()
-    // Refresh cart count every 30 seconds
-    const interval = setInterval(fetchCart, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  // Cart is now managed by the enhanced cart provider
+  // No more polling - cart updates are handled automatically
 
   const isActive = (path: string) => pathname === path
 
   const handleSignOut = async () => {
     try {
-      console.log('🚪 Starting signout process...');
+      debugLog('🚪 Starting signout process...');
       
       // First, clear all authentication cookies
       const clearResponse = await fetch('/api/clear-auth', {
@@ -75,7 +46,7 @@ export default function Header() {
       });
       
       if (clearResponse.ok) {
-        console.log('🧹 Authentication cookies cleared');
+        debugLog('🧹 Authentication cookies cleared');
       }
       
       // Then use NextAuth signOut without redirect
@@ -138,8 +109,12 @@ export default function Header() {
 
         <div className="flex items-center gap-5">
           <Link href="/cart" className="text-pink-600 hover:text-pink-800 transition-all hover:scale-125 relative">
-            <ShoppingBagIcon className="h-6 w-6" />
-            <span className="sr-only">Cart</span>
+            {isLoading ? (
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-pink-600 border-t-transparent"></div>
+            ) : (
+              <ShoppingBagIcon className="h-6 w-6" />
+            )}
+            <span className="sr-only">My Bag</span>
             {cartCount > 0 && (
               <span className="absolute -right-3 -top-3 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-xs font-bold text-white animate-pulse shadow-lg">
                 {cartCount}
@@ -181,6 +156,12 @@ export default function Header() {
                       My Orders
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/account/change-password" className="cursor-pointer">
+                      <LockIcon className="h-4 w-4 mr-2" />
+                      Change Password
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600">
                     <LogOutIcon className="h-4 w-4 mr-2" />
@@ -199,7 +180,7 @@ export default function Header() {
                   <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-pink-400 to-rose-400 rounded-full transition-all duration-200 group-hover:w-4/5"></span>
                 </Link>
                 <Link
-                  href={`/auth/signup?redirect=${encodeURIComponent(getCurrentUrl())}`}
+                  href={`/auth/register?redirect=${encodeURIComponent(getCurrentUrl())}`}
                   className="text-sm font-medium text-pink-600 hover:text-pink-800 transition-all duration-200 relative group px-3 py-2 rounded-lg hover:bg-pink-50"
                 >
                   Sign up
@@ -249,18 +230,28 @@ export default function Header() {
                     className="border-2 border-pink-300 text-pink-600 hover:bg-gradient-to-r hover:from-pink-100 hover:to-rose-100 rounded-full"
                     asChild
                   >
-                    <Link href="/account">My Account</Link>
+                    <Link href="/account" onClick={() => setMobileMenuOpen(false)}>My Account</Link>
                   </Button>
                   <Button
                     variant="outline"
                     className="border-2 border-pink-300 text-pink-600 hover:bg-gradient-to-r hover:from-pink-100 hover:to-rose-100 rounded-full"
                     asChild
                   >
-                    <Link href="/account/orders">My Orders</Link>
+                    <Link href="/account/orders" onClick={() => setMobileMenuOpen(false)}>My Orders</Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-2 border-pink-300 text-pink-600 hover:bg-gradient-to-r hover:from-pink-100 hover:to-rose-100 rounded-full"
+                    asChild
+                  >
+                    <Link href="/account/change-password" onClick={() => setMobileMenuOpen(false)}>Change Password</Link>
                   </Button>
                   <Button
                     className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-full shadow-lg"
-                    onClick={handleSignOut}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      handleSignOut();
+                    }}
                   >
                     Sign out
                   </Button>
@@ -273,13 +264,13 @@ export default function Header() {
                     className="border-2 border-pink-300 text-pink-600 hover:bg-gradient-to-r hover:from-pink-100 hover:to-rose-100 rounded-full"
                     asChild
                   >
-                    <Link href={`/auth/login?redirect=${encodeURIComponent(getCurrentUrl())}`}>Log in</Link>
+                    <Link href={`/auth/login?redirect=${encodeURIComponent(getCurrentUrl())}`} onClick={() => setMobileMenuOpen(false)}>Log in</Link>
                   </Button>
                   <Button
                     className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full shadow-lg"
                     asChild
                   >
-                    <Link href="/auth/signup">Sign up</Link>
+                    <Link href="/auth/register" onClick={() => setMobileMenuOpen(false)}>Sign up</Link>
                   </Button>
                 </>
               )}

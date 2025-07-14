@@ -196,7 +196,7 @@ export function ProductCard({ product }: ProductCardProps) {
               onClick={handleAddToCart}
               disabled={!addToCart}
             >
-              {addToCart ? "Add to Cart" : "Cart Unavailable"}
+              {addToCart ? "Add to Bag" : "Bag Unavailable"}
             </Button>
           </div>
         )}

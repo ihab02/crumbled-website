@@ -1,4 +1,5 @@
 import { databaseService } from './databaseService';
+import { debugLog } from '../debug-utils';
 
 export type OrderMode = 'stock_based' | 'preorder';
 
@@ -54,7 +55,7 @@ class OrderModeService {
       this.cacheExpiry = now + this.CACHE_DURATION;
       return this.cachedOrderMode;
     } catch (error) {
-      console.error('Error fetching order mode:', error);
+      debugLog('Error fetching order mode:', error);
       return 'stock_based'; // Default fallback
     }
   }
@@ -128,7 +129,7 @@ class OrderModeService {
         allowsOutOfStock: false
       };
     } catch (error) {
-      console.error('Error checking product availability:', error);
+      debugLog('Error checking product availability:', error);
       return {
         isAvailable: false,
         status: 'out_of_stock',

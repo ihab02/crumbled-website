@@ -20,12 +20,14 @@ interface City {
   id: number;
   name: string;
   zones: Zone[];
+  is_active: boolean; // Added for inactive status
 }
 
 interface Zone {
   id: number;
   name: string;
   deliveryFee: number;
+  is_active: boolean; // Added for inactive status
 }
 
 function RegisterPageContent() {
@@ -50,8 +52,13 @@ function RegisterPageContent() {
     address: '',
     cityId: '',
     zoneId: '',
+    ageGroup: '',
+    birthDate: '',
     otp: ''
   })
+
+  const [showCoverageMessage, setShowCoverageMessage] = useState(false)
+  const [inactiveCoverageText, setInactiveCoverageText] = useState('')
 
   // Fetch cities on component mount
   useEffect(() => {
@@ -205,6 +212,8 @@ function RegisterPageContent() {
     setError("")
     setSuccess("")
     setIsLoading(true)
+    setShowCoverageMessage(false)
+    setInactiveCoverageText('')
 
     // Basic validation
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.cityId || !formData.zoneId) {
@@ -245,18 +254,33 @@ function RegisterPageContent() {
           phone: formData.phone,
           cityId: formData.cityId,
           zoneId: formData.zoneId,
-          address: formData.address
+          address: formData.address,
+          ageGroup: formData.ageGroup,
+          birthDate: formData.birthDate
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
+        // Check if city or zone is inactive
+        const city = cities.find(c => c.id.toString() === formData.cityId)
+        const zone = zones.find(z => z.id.toString() === formData.zoneId)
+        let inactiveMsg = ''
+        if (city && !city.is_active) {
+          inactiveMsg = `Your city (${city.name}) is not yet under coverage for the delivery service. We will cover it soon!`
+        } else if (zone && !zone.is_active) {
+          inactiveMsg = `Your zone (${zone.name}) is not yet under coverage for the delivery service. We will cover it soon!`
+        }
+        if (inactiveMsg) {
+          setShowCoverageMessage(true)
+          setInactiveCoverageText(inactiveMsg)
+        }
         setSuccess("Account created successfully! Redirecting...")
         setTimeout(() => {
           const redirectUrl = searchParams.get('redirect') || '/account'
           router.push(`/auth/login?redirect=${encodeURIComponent(redirectUrl)}`)
-        }, 2000)
+        }, 3000)
       } else {
         setError(data.error || "Failed to create account")
       }
@@ -290,6 +314,12 @@ function RegisterPageContent() {
           {success && (
             <Alert className="mb-6 border-green-200 bg-green-50">
               <AlertDescription className="text-green-700">{success}</AlertDescription>
+            </Alert>
+          )}
+
+          {showCoverageMessage && (
+            <Alert className="mb-6 border-yellow-200 bg-yellow-50">
+              <AlertDescription className="text-yellow-700">{inactiveCoverageText}</AlertDescription>
             </Alert>
           )}
 
@@ -474,8 +504,13 @@ function RegisterPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       {cities.map((city) => (
-                        <SelectItem key={city.id} value={city.id.toString()}>
-                          {city.name}
+                        <SelectItem
+                          key={city.id}
+                          value={city.id.toString()}
+                          disabled={false}
+                          className={!city.is_active ? 'text-gray-400' : ''}
+                        >
+                          {city.name}{!city.is_active ? ' (coming soon)' : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -496,8 +531,13 @@ function RegisterPageContent() {
                     </SelectTrigger>
                     <SelectContent>
                       {zones.map((zone) => (
-                        <SelectItem key={zone.id} value={zone.id.toString()}>
-                          {zone.name}
+                        <SelectItem
+                          key={zone.id}
+                          value={zone.id.toString()}
+                          disabled={false}
+                          className={!zone.is_active ? 'text-gray-400' : ''}
+                        >
+                          {zone.name}{!zone.is_active ? ' (coming soon)' : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -519,6 +559,48 @@ function RegisterPageContent() {
                     onChange={handleChange}
                     disabled={isLoading}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="ageGroup" className="text-pink-700">
+                      Age Group
+                    </Label>
+                    <Select
+                      value={formData.ageGroup}
+                      onValueChange={(value) => setFormData({ ...formData, ageGroup: value })}
+                      disabled={isLoading}
+                    >
+                      <SelectTrigger className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400">
+                        <SelectValue placeholder="Select your age group" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="13-17">13-17 years</SelectItem>
+                        <SelectItem value="18-24">18-24 years</SelectItem>
+                        <SelectItem value="25-34">25-34 years</SelectItem>
+                        <SelectItem value="35-44">35-44 years</SelectItem>
+                        <SelectItem value="45-54">45-54 years</SelectItem>
+                        <SelectItem value="55-64">55-64 years</SelectItem>
+                        <SelectItem value="65+">65+ years</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="birthDate" className="text-pink-700">
+                      Birth Date (Optional)
+                    </Label>
+                    <Input
+                      id="birthDate"
+                      name="birthDate"
+                      type="date"
+                      className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                      placeholder="Select your birth date"
+                      value={formData.birthDate}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                    />
+                  </div>
                 </div>
 
                 <Button

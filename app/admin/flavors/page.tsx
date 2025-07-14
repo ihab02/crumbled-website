@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Pencil, Trash2, Loader2, Package, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Package, AlertTriangle, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useRouter } from 'next/navigation';
+import { ViewToggle } from '@/components/admin/ViewToggle';
+import { useViewPreferences } from '@/hooks/use-view-preferences';
 
 interface StockInfo {
   quantity: number;
@@ -27,6 +29,8 @@ interface Flavor {
   large_price: number;
   category: string;
   is_active: boolean;
+  deleted_at?: string;
+  status?: string;
   images: Array<{
     id: number;
     image_url: string;
@@ -89,14 +93,16 @@ export default function FlavorsPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
+  // LIFT useViewPreferences to the page
+  const { preferences, toggleShowDeleted } = useViewPreferences('flavors');
 
   useEffect(() => {
     fetchFlavors();
-  }, []);
+  }, [preferences.show_deleted]);
 
   const fetchFlavors = async () => {
     try {
-      const response = await fetch('/api/admin/flavors', {
+      const response = await fetch(`/api/admin/flavors?show_deleted=${preferences.show_deleted}`, {
         credentials: 'include'
       });
       if (!response.ok) {
@@ -140,6 +146,32 @@ export default function FlavorsPage() {
       toast({
         title: 'Error',
         description: 'Failed to delete flavor',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleRestoreFlavor = async (flavor: Flavor) => {
+    if (!confirm('Are you sure you want to restore this flavor?')) return;
+
+    try {
+      const response = await fetch(`/api/admin/flavors/${flavor.id}/restore`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      if (!response.ok) throw new Error('Failed to restore flavor');
+
+      toast({
+        title: 'Success',
+        description: 'Flavor restored successfully'
+      });
+
+      fetchFlavors();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to restore flavor',
         variant: 'destructive'
       });
     }
@@ -200,15 +232,22 @@ export default function FlavorsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Flavors</h1>
-        <Button onClick={() => router.push('/admin/flavors/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add New Flavor
-        </Button>
+        <div className="flex items-center gap-4">
+          <ViewToggle 
+            checked={preferences.show_deleted}
+            onToggle={toggleShowDeleted}
+            viewType="flavors"
+          />
+          <Button onClick={() => router.push('/admin/flavors/new')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add New Flavor
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {flavors.map((flavor) => (
-          <Card key={flavor.id} className="overflow-hidden">
+          <Card key={flavor.id} className={`overflow-hidden ${flavor.deleted_at ? 'opacity-60 border-red-200' : ''}`}>
             <div className="flex items-start gap-4 p-6">
               <div className="w-24 h-24 flex-shrink-0">
                 <img
@@ -226,20 +265,38 @@ export default function FlavorsPage() {
                   <div className="min-w-0 flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 truncate">{flavor.name}</h3>
                     <p className="text-sm text-gray-500">{flavor.category}</p>
+                    {flavor.deleted_at && (
+                      <Badge variant="destructive" className="mt-1">
+                        Deleted
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 ml-2">
-                    <button
-                      onClick={() => router.push(`/admin/flavors/${flavor.id}`)}
-                      className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteFlavor(flavor)}
-                      className="text-red-600 hover:text-red-800 p-1 rounded"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {!flavor.deleted_at && (
+                      <>
+                        <button
+                          onClick={() => router.push(`/admin/flavors/${flavor.id}`)}
+                          className="text-blue-600 hover:text-blue-800 p-1 rounded"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteFlavor(flavor)}
+                          className="text-red-600 hover:text-red-800 p-1 rounded"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                    {flavor.deleted_at && (
+                      <button
+                        onClick={() => handleRestoreFlavor(flavor)}
+                        className="text-green-600 hover:text-green-800 p-1 rounded"
+                        title="Restore flavor"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 

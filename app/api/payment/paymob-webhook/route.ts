@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
-import { emailService } from '@/lib/services/emailService';
+import { sendOrderConfirmationEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -158,9 +158,9 @@ export async function POST(request: NextRequest) {
               // Continue without delivery rules if fetch fails
             }
             
-            await emailService.sendOrderConfirmationEmail(
+            await sendOrderConfirmationEmail(
               orderDetails.email,
-              ourOrderId.toString(),
+              ourOrderId,
               {
                 items: [], // TODO: Get actual order items
                 subtotal: orderDetails.total,

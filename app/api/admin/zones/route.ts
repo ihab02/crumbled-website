@@ -1,50 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
+import { verifyJWT } from '@/lib/middleware/auth';
 
 export async function GET() {
   try {
-    // First, let's try a simpler query to get zones with city names and city active status
+    // Use a single optimized query with LEFT JOINs to get all data at once
     const zones = await databaseService.query(`
       SELECT 
         z.*,
         c.name as city_name,
-        c.is_active as city_is_active
+        c.is_active as city_is_active,
+        dts.name as time_slot_name,
+        dts.from_hour as time_slot_from,
+        dts.to_hour as time_slot_to
       FROM zones z
       LEFT JOIN cities c ON z.city_id = c.id
+      LEFT JOIN delivery_time_slots dts ON z.time_slot_id = dts.id
       ORDER BY c.name ASC, z.name ASC
     `);
     
-    // Now let's try to get time slot information separately to avoid JOIN issues
-    const zonesWithTimeSlots = await Promise.all(
-      zones.map(async (zone: any) => {
-        if (zone.time_slot_id) {
-          try {
-            const timeSlot = await databaseService.query(
-              'SELECT name, from_hour, to_hour FROM delivery_time_slots WHERE id = ?',
-              [zone.time_slot_id]
-            );
-            if (timeSlot.length > 0) {
-              return {
-                ...zone,
-                time_slot_name: timeSlot[0].name,
-                time_slot_from: timeSlot[0].from_hour,
-                time_slot_to: timeSlot[0].to_hour
-              };
-            }
-          } catch (error) {
-            console.error(`Error fetching time slot ${zone.time_slot_id}:`, error);
-          }
-        }
-        return {
-          ...zone,
-          time_slot_name: null,
-          time_slot_from: null,
-          time_slot_to: null
-        };
-      })
-    );
-    
-    return NextResponse.json(zonesWithTimeSlots);
+    return NextResponse.json(zones);
   } catch (error) {
     console.error('Error fetching zones:', error);
     return NextResponse.json(
@@ -56,13 +31,26 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const token = request.cookies.get('adminToken')?.value;
+    
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const decoded = await verifyJWT(token, 'admin');
+    if (!decoded || decoded.type !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { 
       name, 
       city_id, 
       delivery_days = 0, 
       time_slot_id, 
       delivery_fee = 0.00, 
-      is_active = true 
+      is_active = true,
+      kitchen_assignments = []
     } = await request.json();
 
     if (!name || !city_id) {
@@ -72,44 +60,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await databaseService.query(
-      'INSERT INTO zones (name, city_id, delivery_days, time_slot_id, delivery_fee, is_active) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, city_id, delivery_days, time_slot_id, delivery_fee, is_active]
-    );
+    const result = await databaseService.transaction(async (connection) => {
+      // Create the zone
+      const [zoneResult] = await connection.execute(
+        'INSERT INTO zones (name, city_id, delivery_days, time_slot_id, delivery_fee, is_active) VALUES (?, ?, ?, ?, ?, ?)',
+        [name, city_id, delivery_days, time_slot_id, delivery_fee, is_active]
+      );
 
-    // Fetch the newly created zone with city name
+      const zoneId = (zoneResult as any).insertId;
+
+      // Create kitchen assignments if provided
+      if (Array.isArray(kitchen_assignments) && kitchen_assignments.length > 0) {
+        for (const assignment of kitchen_assignments) {
+          const { kitchen_id, is_primary, priority } = assignment;
+          
+          await connection.execute(`
+            INSERT INTO kitchen_zones (kitchen_id, zone_id, is_primary, priority, is_active)
+            VALUES (?, ?, ?, ?, true)
+          `, [kitchen_id, zoneId, is_primary, priority]);
+        }
+      }
+
+      return zoneId;
+    });
+
+    // Fetch the newly created zone with all related data
     const newZone = await databaseService.query(`
       SELECT 
         z.*,
         c.name as city_name,
-        c.is_active as city_is_active
+        c.is_active as city_is_active,
+        dts.name as time_slot_name,
+        dts.from_hour as time_slot_from,
+        dts.to_hour as time_slot_to
       FROM zones z
       LEFT JOIN cities c ON z.city_id = c.id
+      LEFT JOIN delivery_time_slots dts ON z.time_slot_id = dts.id
       WHERE z.id = ?
-    `, [result.insertId]);
+    `, [result]);
 
-    // Add time slot information if available
-    let zoneWithTimeSlot = newZone[0];
-    if (zoneWithTimeSlot.time_slot_id) {
-      try {
-        const timeSlot = await databaseService.query(
-          'SELECT name, from_hour, to_hour FROM delivery_time_slots WHERE id = ?',
-          [zoneWithTimeSlot.time_slot_id]
-        );
-        if (timeSlot.length > 0) {
-          zoneWithTimeSlot = {
-            ...zoneWithTimeSlot,
-            time_slot_name: timeSlot[0].name,
-            time_slot_from: timeSlot[0].from_hour,
-            time_slot_to: timeSlot[0].to_hour
-          };
-        }
-      } catch (error) {
-        console.error(`Error fetching time slot ${zoneWithTimeSlot.time_slot_id}:`, error);
-      }
-    }
-
-    return NextResponse.json(zoneWithTimeSlot, { status: 201 });
+    return NextResponse.json(newZone[0], { status: 201 });
   } catch (error) {
     console.error('Error creating zone:', error);
     return NextResponse.json(

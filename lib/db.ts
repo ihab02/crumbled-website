@@ -227,8 +227,12 @@ export async function getOrderByTracking(trackingId: string, email: string) {
   try {
     connection = await pool.getConnection();
 
+    // Use order id as tracking number and join with customers table to get email
     const [order] = await connection.query(
-      "SELECT * FROM orders WHERE tracking_id = ? AND customer_email = ?",
+      `SELECT o.*, c.email as customer_email 
+       FROM orders o 
+       JOIN customers c ON o.customer_id = c.id 
+       WHERE o.id = ? AND c.email = ?`,
       [trackingId, email]
     );
 
@@ -241,7 +245,21 @@ export async function getOrderByTracking(trackingId: string, email: string) {
       [order[0].id]
     );
 
-    return { success: true, order: order[0], items }
+    // Convert numeric fields to numbers for frontend compatibility
+    const processedOrder = {
+      ...order[0],
+      total: parseFloat(order[0].total_amount || 0),
+      delivery_fee: parseFloat(order[0].delivery_fee || 0),
+      subtotal: parseFloat(order[0].subtotal || 0)
+    };
+
+    // Process items to convert price to number
+    const processedItems = items.map((item: any) => ({
+      ...item,
+      price: parseFloat(item.price || 0)
+    }));
+
+    return { success: true, order: processedOrder, items: processedItems }
   } catch (error) {
     console.error("Error fetching order by tracking:", error)
     return { success: false, error: error instanceof Error ? error.message : "Database operation failed" }
