@@ -69,11 +69,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     // Get flavor details for each order item
     const itemsWithFlavors = await Promise.all(itemsArray.map(async (item: any) => {
-      // Try to use the new columns if available
       let flavors = [];
-      let isPack = item.product_type === 'pack';
-      if (isPack) {
-        // Try to get from product_instance_flavor (new columns)
+      let isPack = item.product_type === 'pack' || item.product_type === 'cookie_pack';
+      
+      // First try to get flavors from the flavor_details JSON column
+      if (item.flavor_details && typeof item.flavor_details === 'string') {
+        try {
+          flavors = JSON.parse(item.flavor_details);
+        } catch (e) {
+          console.error('Error parsing flavor_details JSON:', e);
+        }
+      } else if (item.flavor_details && Array.isArray(item.flavor_details)) {
+        flavors = item.flavor_details;
+      }
+      
+      // If no flavors found in flavor_details, try product_instance_flavor table
+      if (flavors.length === 0 && isPack) {
         const flavorResult = await databaseService.query(
           `SELECT 
             COALESCE(pif.flavor_name, f.name) as flavor_name,
@@ -93,14 +104,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             quantity: f.quantity
           }));
       }
+      
       return {
         id: item.id,
-        product_name: item.product_name || item.product_name,
+        product_name: item.product_name || 'Unknown Product',
         product_type: item.product_type,
-        pack_size: item.pack_size || null, // This comes from order_items table
+        pack_size: item.pack_size || null,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        flavors: isPack ? flavors : [],
+        flavors: flavors,
       };
     }));
 

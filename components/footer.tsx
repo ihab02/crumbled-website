@@ -78,7 +78,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/auth/signup" className="text-pink-600 hover:text-pink-800 transition-colors">
+                <Link href="/auth/register" className="text-pink-600 hover:text-pink-800 transition-colors">
                   Create Account
                 </Link>
               </li>

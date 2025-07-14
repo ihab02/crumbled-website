@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminLoginPage() {
@@ -10,12 +10,23 @@ export default function AdminLoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Add debugging to ensure this is the admin login page
+  useEffect(() => {
+    console.log('Admin login page loaded');
+    console.log('Current pathname:', window.location.pathname);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
+    console.log('Admin login form submitted');
+    console.log('Username:', username);
+    console.log('Password length:', password.length);
+
     try {
+      console.log('Making request to /api/auth/admin/login');
       const response = await fetch('/api/auth/admin/login', {
         method: 'POST',
         headers: {
@@ -25,18 +36,25 @@ export default function AdminLoginPage() {
         credentials: 'include'
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (!response.ok || !data.success) {
         throw new Error(data.message || 'Login failed');
       }
 
+      console.log('Login successful, redirecting to dashboard');
+      
       // Wait longer for the cookie to be set
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Use window.location for a full page reload
       window.location.href = '/admin/dashboard';
     } catch (error) {
+      console.error('Admin login error:', error);
       setError(error instanceof Error ? error.message : 'An error occurred during login');
     } finally {
       setIsLoading(false);
@@ -47,6 +65,7 @@ export default function AdminLoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-50 to-rose-50">
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-6">Admin Login</h1>
+        <p className="text-sm text-gray-600 text-center mb-4">Administrator Access Only</p>
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded mb-4">
             {error}

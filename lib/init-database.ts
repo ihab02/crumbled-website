@@ -1,6 +1,7 @@
 import { sessionManager } from '@/lib/session-manager';
 import { databaseService } from '@/lib/services/databaseService';
 import { validateAuthConfig } from '@/lib/auth-config';
+import { initializeKitchenSystem } from '@/lib/kitchen-system-migration';
 
 export async function initializeDatabase() {
   console.log('Initializing database...');
@@ -99,6 +100,13 @@ export async function initializeDatabase() {
       )
     `);
     console.log('✅ Password reset tokens table initialized');
+
+    // Initialize kitchen system
+    const kitchenResult = await initializeKitchenSystem();
+    if (!kitchenResult.success) {
+      console.error('❌ Kitchen system initialization failed:', kitchenResult.error);
+      return { success: false, error: `Kitchen system initialization failed: ${kitchenResult.error}` };
+    }
 
     console.log('🎉 Database initialization completed successfully!');
     return { success: true };

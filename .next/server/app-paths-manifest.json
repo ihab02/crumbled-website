@@ -1,8 +1,15 @@
 {
+  "/_not-found/page": "app/_not-found/page.js",
+  "/account/orders/page": "app/account/orders/page.js",
+  "/account/page": "app/account/page.js",
+  "/api/debug-mode/route": "app/api/debug-mode/route.js",
   "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/customers/route": "app/api/customers/route.js",
   "/api/cart/route": "app/api/cart/route.js",
-  "/api/admin/orders/route": "app/api/admin/orders/route.js",
-  "/api/admin/orders/assign-delivery/route": "app/api/admin/orders/assign-delivery/route.js",
-  "/checkout/success/page": "app/checkout/success/page.js",
-  "/admin/orders/page": "app/admin/orders/page.js"
+  "/api/user/orders/route": "app/api/user/orders/route.js",
+  "/api/locations/route": "app/api/locations/route.js",
+  "/page": "app/page.js",
+  "/api/sliding-media/route": "app/api/sliding-media/route.js",
+  "/api/flavors/route": "app/api/flavors/route.js",
+  "/flavors/page": "app/flavors/page.js"
 }

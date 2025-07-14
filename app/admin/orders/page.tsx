@@ -94,7 +94,11 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isLoadingOrderDetails, setIsLoadingOrderDetails] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
+  const [bulkSelectedOrders, setBulkSelectedOrders] = useState<Set<number>>(new Set());
+  const [isLoadingBulkAction, setIsLoadingBulkAction] = useState(false);
   const [filterDeliveryPerson, setFilterDeliveryPerson] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState<string>('');
@@ -138,6 +142,142 @@ export default function AdminOrdersPage() {
       }
     } catch (error) {
       console.error('Failed to fetch delivery persons:', error);
+    }
+  };
+
+  const fetchOrderDetails = async (orderId: number) => {
+    setIsLoadingOrderDetails(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSelectedOrder(data.order);
+        } else {
+          console.error('Failed to fetch order details:', data.message);
+        }
+      } else {
+        console.error('Failed to fetch order details');
+      }
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+    } finally {
+      setIsLoadingOrderDetails(false);
+    }
+  };
+
+  const toggleOrderExpansion = async (orderId: number) => {
+    const newExpandedOrders = new Set(expandedOrders);
+    if (newExpandedOrders.has(orderId)) {
+      newExpandedOrders.delete(orderId);
+    } else {
+      newExpandedOrders.add(orderId);
+      // Fetch order details when expanding
+      try {
+        const response = await fetch(`/api/admin/orders/${orderId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            // Update the order in the orders list with the detailed items
+            setOrders(prevOrders => 
+              prevOrders.map(order => 
+                order.id === orderId 
+                  ? { ...order, items: data.order.items }
+                  : order
+              )
+            );
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching order details for expansion:', error);
+      }
+    }
+    setExpandedOrders(newExpandedOrders);
+  };
+
+  const toggleBulkSelection = (orderId: number) => {
+    const newBulkSelectedOrders = new Set(bulkSelectedOrders);
+    if (newBulkSelectedOrders.has(orderId)) {
+      newBulkSelectedOrders.delete(orderId);
+    } else {
+      newBulkSelectedOrders.add(orderId);
+    }
+    setBulkSelectedOrders(newBulkSelectedOrders);
+  };
+
+  const selectAllOrders = () => {
+    const assignableOrderIds = searchFilteredOrders
+      .filter(canAssignToDelivery)
+      .map(order => order.id);
+    
+    if (bulkSelectedOrders.size === assignableOrderIds.length) {
+      setBulkSelectedOrders(new Set());
+    } else {
+      setBulkSelectedOrders(new Set(assignableOrderIds));
+    }
+  };
+
+  const performBulkAction = async (action: string) => {
+    if (bulkSelectedOrders.size === 0) {
+      toast.error('Please select orders to perform bulk action');
+      return;
+    }
+
+    setIsLoadingBulkAction(true);
+    try {
+      switch (action) {
+        case 'assign_delivery':
+          openDeliveryModal(Array.from(bulkSelectedOrders));
+          break;
+        case 'mark_prepared':
+          await updateMultipleOrderStatuses(Array.from(bulkSelectedOrders), 'prepared');
+          break;
+        case 'mark_confirmed':
+          await updateMultipleOrderStatuses(Array.from(bulkSelectedOrders), 'confirmed');
+          break;
+        case 'print_orders':
+          await printMultipleOrders(Array.from(bulkSelectedOrders));
+          break;
+        default:
+          toast.error('Unknown bulk action');
+      }
+    } catch (error) {
+      toast.error('Failed to perform bulk action');
+    } finally {
+      setIsLoadingBulkAction(false);
+    }
+  };
+
+  const updateMultipleOrderStatuses = async (orderIds: number[], status: string) => {
+    try {
+      const response = await fetch('/api/admin/orders/bulk-update', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ orderIds, status })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update order statuses');
+      }
+
+      toast.success(`Updated ${orderIds.length} orders to ${status}`);
+      setBulkSelectedOrders(new Set());
+      fetchOrders(currentPage);
+    } catch (error) {
+      toast.error('Failed to update order statuses');
+    }
+  };
+
+  const printMultipleOrders = async (orderIds: number[]) => {
+    // For now, just print the first order
+    // In a real implementation, you might want to create a combined PDF
+    if (orderIds.length > 0) {
+      const order = orders.find(o => o.id === orderIds[0]);
+      if (order) {
+        printOrder(order);
+      }
     }
   };
 
@@ -788,23 +928,46 @@ export default function AdminOrdersPage() {
             </div>
 
             {/* Bulk Actions */}
-            {selectedOrders.length > 0 && (
+            {bulkSelectedOrders.size > 0 && (
               <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <span className="text-sm font-medium text-blue-900">
-                      {selectedOrders.length} order(s) selected
+                      {bulkSelectedOrders.size} order(s) selected
                     </span>
-                    <button
-                      onClick={() => openDeliveryModal(selectedOrders)}
-                      disabled={selectedOrders.length === 0}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      🚚 Assign Delivery Person
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => performBulkAction('assign_delivery')}
+                        disabled={isLoadingBulkAction}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        🚚 Assign Delivery
+                      </button>
+                      <button
+                        onClick={() => performBulkAction('mark_prepared')}
+                        disabled={isLoadingBulkAction}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ✅ Mark Prepared
+                      </button>
+                      <button
+                        onClick={() => performBulkAction('mark_confirmed')}
+                        disabled={isLoadingBulkAction}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        📋 Mark Confirmed
+                      </button>
+                      <button
+                        onClick={() => performBulkAction('print_orders')}
+                        disabled={isLoadingBulkAction}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        🖨️ Print Orders
+                      </button>
+                    </div>
                   </div>
                   <button
-                    onClick={() => setSelectedOrders([])}
+                    onClick={() => setBulkSelectedOrders(new Set())}
                     className="text-sm text-blue-600 hover:text-blue-800"
                   >
                     Clear Selection
@@ -820,10 +983,13 @@ export default function AdminOrdersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <input
                         type="checkbox"
-                        checked={selectedOrders.length === searchFilteredOrders.length && searchFilteredOrders.length > 0}
-                        onChange={handleBulkSelection}
+                        checked={bulkSelectedOrders.size === searchFilteredOrders.filter(canAssignToDelivery).length && searchFilteredOrders.filter(canAssignToDelivery).length > 0}
+                        onChange={selectAllOrders}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Expand
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order ID
@@ -865,15 +1031,33 @@ export default function AdminOrdersPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {searchFilteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => handleOrderSelection(order.id)}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                      </td>
+                    <>
+                      <tr key={order.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={bulkSelectedOrders.has(order.id)}
+                            onChange={() => toggleBulkSelection(order.id)}
+                            disabled={!canAssignToDelivery(order)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                          />
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => toggleOrderExpansion(order.id)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            {expandedOrders.has(order.id) ? (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
+                          </button>
+                        </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         #{order.id}
                       </td>
@@ -965,7 +1149,7 @@ export default function AdminOrdersPage() {
                               ))}
                             </select>
                             <button
-                              onClick={() => setSelectedOrder(order)}
+                              onClick={() => fetchOrderDetails(order.id)}
                               className="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                             >
                               View Details
@@ -973,6 +1157,95 @@ export default function AdminOrdersPage() {
                           </div>
                       </td>
                     </tr>
+                    {/* Expanded Order Items Row */}
+                    {expandedOrders.has(order.id) && (
+                      <tr key={`${order.id}-expanded`} className="bg-gray-50">
+                        <td colSpan={13} className="px-4 py-4">
+                          <div className="bg-white rounded-lg border border-gray-200 p-4">
+                            <h4 className="text-sm font-medium text-gray-900 mb-3">Order Items</h4>
+                            {order.items && order.items.length > 0 ? (
+                              <div className="space-y-4">
+                                {order.items.map((item, index) => (
+                                  <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <h4 className="text-lg font-semibold text-gray-900">
+                                            {item.product_name || 'Unknown Product'}
+                                          </h4>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+                                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                                            {item.product_type}
+                                          </span>
+                                          {item.pack_size && (
+                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                              {item.pack_size}
+                                            </span>
+                                          )}
+                                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
+                                            Qty: {item.quantity}
+                                          </span>
+                                        </div>
+                                        
+                                        {item.flavors && item.flavors.length > 0 && (
+                                          <div className="mt-3">
+                                            <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                              <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                                              Selected Flavors
+                                            </h5>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                              {item.flavors.map((flavor, flavorIndex) => (
+                                                <div key={flavorIndex} className="flex items-center justify-between p-2 bg-pink-50 rounded-md border border-pink-100">
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-medium text-pink-800">
+                                                      {flavor.flavor_name}
+                                                    </span>
+                                                    <span className="text-xs text-pink-600 bg-pink-100 px-2 py-1 rounded">
+                                                      {flavor.size_name}
+                                                    </span>
+                                                  </div>
+                                                  <span className="text-sm font-semibold text-pink-700">
+                                                    {flavor.quantity}x
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="text-right ml-4">
+                                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                          <p className="text-lg font-bold text-gray-900">
+                                            EGP {Number(item.unit_price).toFixed(2)}
+                                          </p>
+                                          <p className="text-sm text-gray-500">
+                                            per item
+                                          </p>
+                                          <div className="mt-2 pt-2 border-t border-gray-200">
+                                            <p className="text-lg font-bold text-green-600">
+                                              EGP {(Number(item.unit_price) * item.quantity).toFixed(2)}
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              total
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">No items found for this order.</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                   ))}
                 </tbody>
               </table>
@@ -1014,9 +1287,21 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* Order Details Modal */}
+                {/* Order Details Modal */}
         {selectedOrder && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <>
+            {isLoadingOrderDetails && (
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-lg p-6">
+                  <div className="flex items-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                    <span className="ml-3 text-gray-700">Loading order details...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!isLoadingOrderDetails && (
+              <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <div className="px-6 py-4 border-b border-gray-200">
                 <div className="flex justify-between items-center">
@@ -1175,36 +1460,76 @@ export default function AdminOrdersPage() {
                 {/* Order Items */}
                 {selectedOrder.items && selectedOrder.items.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500 mb-2">Order Items</h3>
-                    <div className="bg-gray-50 p-3 rounded-md">
+                    <h3 className="text-sm font-medium text-gray-500 mb-3">Order Items</h3>
+                    <div className="space-y-4">
                       {selectedOrder.items.map((item, index) => (
-                        <div key={index} className="mb-4 last:mb-0">
+                        <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900">
-                                {item.product_name || 'Unknown Product'}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                Type: {item.product_type} {item.pack_size ? `| Size: ${item.pack_size}` : ''} | Qty: {item.quantity}
-                              </p>
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className="text-lg font-semibold text-gray-900">
+                                  {item.product_name || 'Unknown Product'}
+                                </h4>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                                  {item.product_type}
+                                </span>
+                                {item.pack_size && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                    {item.pack_size}
+                                  </span>
+                                )}
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
+                                  Qty: {item.quantity}
+                                </span>
+                              </div>
+                              
                               {item.flavors && item.flavors.length > 0 && (
-                                <div className="mt-1">
-                                  <p className="text-xs text-gray-500 font-medium">Flavors:</p>
-                                  {item.flavors.map((flavor, flavorIndex) => (
-                                    <p key={flavorIndex} className="text-xs text-gray-500 ml-2">
-                                      • {flavor.flavor_name} ({flavor.quantity}x) - {flavor.size_name}
-                                    </p>
-                                  ))}
+                                <div className="mt-3">
+                                  <h5 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+                                    Selected Flavors
+                                  </h5>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {item.flavors.map((flavor, flavorIndex) => (
+                                      <div key={flavorIndex} className="flex items-center justify-between p-2 bg-pink-50 rounded-md border border-pink-100">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-medium text-pink-800">
+                                            {flavor.flavor_name}
+                                          </span>
+                                          <span className="text-xs text-pink-600 bg-pink-100 px-2 py-1 rounded">
+                                            {flavor.size_name}
+                                          </span>
+                                        </div>
+                                        <span className="text-sm font-semibold text-pink-700">
+                                          {flavor.quantity}x
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium text-gray-900">
-                                EGP {Number(item.unit_price).toFixed(2)}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                Total: EGP {(Number(item.unit_price) * item.quantity).toFixed(2)}
-                              </p>
+                            
+                            <div className="text-right ml-4">
+                              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                <p className="text-lg font-bold text-gray-900">
+                                  EGP {Number(item.unit_price).toFixed(2)}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  per item
+                                </p>
+                                <div className="mt-2 pt-2 border-t border-gray-200">
+                                  <p className="text-lg font-bold text-green-600">
+                                    EGP {(Number(item.unit_price) * item.quantity).toFixed(2)}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    total
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1215,6 +1540,8 @@ export default function AdminOrdersPage() {
               </div>
             </div>
           </div>
+            )}
+          </>
         )}
 
         {/* Delivery Assignment Modal */}

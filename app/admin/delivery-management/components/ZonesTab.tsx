@@ -21,8 +21,19 @@ interface Zone {
   updated_at: string;
 }
 
+interface KitchenAssignment {
+  kitchen_id: number;
+  zone_id: number;
+  is_primary: boolean;
+  priority: number;
+  is_active: boolean;
+  kitchen_name?: string;
+  kitchen_capacity?: number;
+}
+
 export default function ZonesTab() {
   const [zones, setZones] = useState<Zone[]>([]);
+  const [kitchenAssignments, setKitchenAssignments] = useState<{ [zoneId: number]: KitchenAssignment[] }>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingZone, setEditingZone] = useState<Zone | null>(null);
@@ -30,17 +41,52 @@ export default function ZonesTab() {
 
   const fetchZones = async () => {
     try {
+      console.log('Fetching zones...');
       const response = await fetch('/api/admin/zones');
       if (!response.ok) {
         throw new Error('Failed to fetch zones');
       }
       const data = await response.json();
+      console.log('Zones loaded:', data);
       setZones(data);
+      
+      // Fetch kitchen assignments for all zones
+      await fetchAllZoneKitchens(data);
     } catch (error) {
+      console.error('Failed to fetch zones:', error);
       toast.error('Failed to fetch zones');
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAllZoneKitchens = async (zonesData: Zone[]) => {
+    const assignments: { [zoneId: number]: KitchenAssignment[] } = {};
+    
+    // Fetch all kitchen assignments in parallel
+    const promises = zonesData.map(async (zone) => {
+      try {
+        const response = await fetch(`/api/admin/zones/${zone.id}/kitchens`);
+        if (response.ok) {
+          const data = await response.json();
+          return { zoneId: zone.id, data: data || [] };
+        } else {
+          console.error(`Failed to fetch kitchens for zone ${zone.id}:`, response.statusText);
+          return { zoneId: zone.id, data: [] };
+        }
+      } catch (error) {
+        console.error(`Failed to fetch kitchens for zone ${zone.id}:`, error);
+        return { zoneId: zone.id, data: [] };
+      }
+    });
+    
+    const results = await Promise.all(promises);
+    
+    results.forEach(({ zoneId, data }) => {
+      assignments[zoneId] = data;
+    });
+    
+    setKitchenAssignments(assignments);
   };
 
   useEffect(() => {
@@ -107,6 +153,24 @@ export default function ZonesTab() {
     return `${days}d`;
   };
 
+  const getKitchenAssignmentsText = (zoneId: number) => {
+    const assignments = kitchenAssignments[zoneId] || [];
+    if (assignments.length === 0) {
+      return 'No kitchens assigned';
+    }
+    
+    const sortedAssignments = assignments.sort((a, b) => a.priority - b.priority);
+    const primaryKitchen = sortedAssignments.find(a => a.is_primary);
+    const otherKitchens = sortedAssignments.filter(a => !a.is_primary);
+    
+    let text = primaryKitchen ? `Primary: ${primaryKitchen.kitchen_name || `Kitchen ${primaryKitchen.kitchen_id}`}` : '';
+    if (otherKitchens.length > 0) {
+      text += ` (+${otherKitchens.length} backup)`;
+    }
+    
+    return text;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -139,25 +203,28 @@ export default function ZonesTab() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Zone Name
               </th>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 City
               </th>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Days
               </th>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Time Slot
               </th>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Delivery Fee
               </th>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Kitchens
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
-              <th className="px-8 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
@@ -165,19 +232,19 @@ export default function ZonesTab() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredZones.map((zone) => (
               <tr key={zone.id} className="hover:bg-gray-50">
-                <td className="px-8 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {zone.name}
                 </td>
-                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {zone.city_name}
                   {zone.city_is_active === 0 && (
                     <span className="ml-1 text-xs text-red-600">(Inactive)</span>
                   )}
                 </td>
-                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500" title={getDeliveryDaysText(zone.delivery_days)}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={getDeliveryDaysText(zone.delivery_days)}>
                   {getDeliveryDaysShort(zone.delivery_days)}
                 </td>
-                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {zone.time_slot_name ? (
                     <span>
                       {zone.time_slot_name}<br />
@@ -189,10 +256,35 @@ export default function ZonesTab() {
                     <span className="text-gray-400">No time slot</span>
                   )}
                 </td>
-                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {Number(zone.delivery_fee || 0).toFixed(2)} EGP
                 </td>
-                <td className="px-8 py-4 whitespace-nowrap">
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  <div className="max-w-xs">
+                    <span className="text-xs font-medium text-gray-700">
+                      {getKitchenAssignmentsText(zone.id)}
+                    </span>
+                    {(kitchenAssignments[zone.id] || []).length > 0 && (
+                      <div className="mt-1">
+                        {(kitchenAssignments[zone.id] || [])
+                          .sort((a, b) => a.priority - b.priority)
+                          .slice(0, 2)
+                          .map((assignment, index) => (
+                            <div key={assignment.kitchen_id} className="text-xs text-gray-500">
+                              {index + 1}. {assignment.kitchen_name || `Kitchen ${assignment.kitchen_id}`}
+                              {assignment.is_primary && <span className="text-indigo-600 ml-1">(Primary)</span>}
+                            </div>
+                          ))}
+                        {(kitchenAssignments[zone.id] || []).length > 2 && (
+                          <div className="text-xs text-gray-400">
+                            +{(kitchenAssignments[zone.id] || []).length - 2} more
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       zone.is_active === 1 && zone.city_is_active === 1
@@ -203,7 +295,7 @@ export default function ZonesTab() {
                     {zone.is_active === 1 && zone.city_is_active === 1 ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="px-8 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(zone)}

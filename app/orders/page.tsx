@@ -264,11 +264,6 @@ export default function OrdersPage() {
                     >
                       View Details
                     </Button>
-                    {(order.status === "pending" || order.status === "processing") && (
-                      <Button variant="outline" size="sm" className="border-blue-300 text-blue-700 hover:bg-blue-50">
-                        Track Order
-                      </Button>
-                    )}
                   </div>
                 </div>
               </CardContent>

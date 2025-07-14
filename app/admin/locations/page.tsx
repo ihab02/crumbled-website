@@ -31,9 +31,16 @@ export default function LocationsPage() {
     try {
       const response = await fetch('/api/locations');
       const data = await response.json();
-      setCities(data);
+      if (data.success && Array.isArray(data.cities)) {
+        setCities(data.cities);
+      } else {
+        console.error('Invalid response format:', data);
+        setCities([]);
+      }
     } catch (error) {
+      console.error('Fetch locations error:', error);
       toast.error('Failed to fetch locations');
+      setCities([]);
     } finally {
       setLoading(false);
     }
@@ -187,7 +194,7 @@ export default function LocationsPage() {
                 required
               >
                 <option value="">Select a city</option>
-                {cities.map((city) => (
+                {Array.isArray(cities) && cities.map((city) => (
                   <option key={city.id} value={city.id}>
                     {city.name}
                   </option>
@@ -238,7 +245,7 @@ export default function LocationsPage() {
             <h2 className="text-xl font-semibold text-gray-900">Cities and Zones</h2>
           </div>
           <div className="border-t border-gray-200">
-            {cities.map((city) => (
+            {Array.isArray(cities) && cities.map((city) => (
               <div key={city.id} className="border-b border-gray-200 last:border-b-0">
                 <div className="px-4 py-5 sm:px-6 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -266,7 +273,7 @@ export default function LocationsPage() {
                           <div>
                             <h4 className="text-sm font-medium text-gray-900">{zone.name}</h4>
                             <p className="text-sm text-gray-500">
-                              Delivery Fee: EGP {zone.delivery_fee.toFixed(2)}
+                              Delivery Fee: EGP {(zone.delivery_fee || 0).toFixed(2)}
                             </p>
                           </div>
                           <button

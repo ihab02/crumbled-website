@@ -70,6 +70,21 @@ export class ViewService {
     showDeleted: boolean
   ): Promise<boolean> {
     try {
+      // Validate parameters to prevent undefined values
+      if (adminUserId === undefined || adminUserId === null) {
+        console.warn('Admin user ID is undefined or null, skipping view preferences update');
+        return true;
+      }
+      
+      if (viewType === undefined || viewType === null) {
+        console.warn('View type is undefined or null, skipping view preferences update');
+        return true;
+      }
+      
+      if (showDeleted === undefined) {
+        showDeleted = false; // Default to false if undefined
+      }
+
       await databaseService.query(`
         INSERT INTO admin_view_preferences (admin_user_id, view_type, show_deleted)
         VALUES (?, ?, ?)

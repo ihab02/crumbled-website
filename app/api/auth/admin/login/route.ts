@@ -18,9 +18,15 @@ interface AdminUser extends RowDataPacket {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Admin login API called');
+    console.log('Request method:', request.method);
+    console.log('Request URL:', request.url);
+    
     const { username, password } = await request.json();
+    console.log('Login attempt for username:', username);
 
     if (!username || !password) {
+      console.log('Missing username or password');
       return NextResponse.json(
         { success: false, message: 'Username and password are required' },
         { status: 400 }
@@ -28,14 +34,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Query the database for the admin user
+    console.log('Querying database for admin user');
     const result = await databaseService.query(
       'SELECT * FROM admin_users WHERE username = ?',
       [username]
     );
 
     const admin = Array.isArray(result) ? result[0] : result;
+    console.log('Admin user found:', !!admin);
 
     if (!admin) {
+      console.log('Admin user not found');
       return NextResponse.json(
         { success: false, message: 'Invalid username or password' },
         { status: 401 }
@@ -44,6 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Check if account is locked
     if (admin.locked_until && new Date(admin.locked_until) > new Date()) {
+      console.log('Account is locked');
       return NextResponse.json(
         { 
           success: false, 
@@ -55,7 +65,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
+    console.log('Verifying password');
     const isValidPassword = await compare(password, admin.password);
+    console.log('Password valid:', isValidPassword);
     
     if (!isValidPassword) {
       // Increment login attempts
@@ -70,6 +82,7 @@ export async function POST(request: NextRequest) {
       );
 
       if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        console.log('Account locked due to too many attempts');
         return NextResponse.json(
           { 
             success: false, 
@@ -80,6 +93,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      console.log('Invalid password, remaining attempts:', MAX_LOGIN_ATTEMPTS - attempts);
       return NextResponse.json(
         { 
           success: false, 
@@ -91,12 +105,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Reset login attempts on successful login
+    console.log('Password valid, resetting login attempts');
     await databaseService.query(
       'UPDATE admin_users SET login_attempts = 0, locked_until = NULL WHERE id = ?',
       [admin.id]
     );
 
     // Generate JWT token
+    console.log('Generating JWT token');
     const sessionId = generateSessionId();
     const token = generateToken({
       type: 'admin',
@@ -128,11 +144,12 @@ export async function POST(request: NextRequest) {
     console.log('Setting admin cookie with options:', cookieOptions);
     response.cookies.set(cookieOptions);
     console.log('Cookie set in response:', response.cookies.get('adminToken'));
+    console.log('Admin login successful');
 
     return response;
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Admin login API error:', error);
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

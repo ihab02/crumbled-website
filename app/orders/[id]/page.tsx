@@ -341,12 +341,6 @@ export default function OrderDetailsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    <Link href={`/track-order?orderId=${order.id}`} className="w-full">
-                      <Button className="w-full bg-pink-600 hover:bg-pink-700">
-                        <Truck className="h-4 w-4 mr-2" />
-                        Track Order
-                      </Button>
-                    </Link>
                     <Link href="/account?tab=orders" className="w-full">
                       <Button variant="outline" className="w-full">
                         <ArrowLeft className="h-4 w-4 mr-2" />

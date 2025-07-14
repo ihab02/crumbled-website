@@ -14,18 +14,28 @@ import {
   Truck, 
   CheckCircle, 
   AlertCircle, 
-  Eye,
   X,
-  RefreshCw
+  RefreshCw,
+  MapPin,
+  Calendar,
+  Cookie
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from 'react-hot-toast'
+
+interface Flavor {
+  id: number | null
+  name: string
+  quantity: number
+  size: string
+}
 
 interface OrderItem {
   id: number
   product_name: string
   quantity: number
   price: string
+  flavors: Flavor[]
   flavor_details?: string
 }
 
@@ -94,6 +104,15 @@ export default function OrdersPage() {
         const allOrders = data.orders
         setOrders(allOrders)
 
+        // Debug: Log order statuses and flavor data
+        console.log('All orders statuses:', allOrders.map((order: Order) => ({
+          id: order.id,
+          status: order.order_status,
+          statusLower: order.order_status.toLowerCase()
+        })))
+        
+
+
         // Separate current and past orders
         const current = allOrders.filter(
           (order: Order) => !["delivered", "cancelled"].includes(order.order_status.toLowerCase())
@@ -101,6 +120,9 @@ export default function OrdersPage() {
         const past = allOrders.filter(
           (order: Order) => ["delivered", "cancelled"].includes(order.order_status.toLowerCase())
         )
+
+        console.log('Current orders count:', current.length)
+        console.log('Past orders count:', past.length)
 
         setCurrentOrders(current)
         setPastOrders(past)
@@ -217,6 +239,13 @@ export default function OrdersPage() {
     })
   }
 
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
@@ -317,6 +346,7 @@ export default function OrdersPage() {
                   getStatusIcon={getStatusIcon}
                   getStatusColor={getStatusColor}
                   formatDate={formatDate}
+                  formatTime={formatTime}
                 />
               ))
             )}
@@ -343,6 +373,7 @@ export default function OrdersPage() {
                   getStatusIcon={getStatusIcon}
                   getStatusColor={getStatusColor}
                   formatDate={formatDate}
+                  formatTime={formatTime}
                 />
               ))
             )}
@@ -362,6 +393,7 @@ interface OrderCardProps {
   getStatusIcon: (status: string) => JSX.Element
   getStatusColor: (status: string) => string
   formatDate: (date: string) => string
+  formatTime: (date: string) => string
 }
 
 function OrderCard({
@@ -372,137 +404,136 @@ function OrderCard({
   cancellationSettings,
   getStatusIcon,
   getStatusColor,
-  formatDate
+  formatDate,
+  formatTime
 }: OrderCardProps) {
-  const [showDetails, setShowDetails] = useState(false)
 
   return (
-    <Card className="border-2 border-pink-200 rounded-3xl overflow-hidden">
+    <Card className="border-2 border-pink-200 rounded-3xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
       <CardHeader className="bg-gradient-to-r from-pink-50 to-rose-50 border-b border-pink-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Package className="h-6 w-6 text-pink-600" />
+            <div className="p-2 bg-pink-100 rounded-full">
+              <Package className="h-6 w-6 text-pink-600" />
+            </div>
             <div>
               <CardTitle className="text-pink-800">Order #{order.id}</CardTitle>
-              <p className="text-sm text-pink-600">{formatDate(order.created_at)}</p>
+              <div className="flex items-center gap-2 text-sm text-pink-600">
+                <Calendar className="h-4 w-4" />
+                <span>{formatDate(order.created_at)}</span>
+                <span>•</span>
+                <span>{formatTime(order.created_at)}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Badge className={`${getStatusColor(order.order_status)} flex items-center gap-1`}>
+            <Badge className={`${getStatusColor(order.order_status)} flex items-center gap-1 px-3 py-1`}>
               {getStatusIcon(order.order_status)}
-              {order.order_status}
+              {order.order_status.charAt(0).toUpperCase() + order.order_status.slice(1)}
             </Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDetails(!showDetails)}
-              className="text-pink-600 hover:text-pink-800"
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
+
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-6">
-        {/* Order Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <p className="text-sm text-pink-600 mb-1">Total Amount</p>
-            <p className="text-xl font-bold text-pink-800">{Number(order.total_amount).toFixed(2)} EGP</p>
+        {/* Payment Method Card */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 mb-6 border border-green-200">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-700">Payment Method</span>
           </div>
-          <div>
-            <p className="text-sm text-pink-600 mb-1">Payment Method</p>
-            <p className="font-semibold text-pink-800">
-              {order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-pink-600 mb-1">Items</p>
-            <p className="font-semibold text-pink-800">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</p>
-          </div>
+          <p className="text-sm font-semibold text-green-800">
+            {order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
+          </p>
         </div>
 
         {/* Delivery Information */}
-        <div className="bg-pink-50 rounded-xl p-4 mb-4">
-          <h4 className="font-semibold text-pink-800 mb-2">Delivery Information</h4>
-          <p className="text-pink-700">{order.delivery_address}</p>
-          {order.delivery_additional_info && (
-            <p className="text-pink-600 text-sm">{order.delivery_additional_info}</p>
-          )}
-          <p className="text-pink-700">{order.delivery_city}, {order.delivery_zone}</p>
-          <p className="text-pink-600 text-sm">Delivery Fee: {Number(order.delivery_fee).toFixed(2)} EGP</p>
+        <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-4 mb-6 border border-pink-200">
+          <h4 className="font-semibold text-pink-800 mb-3 flex items-center gap-2">
+            <MapPin className="h-4 w-4" />
+            Delivery Information
+          </h4>
+          <div className="space-y-2">
+            <p className="text-pink-700 font-medium">{order.delivery_address}</p>
+            {order.delivery_additional_info && (
+              <p className="text-pink-600 text-sm italic">{order.delivery_additional_info}</p>
+            )}
+            <p className="text-pink-700">{order.delivery_city}, {order.delivery_zone}</p>
+          </div>
         </div>
 
-        {/* Order Details (Expandable) */}
-        {showDetails && (
-          <div className="border-t border-pink-200 pt-4">
-            <h4 className="font-semibold text-pink-800 mb-3">Order Items</h4>
-            <div className="space-y-3">
+        {/* Order Details */}
+        <div className="border-t border-pink-200 pt-6">
+            <h4 className="font-semibold text-pink-800 mb-4 flex items-center gap-2">
+              <Cookie className="h-4 w-4" />
+              Order Items
+            </h4>
+            <div className="space-y-4">
               {order.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-4 p-3 bg-pink-50 rounded-xl">
-                  <div className="w-12 h-12 bg-pink-200 rounded-lg flex items-center justify-center">
-                    <span className="font-bold text-pink-700">{item.quantity}x</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-pink-800">{item.product_name}</p>
-                    {item.flavor_details && (
-                      <p className="text-sm text-pink-600">{item.flavor_details}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-pink-800">{Number(item.price).toFixed(2)} EGP</p>
-                    <p className="text-sm text-pink-600">
-                      {(Number(item.price) * item.quantity).toFixed(2)} EGP
-                    </p>
+                <div key={item.id} className="bg-white rounded-xl p-4 border border-pink-200 shadow-sm">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-8 h-8 bg-pink-100 rounded-lg flex items-center justify-center">
+                          <span className="font-bold text-pink-700 text-sm">{item.quantity}x</span>
+                        </div>
+                        <h5 className="font-semibold text-pink-800">{item.product_name}</h5>
+                      </div>
+                      
+                      {/* Flavors Display */}
+                      {item.flavors && item.flavors.length > 0 && (
+                        <div className="ml-11 mb-3">
+                          <p className="text-sm font-medium text-pink-700 mb-2">Selected Flavors:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {item.flavors.map((flavor, index) => (
+                              <Badge 
+                                key={flavor.id || index} 
+                                variant="secondary" 
+                                className="bg-pink-100 text-pink-800 border-pink-200"
+                              >
+                                {flavor.quantity}x {flavor.name} ({flavor.size})
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-pink-800">{Number(item.price).toFixed(2)} EGP</p>
+                      <p className="text-sm text-pink-600">
+                        {(Number(item.price) * item.quantity).toFixed(2)} EGP
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Order Totals */}
-            <div className="mt-4 bg-pink-50 rounded-xl p-4">
-              <div className="flex justify-between mb-2">
-                <span className="text-pink-700">Subtotal:</span>
-                <span className="font-semibold text-pink-800">{Number(order.subtotal).toFixed(2)} EGP</span>
-              </div>
-              <div className="flex justify-between mb-2">
-                <span className="text-pink-700">Delivery Fee:</span>
-                <span className="font-semibold text-pink-800">{Number(order.delivery_fee).toFixed(2)} EGP</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t border-pink-200">
-                <span className="font-semibold text-pink-800">Total:</span>
-                <span className="font-bold text-lg text-pink-800">{Number(order.total_amount).toFixed(2)} EGP</span>
+            <div className="mt-6 bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-4 border border-pink-200">
+              <h5 className="font-semibold text-pink-800 mb-3">Order Summary</h5>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-pink-700">Subtotal:</span>
+                  <span className="font-semibold text-pink-800">{Number(order.subtotal).toFixed(2)} EGP</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-pink-700">Delivery Fee:</span>
+                  <span className="font-semibold text-pink-800">{Number(order.delivery_fee).toFixed(2)} EGP</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-pink-200">
+                  <span className="font-semibold text-pink-800">Total:</span>
+                  <span className="font-bold text-lg text-pink-800">{Number(order.total_amount).toFixed(2)} EGP</span>
+                </div>
               </div>
             </div>
           </div>
-        )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-4 border-t border-pink-200">
+        <div className="flex items-center justify-between pt-6 border-t border-pink-200">
           <div className="flex gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-pink-200 text-pink-600 hover:bg-pink-50"
-              asChild
-            >
-              <Link href={`/account/orders/${order.id}`}>
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-pink-200 text-pink-600 hover:bg-pink-50"
-              asChild
-            >
-              <Link href={`/track-order?email=${encodeURIComponent(order.customer_email)}&tracking=${order.id}`}>
-                <Truck className="mr-2 h-4 w-4" />
-                Track Order
-              </Link>
-            </Button>
+            
           </div>
 
           {canCancel && (

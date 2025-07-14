@@ -30,6 +30,8 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    console.log('Customer login attempt for email:', email);
+
     try {
       const result = await signIn('credentials', {
         email,
@@ -37,11 +39,15 @@ export default function LoginPage() {
         redirect: false,
       });
 
+      console.log('NextAuth signIn result:', result);
+
       if (result?.error) {
+        console.error('NextAuth error:', result.error);
         throw new Error(result.error);
       }
 
       if (result?.ok) {
+        console.log('Login successful, redirecting');
         // Get redirect URL from query param
         const redirectUrl = searchParams.get('redirect') || '/account';
         
@@ -51,6 +57,9 @@ export default function LoginPage() {
         setTimeout(() => {
           router.push(redirectUrl);
         }, 500);
+      } else {
+        console.log('Login failed - no error but not ok');
+        throw new Error('Login failed');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -63,7 +72,14 @@ export default function LoginPage() {
   const handleGuestContinue = () => {
     // Get redirect URL from query param
     const redirectUrl = searchParams.get('redirect') || '/shop';
-    router.push(redirectUrl);
+    
+    // If the redirect URL is a reset password page, redirect to shop instead
+    // to avoid token validation errors
+    if (redirectUrl.includes('/auth/reset-password')) {
+      router.push('/shop');
+    } else {
+      router.push(redirectUrl);
+    }
   };
 
   // Show loading while checking session
@@ -114,6 +130,14 @@ export default function LoginPage() {
                 className="border-pink-200"
                 placeholder="Enter your password"
               />
+              <div className="text-right">
+                <Link 
+                  href="/auth/forgot-password" 
+                  className="text-sm text-pink-600 hover:text-pink-800"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
             <Button
               type="submit"

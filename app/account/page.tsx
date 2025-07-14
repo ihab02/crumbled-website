@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { LoadingLogo } from "@/components/ui/loading-logo"
 import { Package, User, LogOut, Clock, Truck, CheckCircle, AlertCircle, MapPin, Plus, Trash2, Edit, Calendar, CreditCard, Eye, Settings } from "lucide-react"
 import Link from "next/link"
 import { toast } from 'react-hot-toast'
@@ -151,6 +152,7 @@ function AccountPageContent() {
         const current = allOrders.filter(
           (order: Order) => {
             const status = order.status?.toLowerCase() || order.order_status?.toLowerCase() || ''
+            debugLog(`Order ${order.id} status: "${status}"`)
             return status !== "delivered" && status !== "cancelled"
           }
         )
@@ -163,6 +165,7 @@ function AccountPageContent() {
 
         debugLog('Current orders:', current)
         debugLog('Past orders:', past)
+        debugLog(`Order categorization: ${current.length} current, ${past.length} past out of ${allOrders.length} total`)
 
         setCurrentOrders(current)
         setPastOrders(past)
@@ -364,10 +367,7 @@ function AccountPageContent() {
   if (status === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <p className="text-pink-800">Loading account...</p>
-        </div>
+        <LoadingLogo size="lg" text="Loading account..." />
       </div>
     )
   }
@@ -444,13 +444,6 @@ function AccountPageContent() {
                       <div className="text-sm text-pink-600">
                         <p>Estimated delivery: 2-3 business days</p>
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full"
-                        asChild
-                      >
-                        <Link href={`/account/orders/${order.id}`}>Track Order</Link>
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -459,12 +452,8 @@ function AccountPageContent() {
           </div>
         )}
 
-        <Tabs defaultValue="orders" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 bg-white p-1 rounded-xl shadow-sm">
-            <TabsTrigger value="orders" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Orders
-            </TabsTrigger>
+        <Tabs defaultValue="addresses" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2 bg-white p-1 rounded-xl shadow-sm">
             <TabsTrigger value="addresses" className="flex items-center gap-2">
               <MapPin className="h-4 w-4" />
               Addresses
@@ -473,87 +462,7 @@ function AccountPageContent() {
               <User className="h-4 w-4" />
               Profile
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </TabsTrigger>
           </TabsList>
-
-          <TabsContent value="orders">
-            <Card className="border-2 border-pink-200 rounded-3xl">
-              <CardHeader>
-                <CardTitle className="text-pink-800 flex items-center gap-2">
-                  <Package className="h-5 w-5" /> Past Orders
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {pastOrders.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-pink-600 mb-4">No past orders found. (Debug: {orders.length} total orders, {currentOrders.length} current, {pastOrders.length} past)</p>
-                    <Button
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full"
-                      asChild
-                    >
-                      <Link href="/">Shop Now</Link>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {pastOrders.map((order) => (
-                      <div key={order.id} className="border border-pink-200 rounded-xl p-4 bg-white">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-pink-800">Order #{order.id}</h3>
-                              <Badge className={getStatusColor(order.status || order.order_status)}>{order.status || order.order_status}</Badge>
-                            </div>
-                            <p className="text-sm text-pink-600">
-                              Placed on {new Date(order.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <p className="text-xl font-bold text-pink-800 md:text-right">
-                            EGP {Number(order.total || order.total_amount).toFixed(2)}
-                          </p>
-                        </div>
-
-                        <div className="space-y-3">
-                          {order.items &&
-                            order.items.map((item, index) => (
-                              <div key={index} className="flex items-center gap-3 bg-pink-50 p-2 rounded-lg">
-                                <div className="w-10 h-10 bg-pink-200 rounded-md flex items-center justify-center">
-                                  <span className="font-bold text-pink-700">{item.quantity}</span>
-                                </div>
-                                <div className="flex-1">
-                                  <p className="font-medium text-pink-800">{item.product_name}</p>
-                                  {item.is_bundle && (
-                                    <p className="text-xs text-pink-600">Bundle of {item.bundle_size}</p>
-                                  )}
-                                </div>
-                                <p className="font-bold text-pink-700">EGP {Number(item.unit_price || item.price).toFixed(2)}</p>
-                              </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-pink-100 flex justify-between items-center">
-                          <p className="text-sm text-pink-600">
-                            Payment: <span className="font-medium">Cash on Delivery</span>
-                          </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-pink-300 text-pink-600 hover:bg-pink-50"
-                            asChild
-                          >
-                            <Link href={`/account/orders/${order.id}`}>View Details</Link>
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="addresses">
             <Card className="border-2 border-pink-200 rounded-3xl">
@@ -734,17 +643,6 @@ function AccountPageContent() {
                     <div>
                       <h3 className="font-medium text-sm text-pink-600 mb-1">Phone</h3>
                       <p className="text-lg font-bold text-pink-800">{customer?.phone || 'Not set'}</p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-medium text-sm text-pink-600 mb-1">Total Orders</h3>
-                      <p className="text-2xl font-bold text-pink-800">{orders.length}</p>
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-sm text-pink-600 mb-1">Active Orders</h3>
-                      <p className="text-2xl font-bold text-pink-800">{currentOrders.length}</p>
                     </div>
                   </div>
 

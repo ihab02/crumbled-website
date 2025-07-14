@@ -1,25 +1,31 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
-// Get all active cities
+// Get all cities and all zones, including their active status
 export async function GET() {
   try {
-    // Get all active cities
+    // Get all cities (active and inactive)
     const [cities] = await db.query(
-      'SELECT id, name FROM cities WHERE is_active = true ORDER BY name'
+      'SELECT id, name, is_active FROM cities ORDER BY name'
     );
 
-    // For each city, get its active zones
+    // For each city, get all its zones (active and inactive)
     const citiesWithZones = await Promise.all(
       Array.isArray(cities) ? cities.map(async (city) => {
         const [zones] = await db.query(
-          'SELECT id, name, delivery_fee FROM zones WHERE city_id = ? AND is_active = true ORDER BY name',
+          'SELECT id, name, delivery_fee, is_active FROM zones WHERE city_id = ? ORDER BY name',
           [city.id]
         );
         return {
           id: city.id,
           name: city.name,
-          zones: Array.isArray(zones) ? zones : []
+          is_active: city.is_active,
+          zones: Array.isArray(zones) ? zones.map(z => ({
+            id: z.id,
+            name: z.name,
+            delivery_fee: parseFloat(z.delivery_fee) || 0,
+            is_active: z.is_active
+          })) : []
         };
       }) : []
     );
@@ -120,9 +126,9 @@ export async function PUT(request: Request) {
 // Add a new zone to a city
 export async function PATCH(request: Request) {
   try {
-    const { cityId, name, deliveryFee } = await request.json();
+    const { cityId, name, delivery_fee } = await request.json();
 
-    if (!cityId || !name || typeof deliveryFee !== 'number') {
+    if (!cityId || !name || typeof delivery_fee !== 'number') {
       return NextResponse.json(
         { success: false, error: 'Invalid request parameters' },
         { status: 400 }
@@ -131,7 +137,7 @@ export async function PATCH(request: Request) {
 
     await db.query(
       'INSERT INTO zones (city_id, name, delivery_fee, is_active) VALUES (?, ?, ?, true)',
-      [cityId, name, deliveryFee]
+      [cityId, name, delivery_fee]
     );
 
     return NextResponse.json({

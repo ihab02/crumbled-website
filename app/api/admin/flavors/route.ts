@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const showDeleted = searchParams.get('show_deleted') === 'true';
 
     // Get admin user ID from token
-    const adminUserId = decoded.userId;
+    const adminUserId = decoded.userId || decoded.id || 1; // Fallback to admin ID 1 if not found
 
     // Update admin view preferences
     await ViewService.updateAdminViewPreferences(adminUserId, 'flavors', showDeleted);
