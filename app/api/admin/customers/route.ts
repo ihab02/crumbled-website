@@ -26,7 +26,7 @@ export async function GET(request: any) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const decoded = await verifyJWT(token)
+    const decoded = verifyJWT(token)
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

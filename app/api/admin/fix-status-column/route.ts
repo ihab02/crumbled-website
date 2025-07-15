@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const decoded = await verifyJWT(token)
+    const decoded = verifyJWT(token)
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

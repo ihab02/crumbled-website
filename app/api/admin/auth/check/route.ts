@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No token found' }, { status: 401 });
     }
 
-    const decoded = await verifyJWT(token);
+    const decoded = verifyJWT(token);
     
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });

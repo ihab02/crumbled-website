@@ -1,55 +1,7 @@
 import { NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { cookies } from 'next/headers';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-// Proper JWT verification using Web Crypto API
-async function verifyJWT(token: string): Promise<any> {
-  try {
-    const [headerB64, payloadB64, signatureB64] = token.split('.');
-    
-    // Decode header and payload
-    const header = JSON.parse(atob(headerB64));
-    const payload = JSON.parse(atob(payloadB64));
-    
-    // Check if token is expired
-    if (payload.exp && payload.exp < Date.now() / 1000) {
-      throw new Error('Token expired');
-    }
-
-    // Verify signature using Web Crypto API
-    const encoder = new TextEncoder();
-    const data = encoder.encode(`${headerB64}.${payloadB64}`);
-    const signature = Uint8Array.from(atob(signatureB64), c => c.charCodeAt(0));
-    
-    // Import the secret key
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(JWT_SECRET),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify']
-    );
-
-    // Verify the signature
-    const isValid = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      signature,
-      data
-    );
-
-    if (!isValid) {
-      throw new Error('Invalid signature');
-    }
-
-    return payload;
-  } catch (error) {
-    console.error('JWT verification error:', error);
-    throw error;
-  }
-}
+import { verifyJWT } from '@/lib/middleware/auth';
 
 export async function POST(
   request: Request,
@@ -64,10 +16,7 @@ export async function POST(
     }
 
     try {
-      const decoded = await verifyJWT(adminToken);
-      if (decoded.role !== 'admin') {
-        return new NextResponse('Unauthorized', { status: 401 });
-      }
+      const decoded = verifyJWT(adminToken, 'admin');
     } catch (error) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
@@ -119,10 +68,7 @@ export async function DELETE(
     }
 
     try {
-      const decoded = await verifyJWT(adminToken);
-      if (decoded.role !== 'admin') {
-        return new NextResponse('Unauthorized', { status: 401 });
-      }
+      const decoded = verifyJWT(adminToken, 'admin');
     } catch (error) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
@@ -168,10 +114,7 @@ export async function PATCH(
     }
 
     try {
-      const decoded = await verifyJWT(adminToken);
-      if (decoded.role !== 'admin') {
-        return new NextResponse('Unauthorized', { status: 401 });
-      }
+      const decoded = verifyJWT(adminToken, 'admin');
     } catch (error) {
       return new NextResponse('Unauthorized', { status: 401 });
     }

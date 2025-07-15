@@ -50,7 +50,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const decoded = await verifyJWT(token, 'admin');
+    const decoded = verifyJWT(token, 'admin');
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -140,7 +140,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const decoded = await verifyJWT(token, 'admin');
+    const decoded = verifyJWT(token, 'admin');
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

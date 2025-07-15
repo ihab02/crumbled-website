@@ -237,6 +237,41 @@ export async function POST(request: Request) {
     const images = formData.getAll('images') as File[]
     const coverImageIndex = formData.get('coverImageIndex') as string
 
+    // Calculate total request size
+    const totalSize = images.reduce((total, image) => total + image.size, 0);
+    const maxTotalSize = 50 * 1024 * 1024; // 50MB total
+    
+    if (totalSize > maxTotalSize) {
+      return NextResponse.json(
+        { error: `Total request size (${(totalSize / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size of 50MB` },
+        { status: 413 }
+      );
+    }
+
+    // Validate image file sizes and types
+    const maxFileSize = 10 * 1024 * 1024; // 10MB per file
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      
+      // Check file type
+      if (!allowedTypes.includes(image.type)) {
+        return NextResponse.json(
+          { error: `Invalid file type for image ${i + 1}. Allowed types: JPEG, PNG, GIF, WebP` },
+          { status: 400 }
+        );
+      }
+      
+      // Check file size
+      if (image.size > maxFileSize) {
+        return NextResponse.json(
+          { error: `Image ${i + 1} is too large. Maximum size is 10MB per image` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Generate slug from name
     const slug = generateSlug(name)
 

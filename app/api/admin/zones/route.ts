@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const decoded = await verifyJWT(token, 'admin');
+    const decoded = verifyJWT(token, 'admin');
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
