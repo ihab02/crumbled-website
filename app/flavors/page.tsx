@@ -107,16 +107,22 @@ export default function FlavorsPage() {
         <h1 className="text-3xl font-bold mb-6">Our Flavors</h1>
         <div className="grid grid-cols-1 gap-6">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="w-full rounded-3xl border-2 border-pink-200 bg-gradient-to-br from-white to-pink-50 overflow-hidden flex flex-col md:flex-row items-center p-4">
-              <div className="flex-shrink-0 flex items-center justify-center mb-4 md:mb-0 md:mr-8 w-full md:w-auto">
-                <Skeleton className="h-32 w-full md:h-48 md:w-48 rounded-2xl" />
+            <Card key={i} className="w-full rounded-3xl border-2 border-pink-200 bg-gradient-to-br from-white to-pink-50 overflow-hidden flex flex-col md:flex-row items-start md:items-center p-4 sm:p-6">
+              <div className="flex-shrink-0 mb-2 md:mb-0 md:mr-8 w-full md:w-auto">
+                <div className="w-full h-80 md:w-48 md:h-48 rounded-2xl overflow-hidden">
+                  <div className="w-full h-full relative">
+                    <Skeleton className="absolute inset-0 w-full h-full rounded-2xl" />
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 flex flex-col md:flex-row justify-between items-center md:items-start text-center md:text-left space-y-3 md:space-y-0">
+              <div className="flex-1 flex flex-col justify-between h-full w-full">
                 <div className="flex flex-col items-center md:items-start space-y-2">
                   <Skeleton className="h-8 w-48" />
                   <Skeleton className="h-4 w-64" />
                 </div>
-                <Skeleton className="h-12 w-32" />
+                <div className="flex w-full justify-center md:justify-end items-center mt-4 md:mt-0">
+                  <Skeleton className="h-12 w-[70%] md:w-32" />
+                </div>
               </div>
             </Card>
           ))}
@@ -126,7 +132,7 @@ export default function FlavorsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 sm:px-6 py-8">
       <SlidingMediaHeader />
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Our Flavors</h1>
@@ -135,7 +141,7 @@ export default function FlavorsPage() {
           Order Now
         </Button>
       </div>
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-6 w-full">
         {Array.isArray(flavors) && flavors.map((flavor) => {
           const isHovered = hoveredFlavor === flavor.id;
           const currentIndex = currentImageIndex[flavor.id] || 0;
@@ -145,23 +151,27 @@ export default function FlavorsPage() {
           return (
             <Card
               key={flavor.id}
-              className="w-full rounded-3xl border-2 border-pink-200 bg-gradient-to-br from-white to-pink-50 overflow-hidden flex flex-col md:flex-row items-center p-4 group transition-all hover:shadow-2xl cursor-pointer"
+              className="w-full rounded-3xl border-2 border-pink-200 bg-gradient-to-br from-white to-pink-50 overflow-hidden flex flex-col md:flex-row items-start md:items-center p-4 sm:p-6 group transition-all hover:shadow-2xl cursor-pointer"
               onMouseEnter={() => handleMouseEnter(flavor.id)}
               onMouseLeave={() => handleMouseLeave(flavor.id)}
               onClick={() => router.push(`/flavors/${flavor.id}`)}
             >
-              <div className="flex-shrink-0 flex items-center justify-center mb-4 md:mb-0 md:mr-8 w-full md:w-auto">
-                <img
-                  src={currentImage?.image_url || '/images/placeholder.png'}
-                  alt={flavor.name}
-                  className="h-32 w-full md:h-48 md:w-48 object-cover rounded-2xl transition-all duration-300 group-hover:scale-110"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = '/images/placeholder.png';
-                  }}
-                />
+              <div className="flex-shrink-0 mb-2 md:mb-0 md:mr-8 w-full md:w-auto">
+                <div className="w-full h-80 md:w-48 md:h-48 rounded-2xl overflow-hidden">
+                  <div className="w-full h-full relative">
+                    <img
+                      src={currentImage?.image_url || '/images/placeholder.png'}
+                      alt={flavor.name}
+                      className="absolute inset-0 w-full h-full object-cover transition-all duration-300 group-hover:scale-110"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/images/placeholder.png';
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 flex flex-col md:flex-row justify-between items-center md:items-start text-center md:text-left space-y-3 md:space-y-0">
+              <div className="flex-1 flex flex-col justify-between h-full w-full">
                 <div className="flex flex-col items-center md:items-start space-y-2">
                   <h2 className="font-bold text-lg md:text-2xl text-pink-800 line-clamp-1 hover:text-pink-600 transition-colors">
                     {flavor.name}
@@ -170,7 +180,7 @@ export default function FlavorsPage() {
                     {flavor.description}
                   </p>
                   {/* Reviews Display */}
-                  {(flavor.total_reviews && flavor.total_reviews > 0) && (
+                  {flavor.total_reviews && flavor.total_reviews > 0 ? (
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
                         {[...Array(5)].map((_, i) => (
@@ -185,23 +195,48 @@ export default function FlavorsPage() {
                         ))}
                       </div>
                       <span className="text-sm text-pink-600 font-medium">
-                        {flavor.average_rating?.toFixed(1) || '0.0'}
+                        {flavor.average_rating?.toFixed(1)}
                       </span>
                       <span className="text-sm text-pink-500">
-                        ({flavor.total_reviews} reviews)
+                        ({flavor.total_reviews} {flavor.total_reviews === 1 ? 'review' : 'reviews'})
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className="h-4 w-4 text-gray-300"
+                          />
+                        ))}
+                      </div>
+                      <span className="text-sm text-pink-400 font-medium">
+                        Be the first to review!
                       </span>
                     </div>
                   )}
+                  
+                  {/* Clickable Review Link */}
+                  <button
+                    onClick={() => router.push(`/flavors/${flavor.id}`)}
+                    className="text-xs text-pink-500 hover:text-pink-600 underline hover:no-underline transition-colors cursor-pointer"
+                    title="Click to write a review"
+                  >
+                    {flavor.total_reviews && flavor.total_reviews > 0 ? 'Write a review' : 'Be the first to review!'}
+                  </button>
                 </div>
-                <Button
-                  className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all w-full md:w-auto px-8"
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent card click
-                    router.push(`/shop?preselect=${flavor.id}`);
-                  }}
-                >
-                  Order Now
-                </Button>
+                <div className="flex w-full justify-center md:justify-end items-center md:items-center mt-4 md:mt-0">
+                  <Button
+                    className="w-[70%] md:w-auto bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all px-8"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent card click
+                      router.push(`/shop?preselect=${flavor.id}`);
+                    }}
+                  >
+                    Order Now
+                  </Button>
+                </div>
               </div>
             </Card>
           );

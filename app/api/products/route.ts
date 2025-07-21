@@ -146,8 +146,11 @@ export async function POST(request: Request) {
       const [result] = await connection.query(
         `INSERT INTO products (
           name, description, product_type_id, is_pack, count, flavor_size,
-          base_price, image_url, is_active, display_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          base_price, image_url, is_active, display_order,
+          total_reviews, average_rating,
+          review_count_1_star, review_count_2_star, review_count_3_star, 
+          review_count_4_star, review_count_5_star
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0.00, 0, 0, 0, 0, 0)`,
         [
           data.name,
           data.description || null,

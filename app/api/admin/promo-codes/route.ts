@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const promoCodes = await databaseService.query(`
       SELECT 
         pc.*,
-        au.name as created_by_name
+        au.username as created_by_name
       FROM promo_codes pc
       LEFT JOIN admin_users au ON pc.created_by = au.id
       ORDER BY pc.created_at DESC

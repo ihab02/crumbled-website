@@ -281,7 +281,7 @@ export function ProductReviews({
       </div>
 
       {/* Reviews Stats */}
-      {stats.totalReviews > 0 && (
+      {stats.totalReviews > 0 ? (
         <Card>
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -294,7 +294,7 @@ export function ProductReviews({
                   {renderStars(Math.round(stats.averageRating), 'lg')}
                 </div>
                 <p className="text-sm text-gray-600">
-                  Based on {stats.totalReviews} reviews
+                  Based on {stats.totalReviews} {stats.totalReviews === 1 ? 'review' : 'reviews'}
                 </p>
               </div>
 
@@ -316,6 +316,13 @@ export function ProductReviews({
                 ))}
               </div>
             </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <div className="text-2xl font-bold text-gray-400 mb-2">No reviews yet</div>
+            <p className="text-gray-600">Be the first to review this item!</p>
           </CardContent>
         </Card>
       )}

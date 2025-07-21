@@ -71,7 +71,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     try {
       setIsLoading(true)
-      console.log('🔄 Fetching cart from API...')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Fetching cart from API...')
+      }
       
       const response = await fetch('/api/cart')
       const data = await response.json()
@@ -81,7 +83,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setCartCount(calculateCartCount(data.items))
         setLastUpdated(now)
         lastFetchRef.current = now
-        console.log('✅ Cart updated successfully')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Cart updated successfully')
+        }
       }
     } catch (error) {
       console.error('❌ Error fetching cart:', error)

@@ -587,7 +587,7 @@ export default function PackProductPage() {
                             <p className="text-xs sm:text-sm text-pink-600 mt-1 line-clamp-2">{flavor.description}</p>
                           )}
                           {/* Reviews Display */}
-                          {(flavor.total_reviews && flavor.total_reviews > 0) && (
+                          {flavor.total_reviews && flavor.total_reviews > 0 ? (
                             <div className="flex items-center gap-1 mt-1">
                               <div className="flex items-center gap-0.5">
                                 {[...Array(5)].map((_, i) => (
@@ -602,10 +602,24 @@ export default function PackProductPage() {
                                 ))}
                               </div>
                               <span className="text-xs text-pink-600 font-medium">
-                                {flavor.average_rating?.toFixed(1) || '0.0'}
+                                {flavor.average_rating?.toFixed(1)}
                               </span>
                               <span className="text-xs text-pink-500">
                                 ({flavor.total_reviews})
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 mt-1">
+                              <div className="flex items-center gap-0.5">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className="h-3 w-3 text-gray-300"
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-xs text-pink-400 font-medium">
+                                Be the first!
                               </span>
                             </div>
                           )}

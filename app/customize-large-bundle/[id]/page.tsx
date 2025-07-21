@@ -314,7 +314,7 @@ export default function CustomizeLargeBundlePage() {
                         <p className="text-sm text-pink-600 mb-3 line-clamp-2">{flavor.description}</p>
                         
                         {/* Reviews Display */}
-                        {(flavor.reviews && flavor.reviews > 0) && (
+                        {flavor.reviews && flavor.reviews > 0 ? (
                           <div className="flex items-center gap-1 mb-3">
                             <div className="flex items-center gap-0.5">
                               {[...Array(5)].map((_, i) => (
@@ -329,10 +329,24 @@ export default function CustomizeLargeBundlePage() {
                               ))}
                             </div>
                             <span className="text-xs text-pink-600 font-medium">
-                              {flavor.rating?.toFixed(1) || '0.0'}
+                              {flavor.rating?.toFixed(1)}
                             </span>
                             <span className="text-xs text-pink-500">
                               ({flavor.reviews})
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 mb-3">
+                            <div className="flex items-center gap-0.5">
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className="h-3 w-3 text-gray-300"
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs text-pink-400 font-medium">
+                              Be the first!
                             </span>
                           </div>
                         )}

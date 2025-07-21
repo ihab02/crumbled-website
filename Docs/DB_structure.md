@@ -429,6 +429,73 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 
 **Purpose**: Email service configuration for notifications and verifications.
 
+### 11. Promo Codes System
+
+#### `promo_codes` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- code (VARCHAR(50), UNIQUE) - Promo code (e.g., "WELCOME10")
+- name (VARCHAR(255)) - Display name (e.g., "Welcome Discount")
+- description (TEXT) - Detailed description
+- discount_type (ENUM: 'percentage', 'fixed_amount') - Type of discount
+- discount_value (DECIMAL(10,2)) - Discount amount or percentage
+- minimum_order_amount (DECIMAL(10,2), DEFAULT 0.00) - Minimum order for discount
+- maximum_discount (DECIMAL(10,2), NULL) - Maximum discount cap
+- usage_limit (INT, NULL) - Maximum usage count (NULL = unlimited)
+- used_count (INT, DEFAULT 0) - Current usage count
+- valid_from (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP) - Start date
+- valid_until (TIMESTAMP, NULL) - Expiration date
+- is_active (BOOLEAN, DEFAULT true) - Whether code is active
+- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who created
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+```
+
+**Purpose**: Manages promotional codes with flexible discount rules.
+
+**Business Logic**:
+- **Percentage Discounts**: Applied as percentage of order total
+- **Fixed Amount Discounts**: Applied as fixed currency amount
+- **Usage Tracking**: Monitors how many times each code is used
+- **Validity Periods**: Time-based activation and expiration
+- **Minimum Orders**: Enforces minimum order amounts for discounts
+- **Maximum Caps**: Limits maximum discount amount for percentage codes
+
+#### `promo_code_usage` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- promo_code_id (INT, FOREIGN KEY -> promo_codes.id) - Reference to promo code
+- order_id (INT, FOREIGN KEY -> orders.id) - Order where code was used
+- customer_id (INT, FOREIGN KEY -> customers.id, NULL) - Customer who used code
+- customer_email (VARCHAR(255), NULL) - Customer email for tracking
+- discount_amount (DECIMAL(10,2)) - Actual discount applied
+- order_amount (DECIMAL(10,2)) - Order total before discount
+- used_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP) - When code was used
+```
+
+**Purpose**: Tracks usage of promotional codes for analytics and validation.
+
+**Business Logic**:
+- **Usage History**: Complete audit trail of promo code usage
+- **Customer Tracking**: Links usage to specific customers
+- **Order Association**: Connects discounts to specific orders
+- **Analytics Support**: Enables reporting on promo code effectiveness
+
+#### Orders Table Promo Code Columns
+```sql
+- promo_code_id (INT, FOREIGN KEY -> promo_codes.id, NULL) - Applied promo code
+- promo_code (VARCHAR(50), NULL) - Promo code string for display
+- discount_amount (DECIMAL(10,2), DEFAULT 0.00) - Discount applied to order
+```
+
+**Purpose**: Links orders to applied promotional codes and tracks discounts.
+
+**Business Logic**:
+- **Order Discounts**: Records discounts applied to specific orders
+- **Code Reference**: Maintains link to original promo code
+- **Display Support**: Stores code string for order display
+- **Historical Preservation**: Maintains discount information even if code is deleted
+
 ## Key Relationships
 
 ### Customer Registration Flow
@@ -460,6 +527,10 @@ sizes ←→ product_instance (1:many)
 customers ←→ orders (1:many)
 orders ←→ order_items (1:many)
 order_items ←→ product_instance (many:1)
+promo_codes ←→ orders (1:many) - Applied promo codes
+promo_codes ←→ promo_code_usage (1:many) - Usage tracking
+orders ←→ promo_code_usage (1:many) - Order usage records
+customers ←→ promo_code_usage (1:many) - Customer usage tracking
 ```
 
 ### Cart Management
@@ -506,6 +577,17 @@ CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created ON orders(created_at);
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_instance_id);
+CREATE INDEX idx_orders_promo_code ON orders(promo_code);
+```
+
+### Promo Codes Management
+```sql
+CREATE INDEX idx_promo_codes_code ON promo_codes(code);
+CREATE INDEX idx_promo_codes_active ON promo_codes(is_active);
+CREATE INDEX idx_promo_codes_valid_until ON promo_codes(valid_until);
+CREATE INDEX idx_promo_code_usage_promo_code_id ON promo_code_usage(promo_code_id);
+CREATE INDEX idx_promo_code_usage_order_id ON promo_code_usage(order_id);
+CREATE INDEX idx_promo_code_usage_customer_id ON promo_code_usage(customer_id);
 ```
 
 ## Data Integrity Constraints

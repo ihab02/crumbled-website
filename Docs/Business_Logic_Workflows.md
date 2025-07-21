@@ -241,7 +241,20 @@ const getDeliveryDate = (orderDate: Date, deliveryDays: number) => {
 };
 ```
 
-### 5. Debug Logging Workflow
+### 4. Zone-Based Delivery System
+- **Delivery Zones**: Geographic areas with specific delivery fees
+- **Delivery Personnel**: Assigned to specific zones with availability schedules
+- **Time Slots**: Fixed delivery windows per zone
+
+### 5. Promo Codes System
+- **Code Creation**: Admins create promotional codes with flexible rules
+- **Discount Types**: Percentage or fixed amount discounts
+- **Validation Rules**: Minimum order amounts, usage limits, validity periods
+- **Usage Tracking**: Monitor code usage and customer behavior
+- **Order Integration**: Apply discounts during checkout process
+- **Analytics**: Track promo code effectiveness and ROI
+
+### 6. Debug Logging System
 
 #### Debug Mode Management
 ```

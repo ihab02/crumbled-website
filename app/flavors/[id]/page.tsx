@@ -99,7 +99,7 @@ export default function FlavorDetailPage() {
           customerId: parseInt(session.user.id),
           flavorId: flavorId,
           rating: reviewForm.rating,
-          reviewText: reviewForm.comment,
+          reviewText: reviewForm.comment || null,
           title: `Review for ${flavor?.name}`,
           isAnonymous: false
         }),
@@ -199,16 +199,43 @@ export default function FlavorDetailPage() {
               <div className="flex items-center gap-2 mb-6">
                 <div className="flex items-center gap-1">
                   {[...Array(5)].map((_, i) => (
-                    <Star
+                    <button
                       key={i}
-                      className={`h-5 w-5 ${
-                        i < Math.floor(flavor.average_rating || 0) ? "text-yellow-400 fill-current" : "text-gray-300"
-                      }`}
-                    />
+                      onClick={() => {
+                        if (session?.user) {
+                          setShowReviewForm(true);
+                          setReviewForm({ ...reviewForm, rating: i + 1 });
+                          // Focus on the review text field after rating selection
+                          setTimeout(() => {
+                            const textarea = document.getElementById('review-textarea');
+                            if (textarea) {
+                              textarea.focus();
+                            }
+                          }, 100);
+                        } else {
+                          // Redirect to login with return URL
+                          window.location.href = `/auth/login?redirect=${encodeURIComponent(pathname)}`;
+                        }
+                      }}
+                      className="focus:outline-none hover:scale-110 transition-transform cursor-pointer"
+                      title="Click to rate this flavor"
+                    >
+                      <Star
+                        className={`h-5 w-5 ${
+                          i < Math.floor(flavor.average_rating || 0) ? "text-yellow-400 fill-current" : "text-gray-300"
+                        }`}
+                      />
+                    </button>
                   ))}
                 </div>
-                <span className="text-pink-600 font-medium">{flavor.average_rating?.toFixed(1) || '0.0'}</span>
-                <span className="text-pink-500">({flavor.total_reviews || 0} reviews)</span>
+                {flavor.total_reviews && flavor.total_reviews > 0 ? (
+                  <>
+                    <span className="text-pink-600 font-medium">{flavor.average_rating?.toFixed(1)}</span>
+                    <span className="text-pink-500">({flavor.total_reviews} {flavor.total_reviews === 1 ? 'review' : 'reviews'})</span>
+                  </>
+                ) : (
+                  <span className="text-pink-400 font-medium">Be the first to review!</span>
+                )}
               </div>
 
               <p className="text-lg text-pink-700 leading-relaxed mb-8">{flavor.description}</p>
@@ -248,13 +275,64 @@ export default function FlavorDetailPage() {
                     <span className="text-pink-600">Category:</span>
                     <span className="font-medium text-pink-800">{flavor.category}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-pink-600">Rating:</span>
-                    <span className="font-medium text-pink-800">{flavor.average_rating?.toFixed(1) || '0.0'}/5 stars</span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (session?.user) {
+                                setShowReviewForm(true);
+                                setReviewForm({ ...reviewForm, rating: i + 1 });
+                                // Focus on the review text field after rating selection
+                                setTimeout(() => {
+                                  const textarea = document.getElementById('review-textarea');
+                                  if (textarea) {
+                                    textarea.focus();
+                                  }
+                                }, 100);
+                              } else {
+                                window.location.href = `/auth/login?redirect=${encodeURIComponent(pathname)}`;
+                              }
+                            }}
+                            className="focus:outline-none hover:scale-110 transition-transform cursor-pointer"
+                          >
+                            <Star
+                              className={`h-4 w-4 ${
+                                i < Math.floor(flavor.average_rating || 0) ? "text-yellow-400 fill-current" : "text-gray-300"
+                              }`}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <span className="font-medium text-pink-800">
+                        {flavor.total_reviews && flavor.total_reviews > 0 
+                          ? `${flavor.average_rating?.toFixed(1)}/5` 
+                          : 'No reviews yet'
+                        }
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-pink-600">Reviews:</span>
-                    <span className="font-medium text-pink-800">{flavor.total_reviews || 0} customer reviews</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-pink-800">
+                        {flavor.total_reviews && flavor.total_reviews > 0 
+                          ? `${flavor.total_reviews} customer ${flavor.total_reviews === 1 ? 'review' : 'reviews'}`
+                          : 'Be the first to review!'
+                        }
+                      </span>
+                      {!session?.user && (
+                        <button
+                          onClick={() => window.location.href = `/auth/login?redirect=${encodeURIComponent(pathname)}`}
+                          className="text-xs text-pink-500 hover:text-pink-600 underline hover:no-underline transition-colors"
+                        >
+                          Login to review
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -301,8 +379,17 @@ export default function FlavorDetailPage() {
                             <button
                               key={i}
                               type="button"
-                              onClick={() => setReviewForm({ ...reviewForm, rating: i + 1 })}
-                              className="focus:outline-none"
+                              onClick={() => {
+                                setReviewForm({ ...reviewForm, rating: i + 1 });
+                                // Focus on the review text field after rating selection
+                                setTimeout(() => {
+                                  const textarea = document.getElementById('review-textarea');
+                                  if (textarea) {
+                                    textarea.focus();
+                                  }
+                                }, 100);
+                              }}
+                              className="focus:outline-none hover:scale-110 transition-transform cursor-pointer"
                             >
                               <Star
                                 className={`h-6 w-6 ${
@@ -318,13 +405,16 @@ export default function FlavorDetailPage() {
 
 
                       <div>
-                        <label className="block text-sm font-medium text-pink-700 mb-2">Your Review</label>
+                        <label className="block text-sm font-medium text-pink-700 mb-2">
+                          Your Review (Optional)
+                        </label>
                         <textarea
+                          id="review-textarea"
                           value={reviewForm.comment}
                           onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
                           className="w-full px-3 py-2 border border-pink-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
                           rows={3}
-                          required
+                          placeholder="Share your thoughts about this flavor (optional)"
                         />
                       </div>
 

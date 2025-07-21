@@ -5,8 +5,8 @@ import { InstagramIcon, FacebookIcon, TwitterIcon } from "lucide-react"
 export function Footer() {
   return (
     <footer className="border-t-2 border-pink-200 bg-gradient-to-br from-white to-pink-50">
-      <div className="container py-16">
-        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4">
+      <div className="container mx-auto px-4 py-16">
+        <div className="grid gap-8 md:gap-12 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="flex items-center gap-3 mb-6">
               <Image src="/logo-no-bg.png" alt="Crumbled Logo" width={100} height={50} className="h-10 w-auto" />

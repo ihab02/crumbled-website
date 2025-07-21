@@ -2,50 +2,63 @@ const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
 
-async function runPromoCodesMigration() {
+// Database configuration (same as in lib/db.ts)
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'Goodmorning@1',
+  database: process.env.DB_NAME || 'crumbled_nextDB',
+  multipleStatements: true // Allow multiple SQL statements
+};
+
+async function runMigration() {
   let connection;
   
   try {
+    console.log('🚀 Starting Promo Codes Migration');
+    console.log(`Database: ${dbConfig.database} on ${dbConfig.host}`);
+    
     // Create connection
-    connection = await mysql.createConnection({
-      host: 'localhost',
-      user: 'root',
-      password: 'Goodmorning@1',
-      database: 'crumbled_nextDB'
-    });
-
-    console.log('Connected to database');
-
-    // Read the migration file
-    const migrationPath = path.join(__dirname, '../migrations/add_promo_codes.sql');
-    const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-
-    // Split the SQL into individual statements
-    const statements = migrationSQL
-      .split(';')
-      .map(stmt => stmt.trim())
-      .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
-
-    console.log(`Executing ${statements.length} SQL statements...`);
-
-    for (let i = 0; i < statements.length; i++) {
-      const statement = statements[i];
-      if (statement.trim()) {
-        try {
-          console.log(`Executing statement ${i + 1}/${statements.length}: ${statement.substring(0, 50)}...`);
-          await connection.execute(statement);
-          console.log(`✅ Statement ${i + 1} executed successfully`);
-        } catch (error) {
-          console.error(`❌ Error executing statement ${i + 1}:`, error.message);
-          // Continue with other statements
-        }
-      }
+    connection = await mysql.createConnection(dbConfig);
+    console.log('✅ Database connection established');
+    
+    // Read migration file
+    const migrationFile = path.join(__dirname, '..', 'migrations', 'add_promo_codes.sql');
+    
+    if (!fs.existsSync(migrationFile)) {
+      throw new Error(`Migration file not found: ${migrationFile}`);
     }
-
-    console.log('✅ Promo codes migration completed successfully');
-
+    
+    console.log(`📄 Reading migration file: ${migrationFile}`);
+    const migrationSQL = fs.readFileSync(migrationFile, 'utf8');
+    
+    // Run migration
+    console.log('🔧 Executing migration...');
+    await connection.query(migrationSQL);
+    console.log('✅ Migration executed successfully');
+    
+    // Verify migration
+    console.log('🔍 Verifying migration...');
+    const [tables] = await connection.query("SHOW TABLES LIKE 'promo_codes'");
+    
+    if (tables.length > 0) {
+      console.log('✅ Promo codes table created successfully!');
+      
+      // Check if sample data was inserted
+      const [promoCodes] = await connection.query('SELECT COUNT(*) as count FROM promo_codes');
+      console.log(`📊 Found ${promoCodes[0].count} promo codes in the table`);
+      
+    } else {
+      throw new Error('Promo codes table not found after migration');
+    }
+    
+    console.log('\n🎉 Migration completed successfully!');
+    console.log('The promo codes system is now ready to use.');
+    
   } catch (error) {
-    console.error('❌ Migration failed:', error);
+    console.error('❌ Migration failed:', error.message);
+    console.error('You may need to restore from a backup if the database was partially modified.');
+    process.exit(1);
   } finally {
     if (connection) {
       await connection.end();
@@ -54,4 +67,4 @@ async function runPromoCodesMigration() {
 }
 
 // Run the migration
-runPromoCodesMigration(); 
+runMigration(); 

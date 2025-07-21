@@ -275,9 +275,15 @@ export async function POST(request: Request) {
     // Generate slug from name
     const slug = generateSlug(name)
 
-    // Insert the flavor first
+    // Insert the flavor first with review statistics initialized
     const result = await databaseService.query(
-      'INSERT INTO flavors (name, description, mini_price, medium_price, large_price, is_active, slug, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      `INSERT INTO flavors (
+        name, description, mini_price, medium_price, large_price, 
+        is_active, slug, category,
+        total_reviews, average_rating,
+        review_count_1_star, review_count_2_star, review_count_3_star, 
+        review_count_4_star, review_count_5_star
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0.00, 0, 0, 0, 0, 0)`,
       [name, description, miniPrice, mediumPrice, largePrice, enabled, slug, 'Classic']
     )
 

@@ -73,10 +73,7 @@ export function ReviewForm({
       return;
     }
 
-    if (!reviewText.trim()) {
-      toast.error('Please write a review');
-      return;
-    }
+    // Review text is now optional, so we don't need this validation
 
     setIsSubmitting(true);
 
@@ -88,7 +85,7 @@ export function ReviewForm({
         flavorId,
         rating,
         title: title.trim() || null,
-        reviewText: reviewText.trim(),
+        reviewText: reviewText.trim() || null,
         images,
         isAnonymous
       };
@@ -192,12 +189,12 @@ export function ReviewForm({
 
           {/* Review Text */}
           <div className="space-y-2">
-            <Label htmlFor="review">Review *</Label>
+            <Label htmlFor="review">Review (Optional)</Label>
             <Textarea
               id="review"
               value={reviewText}
               onChange={(e) => setReviewText(e.target.value)}
-              placeholder="Share your experience with this product..."
+              placeholder="Share your experience with this product (optional)..."
               rows={5}
               maxLength={1000}
             />
@@ -275,7 +272,7 @@ export function ReviewForm({
           <div className="flex gap-3 pt-4">
             <Button
               type="submit"
-              disabled={isSubmitting || rating === 0 || !reviewText.trim()}
+              disabled={isSubmitting || rating === 0}
               className="flex-1"
             >
               {isSubmitting ? (

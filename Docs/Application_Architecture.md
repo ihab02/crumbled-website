@@ -186,6 +186,7 @@ debugLog('Component mounted', { props });
 - **Delivery Management**: Assign delivery personnel
 - **Analytics**: Sales and performance metrics
 - **Inventory Management**: Stock tracking and updates
+- **Promo Codes Management**: Create, edit, and manage promotional codes
 
 #### Admin Components
 - `AdminLayout`: Admin dashboard layout
@@ -225,6 +226,20 @@ GET    /api/admin/delivery-men        # Delivery personnel
 POST   /api/admin/delivery-men        # Add delivery person
 PUT    /api/admin/delivery-men/:id    # Update delivery person
 ```
+
+#### Admin APIs
+- **GET /api/admin/promo-codes**: Fetch all promotional codes
+- **POST /api/admin/promo-codes**: Create new promotional code
+- **PUT /api/admin/promo-codes/:id**: Update existing promotional code
+- **DELETE /api/admin/promo-codes/:id**: Delete promotional code
+
+#### Promo Code Features
+- **Flexible Discount Types**: Percentage or fixed amount discounts
+- **Usage Limits**: Configurable usage limits per code
+- **Validity Periods**: Time-based activation and expiration
+- **Minimum Order Requirements**: Enforce minimum order amounts
+- **Usage Tracking**: Monitor code usage and effectiveness
+- **Admin Management**: Full CRUD operations through admin interface
 
 ### API Response Format
 ```typescript

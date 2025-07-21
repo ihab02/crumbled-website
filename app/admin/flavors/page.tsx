@@ -184,17 +184,13 @@ export default function FlavorsPage() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          name: flavor.name,
-          description: flavor.description,
-          category: flavor.category,
-          mini_price: flavor.mini_price,
-          medium_price: flavor.medium_price,
-          large_price: flavor.large_price,
           is_active: !flavor.is_active
         })
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Toggle active error:', errorText);
         throw new Error('Failed to update flavor status');
       }
 
@@ -211,6 +207,7 @@ export default function FlavorsPage() {
         description: `Flavor ${updatedFlavor.is_active ? 'activated' : 'deactivated'} successfully`
       });
     } catch (error) {
+      console.error('Error toggling flavor status:', error);
       toast({
         title: 'Error',
         description: 'Failed to update flavor status',

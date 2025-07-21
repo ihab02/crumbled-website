@@ -91,9 +91,27 @@ export async function PUT(
     }
 
     const body = await request.json();
+    console.log('PUT request body:', body); // Debug log
+
+    // Check if this is a status toggle request (only is_active field)
+    if (Object.keys(body).length === 1 && body.hasOwnProperty('is_active')) {
+      // Simple status toggle
+      await db.query(
+        `UPDATE flavors SET is_enabled = ? WHERE id = ?`,
+        [body.is_active, params.id]
+      );
+
+      return NextResponse.json({ 
+        id: params.id, 
+        is_active: body.is_active 
+      });
+    }
+
+    // Full update - validate required fields
     const { name, description, category, mini_price, medium_price, large_price, is_active } = body;
 
-    if (!name || !description || !mini_price || !medium_price || !large_price) {
+    if (!name || !description || mini_price === undefined || medium_price === undefined || large_price === undefined) {
+      console.log('Missing required fields:', { name, description, mini_price, medium_price, large_price });
       return new NextResponse('Missing required fields', { status: 400 });
     }
 

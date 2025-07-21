@@ -1,6 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 
+// Function to update flavor statistics
+async function updateFlavorStatistics(flavorId: number) {
+  try {
+    console.log('Updating flavor statistics for flavor ID:', flavorId);
+    
+    // Calculate new statistics from customer_reviews table
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_reviews,
+        AVG(rating) as average_rating,
+        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as review_count_1_star,
+        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as review_count_2_star,
+        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as review_count_3_star,
+        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as review_count_4_star,
+        SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as review_count_5_star
+      FROM customer_reviews 
+      WHERE flavor_id = ? AND is_approved = true
+    `;
+    
+    const statsResult = await databaseService.query(statsQuery, [flavorId]);
+    const stats = Array.isArray(statsResult) ? statsResult[0] : statsResult;
+    
+    console.log('Calculated statistics:', stats);
+    
+    // Update the flavors table with new statistics
+    const updateQuery = `
+      UPDATE flavors 
+      SET 
+        total_reviews = ?,
+        average_rating = ?,
+        review_count_1_star = ?,
+        review_count_2_star = ?,
+        review_count_3_star = ?,
+        review_count_4_star = ?,
+        review_count_5_star = ?,
+        updated_at = NOW()
+      WHERE id = ?
+    `;
+    
+    const updateParams = [
+      stats.total_reviews || 0,
+      stats.average_rating || 0,
+      stats.review_count_1_star || 0,
+      stats.review_count_2_star || 0,
+      stats.review_count_3_star || 0,
+      stats.review_count_4_star || 0,
+      stats.review_count_5_star || 0,
+      flavorId
+    ];
+    
+    await databaseService.query(updateQuery, updateParams);
+    console.log('Flavor statistics updated successfully');
+    
+  } catch (error) {
+    console.error('Error updating flavor statistics:', error);
+    // Don't throw error to avoid breaking the review submission
+  }
+}
+
 // GET - Fetch reviews with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
@@ -125,9 +184,9 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!customerId || !rating || !reviewText) {
+    if (!customerId || !rating) {
       return NextResponse.json(
-        { success: false, error: 'Customer ID, rating, and review text are required' },
+        { success: false, error: 'Customer ID and rating are required' },
         { status: 400 }
       );
     }
@@ -182,7 +241,7 @@ export async function POST(request: NextRequest) {
       const updateParams = [
         rating,
         title || null,
-        reviewText,
+        reviewText || null,
         images ? JSON.stringify(images) : null,
         isAnonymous || false,
         customerId,
@@ -190,6 +249,11 @@ export async function POST(request: NextRequest) {
       ];
       
       await databaseService.query(updateQuery, updateParams);
+      
+      // Update flavor statistics after updating review
+      if (flavorId) {
+        await updateFlavorStatistics(flavorId);
+      }
       
       // Fetch the updated review
       const updatedReview = await databaseService.query(
@@ -267,14 +331,22 @@ export async function POST(request: NextRequest) {
       flavorId || null,
       rating,
       title || null,
-      reviewText,
+      reviewText || null,
       images ? JSON.stringify(images) : null,
       isVerifiedPurchase,
       isAnonymous || false
     ];
 
+    console.log('Insert query:', insertQuery);
+    console.log('Insert params:', insertParams);
+
     const result = await databaseService.query(insertQuery, insertParams);
     const reviewId = Array.isArray(result) ? result[0]?.insertId : result?.insertId;
+
+    // Update flavor statistics after inserting new review
+    if (flavorId) {
+      await updateFlavorStatistics(flavorId);
+    }
 
     // Fetch the created review
     const createdReview = await databaseService.query(
@@ -327,7 +399,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating review:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create review' },
+      { 
+        success: false, 
+        error: 'Failed to create review',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }

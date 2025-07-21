@@ -99,15 +99,17 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
     try {
       const imageToRemove = formData.images[index];
       
-      // Delete the image from the database
-      const response = await fetch(`/api/admin/flavors/${params.id}/images/${imageToRemove.id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      // Only delete from database if it has a valid ID (not a temporary ID for new images)
+      if (imageToRemove.id && typeof imageToRemove.id === 'number') {
+        const response = await fetch(`/api/admin/flavors/${params.id}/images/${imageToRemove.id}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete image');
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to delete image');
+        }
       }
 
       // Update the local state
@@ -207,20 +209,38 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
         }
       }
 
-      // Delete removed images
+      // Delete removed images - only delete images that were in originalImages but not in current formData.images
+      // and have a valid ID (not temporary IDs for new images)
       const removedImages = originalImages.filter(
-        originalImage => !formData.images.some(
-          currentImage => currentImage.id === originalImage.id
-        )
+        originalImage => 
+          originalImage.id && // Only delete images with valid IDs
+          !formData.images.some(
+            currentImage => currentImage.id === originalImage.id
+          )
       );
 
       if (removedImages.length > 0) {
-        const deletePromises = removedImages.map(image =>
-          fetch(`/api/admin/flavors/${params.id}/images/${image.id}`, {
-            method: 'DELETE',
-            credentials: 'include'
-          })
-        );
+        console.log('Deleting removed images:', removedImages);
+        
+        const deletePromises = removedImages.map(async (image) => {
+          try {
+            const response = await fetch(`/api/admin/flavors/${params.id}/images/${image.id}`, {
+              method: 'DELETE',
+              credentials: 'include'
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.error(`Failed to delete image ${image.id}:`, errorData);
+              throw new Error(`Failed to delete image: ${errorData.error || response.statusText}`);
+            }
+            
+            return response;
+          } catch (error) {
+            console.error(`Error deleting image ${image.id}:`, error);
+            throw error;
+          }
+        });
 
         await Promise.all(deletePromises);
       }

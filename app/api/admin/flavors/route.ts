@@ -258,9 +258,15 @@ export async function POST(request: Request) {
 
     console.log('Creating flavor:', { name, description, miniPrice, mediumPrice, largePrice, enabled, imagesCount: images.length, coverImageIndex, slug });
 
-    // Insert the flavor first
+    // Insert the flavor first with review statistics initialized
     const result = await databaseService.query(
-      'INSERT INTO flavors (name, description, mini_price, medium_price, large_price, is_enabled, slug, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      `INSERT INTO flavors (
+        name, description, mini_price, medium_price, large_price, 
+        is_enabled, slug, category,
+        total_reviews, average_rating,
+        review_count_1_star, review_count_2_star, review_count_3_star, 
+        review_count_4_star, review_count_5_star
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0.00, 0, 0, 0, 0, 0)`,
       [name, description, miniPrice, mediumPrice, largePrice, enabled, slug, category]
     ) as any;
 
