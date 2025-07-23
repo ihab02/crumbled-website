@@ -50,7 +50,7 @@ export class EmailService {
       host: settings.smtp_host,
       port: settings.smtp_port,
       secure: settings.use_ssl,
-      auth: {
+  auth: {
         user: settings.smtp_username,
         pass: settings.smtp_password,
       },
@@ -80,8 +80,8 @@ export class EmailService {
             <div style="background: linear-gradient(135deg, #ff6b6b, #ee5a24); padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
               <h1 style="color: white; margin: 0;">Crumbled</h1>
               <p style="color: white; margin: 5px 0 0 0;">Delicious Cookies Delivered</p>
-            </div>
-            
+      </div>
+
             <div style="padding: 30px; background: #f8f9fa; border-radius: 0 0 10px 10px;">
               <h2 style="color: #333; margin-bottom: 20px;">Hello ${customerName}!</h2>
               
@@ -96,8 +96,8 @@ export class EmailService {
                           text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
                   Verify Email Address
                 </a>
-              </div>
-              
+      </div>
+
               <p style="color: #666; line-height: 1.6; margin-bottom: 15px;">
                 If the button doesn't work, you can copy and paste this link into your browser:
               </p>
@@ -151,8 +151,8 @@ export class EmailService {
             <div style="background: linear-gradient(135deg, #ff6b6b, #ee5a24); padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
               <h1 style="color: white; margin: 0;">Crumbled</h1>
               <p style="color: white; margin: 5px 0 0 0;">Delicious Cookies Delivered</p>
-            </div>
-            
+      </div>
+
             <div style="padding: 30px; background: #f8f9fa; border-radius: 0 0 10px 10px;">
               <h2 style="color: #333; margin-bottom: 20px;">Hello ${customerName}!</h2>
               
@@ -167,8 +167,8 @@ export class EmailService {
                           text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
                   Reset Password
                 </a>
-              </div>
-              
+      </div>
+
               <p style="color: #666; line-height: 1.6; margin-bottom: 15px;">
                 If the button doesn't work, you can copy and paste this link into your browser:
               </p>
@@ -188,8 +188,8 @@ export class EmailService {
                 Best regards,<br>
                 The Crumbled Team
               </p>
-            </div>
-          </div>
+      </div>
+    </div>
         `
       };
 
@@ -249,8 +249,8 @@ export class EmailService {
                 Best regards,<br>
                 The Crumbled Team
               </p>
-            </div>
-          </div>
+      </div>
+    </div>
         `
       };
 
@@ -605,12 +605,12 @@ export class EmailService {
       const result = await transporter.sendMail(mailOptions);
       console.log('Order status update email sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
-    } catch (error) {
+  } catch (error) {
       console.error('❌ Failed to send order status update email:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Failed to send email' };
     }
   }
-}
+} 
 
 // Export a default instance
 export const emailService = EmailService;
