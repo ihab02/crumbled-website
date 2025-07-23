@@ -104,11 +104,26 @@ export async function PUT(
     const data = await request.json();
 
     // Validate required fields
-    if (!id) {
+    if (!id || !data.name || !data.product_type_id || !data.base_price || !data.flavor_size) {
       return NextResponse.json(
-        { success: false, error: 'Product ID is required' },
+        { success: false, error: 'Missing required fields' },
         { status: 400 }
       );
+    }
+
+    // Validate count for packs
+    if (data.is_pack && (!data.count || data.count < 1)) {
+      return NextResponse.json(
+        { success: false, error: 'Pack must have a count of at least 1' },
+        { status: 400 }
+      );
+    }
+
+    // Only generate pack image if it's a pack and no image was uploaded
+    let imageUrl = data.image_url;
+    if (data.is_pack && !imageUrl) {
+      // Optionally generate image here if needed
+      imageUrl = null;
     }
 
     // Get old stock for logging
@@ -120,14 +135,34 @@ export async function PUT(
       }
     }
 
-    // Update the product with stock information
+    // Update all product fields
     await databaseService.query(
       `UPDATE products SET 
-        stock_quantity = ?, 
+        name = ?,
+        description = ?,
+        product_type_id = ?,
+        is_pack = ?,
+        count = ?,
+        flavor_size = ?,
+        base_price = ?,
+        image_url = ?,
+        is_active = ?,
+        display_order = ?,
+        stock_quantity = ?,
         is_available = ?,
         updated_at = NOW()
       WHERE id = ?`,
       [
+        data.name,
+        data.description || null,
+        data.product_type_id,
+        data.is_pack ? 1 : 0,
+        data.count || null,
+        data.flavor_size,
+        data.base_price,
+        imageUrl,
+        data.is_active ? 1 : 0,
+        data.display_order || 0,
         data.stock_quantity || 0,
         data.is_available ? 1 : 0,
         id
@@ -150,14 +185,15 @@ export async function PUT(
       );
     }
 
+    revalidatePath('/admin/products');
     return NextResponse.json({ 
       success: true, 
-      message: 'Product stock updated successfully' 
+      message: 'Product updated successfully' 
     });
   } catch (error) {
-    console.error('Error updating product stock:', error);
+    console.error('Error updating product:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update product stock' },
+      { success: false, error: 'Failed to update product' },
       { status: 500 }
     );
   }

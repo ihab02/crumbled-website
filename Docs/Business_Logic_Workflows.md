@@ -254,7 +254,92 @@ const getDeliveryDate = (orderDate: Date, deliveryDays: number) => {
 - **Order Integration**: Apply discounts during checkout process
 - **Analytics**: Track promo code effectiveness and ROI
 
-### 6. Debug Logging System
+### 6. Product Pricing Management System
+
+#### Pricing Management Workflow
+```
+1. Admin creates pricing rules
+   - Product-specific rules (individual products)
+   - Category-based rules (product types, flavors)
+   - Time-based rules (scheduled promotions)
+   - Customer group rules (VIP, members)
+   ↓
+2. System applies pricing rules
+   - Rule priority determines application order
+   - Time-based rules activate/deactivate automatically
+   - Customer-specific rules apply based on user type
+   ↓
+3. Price calculation and display
+   - Original price preserved for comparison
+   - Sale price calculated and displayed
+   - "Was/Now" pricing shown to customers
+   ↓
+4. Order processing with pricing
+   - Pricing rules applied during cart updates
+   - Final pricing calculated at checkout
+   - Pricing breakdown shown in order summary
+   ↓
+5. Analytics and reporting
+   - Track pricing rule effectiveness
+   - Monitor revenue impact
+   - Analyze customer pricing behavior
+```
+
+#### Pricing Rule Types
+- **Product-Specific**: Individual product price management with sale prices
+- **Category-Based**: Apply pricing rules to product categories and flavors
+- **Time-Based**: Scheduled price changes and promotional periods
+- **Customer Group**: VIP and member pricing tiers
+- **Advanced Pricing Tiers**: Regular, sale, member, and wholesale pricing
+- **Bulk Operations**: Mass price updates and rule creation
+- **Pricing Analytics**: Revenue impact and rule effectiveness tracking
+- **Integration**: Works alongside promo codes for comprehensive discount strategies
+
+#### Pricing Calculation Logic
+```typescript
+// Pricing calculation workflow
+const calculateFinalPrice = (product, customer, orderAmount) => {
+  let finalPrice = product.base_price;
+  let appliedRules = [];
+  
+  // Apply product-specific pricing rules
+  const productRules = getProductPricingRules(product.id);
+  productRules.forEach(rule => {
+    if (isRuleValid(rule, customer, orderAmount)) {
+      finalPrice = applyPricingRule(finalPrice, rule);
+      appliedRules.push(rule);
+    }
+  });
+  
+  // Apply category-based pricing rules
+  const categoryRules = getCategoryPricingRules(product.category);
+  categoryRules.forEach(rule => {
+    if (isRuleValid(rule, customer, orderAmount)) {
+      finalPrice = applyPricingRule(finalPrice, rule);
+      appliedRules.push(rule);
+    }
+  });
+  
+  // Apply customer group pricing
+  const customerRules = getCustomerGroupPricingRules(customer.type);
+  customerRules.forEach(rule => {
+    if (isRuleValid(rule, customer, orderAmount)) {
+      finalPrice = applyPricingRule(finalPrice, rule);
+      appliedRules.push(rule);
+    }
+  });
+  
+  return {
+    originalPrice: product.base_price,
+    finalPrice: finalPrice,
+    appliedRules: appliedRules,
+    discountAmount: product.base_price - finalPrice,
+    discountPercentage: ((product.base_price - finalPrice) / product.base_price) * 100
+  };
+};
+```
+
+### 7. Debug Logging System
 
 #### Debug Mode Management
 ```
@@ -287,7 +372,7 @@ const getDeliveryDate = (orderDate: Date, deliveryDays: number) => {
 6. **SMS Operations**: OTP generation, delivery status
 7. **Performance**: Response times, cache hits/misses
 
-### 6. Order Processing Workflow
+### 8. Order Processing Workflow
 
 #### Order Status Flow
 ```
@@ -316,7 +401,7 @@ cancelled (at any stage)
    - Failed: Payment failed
 ```
 
-### 7. Password Management Workflow
+### 9. Password Management Workflow
 
 #### Password Reset Process
 ```
@@ -347,7 +432,7 @@ cancelled (at any stage)
 - **Password Strength**: Minimum 8 characters required
 - **Email Verification**: Reset links sent to registered email only
 
-### 8. Guest User Management
+### 10. Guest User Management
 
 #### Guest Checkout Flow
 ```

@@ -101,6 +101,13 @@ export default function PackProductPage() {
     }
   }, [preselectFlavorId, availableFlavors, product, selectedFlavors.length]);
 
+  // Clear selected flavors when product ID changes or component unmounts
+  useEffect(() => {
+    return () => {
+      setSelectedFlavors([]);
+    };
+  }, [id]);
+
   const fetchOrderMode = async () => {
     try {
       const response = await fetch('/api/order-mode');
@@ -419,9 +426,11 @@ export default function PackProductPage() {
                         <span className="text-pink-700 truncate mr-2">
                           {flavor.quantity}x {flavor.name}
                         </span>
-                        <span className="font-bold text-pink-800 flex-shrink-0">
-                          +{(flavor.price * flavor.quantity).toFixed(2)} EGP
-                        </span>
+                        {Number(flavor.price) > 0 && (
+                          <span className="font-bold text-pink-800 flex-shrink-0">
+                            +{(flavor.price * flavor.quantity).toFixed(2)} EGP
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -479,7 +488,7 @@ export default function PackProductPage() {
                 >
                   <ShoppingBag className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                   {totalSelectedCount === product.count 
-                    ? 'Add to Bag' 
+                    ? 'Add to My Bag' 
                     : `Select ${product.count - totalSelectedCount} more flavor${product.count - totalSelectedCount === 1 ? '' : 's'}`}
                 </Button>
               </CardContent>
@@ -746,7 +755,7 @@ export default function PackProductPage() {
             <Button
               onClick={() => {
                 setShowConfirmation(false);
-                router.back();
+                router.push('/shop'); // Always go to /shop without preselect
               }}
               className="flex-1 bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
             >
@@ -759,7 +768,7 @@ export default function PackProductPage() {
               }}
               className="flex-1 bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
             >
-              Go to Cart
+              Go to My Bag
             </Button>
           </div>
         </DialogContent>

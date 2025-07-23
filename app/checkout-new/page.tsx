@@ -150,6 +150,13 @@ export default function NewCheckoutPage() {
     availableQuantity: number
   }> | null>(null)
   
+  // Promo code state
+  const [appliedPromoCode, setAppliedPromoCode] = useState<any>(null);
+  const [promoDiscount, setPromoDiscount] = useState<number>(0);
+  const [promoInput, setPromoInput] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState("");
+
   // Add step state
   const [step, setStep] = useState(1)
 
@@ -164,6 +171,10 @@ export default function NewCheckoutPage() {
   // Determine if user is logged in based on session status
   const isLoggedIn = status === 'authenticated' && session?.user
   const isSessionLoading = status === 'loading'
+
+  // Move subtotal and total here, before any return or if block
+  const subtotal = checkoutData?.cart?.total || 0
+  const total = Math.max(0, Number(subtotal) + Number(deliveryFee) - Number(promoDiscount));
 
   // Validation function for step 1
   const isStep1Valid = () => {
@@ -497,7 +508,12 @@ export default function NewCheckoutPage() {
         newAddress: checkoutData.userType === 'registered' && useNewAddress ? newAddress : undefined,
         saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined,
         // Delivery date
-        deliveryDate: selectedDeliveryDate
+        deliveryDate: selectedDeliveryDate,
+        promoCode: appliedPromoCode ? {
+          id: appliedPromoCode.id,
+          code: appliedPromoCode.code,
+          discount_amount: promoDiscount
+        } : undefined
       }
 
       debugLog('🔍 [DEBUG] Frontend - Request data:', JSON.stringify(requestData, null, 2))
@@ -583,6 +599,49 @@ export default function NewCheckoutPage() {
     }
   }, [otpCountdown])
 
+  const handleApplyPromo = async () => {
+    setPromoLoading(true);
+    setPromoError("");
+    try {
+      const response = await fetch("/api/validate-promo-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: promoInput,
+          customerId: checkoutData?.user?.id,
+          customerEmail: checkoutData?.user?.email,
+          cartItems: checkoutData?.cart?.items?.map(item => ({
+            product_id: item.id,
+            quantity: item.quantity,
+            price: item.total
+          })) || [],
+          subtotal: subtotal
+        })
+      });
+      const result = await response.json();
+      if (result.valid && result.promoCode) {
+        setAppliedPromoCode(result.promoCode);
+        setPromoDiscount(result.promoCode.discount_amount || 0);
+        setPromoInput("");
+        setPromoError("");
+      } else {
+        setPromoError(result.error || "Invalid promo code");
+        setAppliedPromoCode(null);
+        setPromoDiscount(0);
+      }
+    } catch (e) {
+      setPromoError("Failed to validate promo code");
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+  const handleRemovePromo = () => {
+    setAppliedPromoCode(null);
+    setPromoDiscount(0);
+    setPromoInput("");
+    setPromoError("");
+  };
+
   // Stepper component
   function Stepper({ step }: { step: number }) {
     const steps = [
@@ -631,7 +690,6 @@ export default function NewCheckoutPage() {
     )
   }
 
-  // Check if cart is empty
   if (!checkoutData.cart || checkoutData.cart.items.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 flex items-center justify-center">
@@ -658,1101 +716,852 @@ export default function NewCheckoutPage() {
     )
   }
 
-  const subtotal = checkoutData.cart?.total || 0
-  const total = Number(subtotal) + Number(deliveryFee)
-
+  // Main return: wrap all JSX in a single parent <div>
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-      {/* Loading Overlay */}
-      {placingOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-md mx-4 text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-500 mx-auto mb-4"></div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              {paymentMethod === 'cod' ? 'Placing Your Order...' : 'Processing Payment...'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {paymentMethod === 'cod' 
-                ? 'Please wait while we confirm your order details and place your order.'
-                : 'Please wait while we process your payment securely.'
-              }
-            </p>
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <RefreshCw className="h-4 w-4 animate-spin" />
-              <span>This may take a few moments...</span>
-            </div>
-          </div>
+    <div>
+      {/* Out of Stock Alert */}
+      {outOfStockItems && outOfStockItems.length > 0 && (
+        <div className="mb-6">
+          <Card className="border-2 border-red-200 bg-red-50 rounded-3xl">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                    <span className="text-red-600 text-lg">⚠️</span>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-red-800 mb-3">
+                    Some items in your cart are out of stock
+                  </h3>
+                  <div className="space-y-3">
+                    {outOfStockItems.filter(item => item.type === 'product').length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-red-700 mb-2">Products out of stock:</h4>
+                        <ul className="space-y-1">
+                          {outOfStockItems
+                            .filter(item => item.type === 'product')
+                            .map((item, index) => (
+                              <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
+                                <span className="text-sm font-medium text-red-800">{item.name}</span>
+                                <span className="text-sm text-red-600">
+                                  {item.requestedQuantity} requested, {item.availableQuantity} available
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+                    {outOfStockItems.filter(item => item.type === 'flavor').length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-red-700 mb-2">Flavors out of stock:</h4>
+                        <ul className="space-y-1">
+                          {outOfStockItems
+                            .filter(item => item.type === 'flavor')
+                            .map((item, index) => (
+                              <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
+                                <span className="text-sm font-medium text-red-800">{item.name}</span>
+                                <span className="text-sm text-red-600">
+                                  {item.requestedQuantity} requested, {item.availableQuantity} available only
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 flex items-center gap-3">
+                    <Button
+                      onClick={() => router.push('/cart')}
+                      variant="outline"
+                      size="sm"
+                      className="border-red-300 text-red-700 hover:bg-red-100"
+                    >
+                      ← Back to Cart
+                    </Button>
+                    <Button
+                      onClick={() => setOutOfStockItems(null)}
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
-      
-      <div className="container mx-auto p-4">
-        <Stepper step={step} />
-        
-        {/* Out of Stock Alert */}
-        {outOfStockItems && outOfStockItems.length > 0 && (
-          <div className="mb-6">
-            <Card className="border-2 border-red-200 bg-red-50 rounded-3xl">
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                      <span className="text-red-600 text-lg">⚠️</span>
+      {/* Step 1: Delivery Info */}
+      {step === 1 && (
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="border-2 border-pink-200 rounded-3xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-pink-800">
+                  <User className="h-5 w-5" />
+                  Delivery Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {isLoggedIn && checkoutData?.userType === 'registered' ? (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-800">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="font-medium">Logged in as: {checkoutData.user?.email}</span>
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">
+                        {checkoutData.user?.firstName} {checkoutData.user?.lastName} • {checkoutData.user?.phone}
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">Delivery Address</Label>
+                      {checkoutData.user?.addresses && checkoutData.user.addresses.length > 0 && (
+                        <div className="space-y-2">
+                          {checkoutData.user.addresses.map((address) => (
+                            <div key={address.id} className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                id={`address-${address.id}`}
+                                name="address"
+                                value={address.id}
+                                checked={selectedAddressId === address.id && !useNewAddress}
+                                onChange={(e) => { 
+                                  setSelectedAddressId(Number(e.target.value)); 
+                                  setUseNewAddress(false);
+                                  setDeliveryFee(Number(address.delivery_fee));
+                                }}
+                                className="text-pink-600 focus:ring-pink-500"
+                              />
+                              <Label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
+                                <div className="p-3 border rounded-lg hover:bg-pink-50">
+                                  <p className="font-medium">{address.street_address}</p>
+                                  {address.additional_info && (
+                                    <p className="text-sm text-gray-600">{address.additional_info}</p>
+                                  )}
+                                  <p className="text-sm text-gray-600">
+                                    {address.city_name}, {address.zone_name}
+                                  </p>
+                                  <p className="text-sm text-gray-600">Delivery Fee: {address.delivery_fee} EGP</p>
+                                </div>
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center space-x-2 mt-2">
+                        <input
+                          type="radio"
+                          id="new-address"
+                          name="address"
+                          checked={useNewAddress}
+                          onChange={(e) => { setUseNewAddress(e.target.checked); if (e.target.checked) setSelectedAddressId(null); }}
+                          className="text-pink-600 focus:ring-pink-500"
+                        />
+                        <Label htmlFor="new-address" className="cursor-pointer">
+                          Deliver to a different address
+                        </Label>
+                      </div>
+                      {useNewAddress && (
+                        <div className="mt-4 animate-fade-in">
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="newStreetAddress">Street Address *</Label>
+                              <Textarea
+                                id="newStreetAddress"
+                                value={newAddress.street_address}
+                                onChange={(e) => setNewAddress({ ...newAddress, street_address: e.target.value })}
+                                placeholder="Enter street address"
+                                rows={3}
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor="newAdditionalInfo">Additional Information (Optional)</Label>
+                              <Textarea
+                                id="newAdditionalInfo"
+                                value={newAddress.additional_info}
+                                onChange={(e) => setNewAddress({ ...newAddress, additional_info: e.target.value })}
+                                placeholder="Apartment, suite, etc. (optional)"
+                                rows={2}
+                              />
+                            </div>
+                            
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div>
+                                <Label htmlFor="newCity">City *</Label>
+                                <Select value={newAddress.city_id.toString()} onValueChange={(value) => setNewAddress({ ...newAddress, city_id: Number(value) })}>
+                                  <SelectTrigger className="mt-1">
+                                    <SelectValue placeholder="Select a city" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {checkoutData.cities.map((city) => (
+                                      <SelectItem key={city.id} value={city.id.toString()}>
+                                        {city.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label htmlFor="newZone">Zone *</Label>
+                                <Select value={newAddress.zone_id.toString()} onValueChange={(value) => {
+                                  const zoneId = Number(value);
+                                  const selectedCityData = checkoutData.cities.find(city => city.id === newAddress.city_id);
+                                  const selectedZoneData = selectedCityData?.zones.find(zone => zone.id === zoneId);
+                                  setNewAddress({ ...newAddress, zone_id: zoneId });
+                                  if (selectedZoneData) {
+                                    setDeliveryFee(Number(selectedZoneData.delivery_fee));
+                                  }
+                                }}>
+                                  <SelectTrigger className="mt-1">
+                                    <SelectValue placeholder="Select a zone" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {checkoutData.cities
+                                      .find(city => city.id.toString() === newAddress.city_id.toString())
+                                      ?.zones.map((zone) => (
+                                        <SelectItem key={zone.id} value={zone.id.toString()}>
+                                          {zone.name} ({zone.delivery_fee} EGP)
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            
+                            {/* Save Address Option */}
+                            <div className="flex items-center space-x-2 mt-4">
+                              <Checkbox
+                                id="save-new-address"
+                                checked={saveNewAddress}
+                                onCheckedChange={(checked) => setSaveNewAddress(checked as boolean)}
+                                className="text-pink-600 focus:ring-pink-500"
+                              />
+                              <Label htmlFor="save-new-address" className="cursor-pointer text-sm text-gray-700">
+                                <div className="flex items-center gap-2">
+                                  <Save className="h-4 w-4" />
+                                  Save this address to my account for future orders
+                                </div>
+                              </Label>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-red-800 mb-3">
-                      Some items in your cart are out of stock
-                    </h3>
-                    <div className="space-y-3">
-                      {outOfStockItems.filter(item => item.type === 'product').length > 0 && (
-                        <div>
-                          <h4 className="font-medium text-red-700 mb-2">Products out of stock:</h4>
-                          <ul className="space-y-1">
-                            {outOfStockItems
-                              .filter(item => item.type === 'product')
-                              .map((item, index) => (
-                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
-                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
-                                  <span className="text-sm text-red-600">
-                                    {item.requestedQuantity} requested, {item.availableQuantity} available
-                                  </span>
-                                </li>
-                              ))}
-                          </ul>
+                ) : (
+                  <div className="space-y-4">
+                    {isLoggedIn ? (
+                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-center gap-2 text-yellow-800">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="font-medium">Loading user data...</span>
                         </div>
-                      )}
-                      
-                      {outOfStockItems.filter(item => item.type === 'flavor').length > 0 && (
-                        <div>
-                          <h4 className="font-medium text-red-700 mb-2">Flavors out of stock:</h4>
-                          <ul className="space-y-1">
-                            {outOfStockItems
-                              .filter(item => item.type === 'flavor')
-                              .map((item, index) => (
-                                <li key={index} className="flex items-center justify-between bg-red-100 rounded-lg px-3 py-2">
-                                  <span className="text-sm font-medium text-red-800">{item.name}</span>
-                                  <span className="text-sm text-red-600">
-                                    {item.requestedQuantity} requested, {item.availableQuantity} available only
-                                  </span>
-                                </li>
-                              ))}
-                          </ul>
+                        <p className="text-sm text-yellow-600 mt-1">
+                          Please wait while we load your account information.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-medium text-blue-800">Have an account?</h3>
+                            <p className="text-sm text-blue-600">Login to use your saved addresses and get faster checkout</p>
+                          </div>
+                          <Button
+                            onClick={handleLoginRedirect}
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                          >
+                            <LogIn className="h-4 w-4 mr-2" />
+                            Login
+                          </Button>
                         </div>
-                      )}
+                      </div>
+                    )}
+                    
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <Label htmlFor="name">Full Name *</Label>
+                        <Input
+                          id="name"
+                          value={guestData.name}
+                          onChange={(e) => setGuestData({ ...guestData, name: e.target.value })}
+                          placeholder="Enter your full name"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={guestData.email}
+                          onChange={(e) => handleEmailChange(e.target.value)}
+                          placeholder="Enter your email"
+                          className={`mt-1 ${emailError ? 'border-red-500' : ''}`}
+                        />
+                        {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Phone Number *</Label>
+                        <Input
+                          id="phone"
+                          value={guestData.phone}
+                          onChange={(e) => handlePhoneChange(e.target.value)}
+                          placeholder="01234567890"
+                          className={`mt-1 ${phoneError ? 'border-red-500' : ''}`}
+                        />
+                        {phoneError && <p className="text-red-500 text-sm mt-1">{phoneError}</p>}
+                        {guestData.phone && !phoneError && otpVerified && guestData.phone !== verifiedPhone && (
+                          <p className="text-orange-600 text-sm mt-1 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Phone number changed - please verify again
+                          </p>
+                        )}
+                        {guestData.phone && !phoneError && (
+                          <Button
+                            onClick={() => sendOtp(guestData.phone)}
+                            disabled={sendingOtp || (otpVerified && guestData.phone === verifiedPhone)}
+                            size="sm"
+                            className="mt-2 bg-green-600 hover:bg-green-700"
+                          >
+                            {otpVerified && guestData.phone === verifiedPhone ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Verified
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="h-4 w-4 mr-2" />
+                                {sendingOtp ? 'Sending...' : 'Verify Phone'}
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-4 flex items-center gap-3">
-                      <Button
-                        onClick={() => router.push('/cart')}
-                        variant="outline"
-                        size="sm"
-                        className="border-red-300 text-red-700 hover:bg-red-100"
-                      >
-                        ← Back to Cart
-                      </Button>
-                      <Button
-                        onClick={() => setOutOfStockItems(null)}
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Dismiss
-                      </Button>
+                    
+                    <div className="space-y-4">
+                      <Label htmlFor="address">Delivery Address *</Label>
+                      <Textarea
+                        id="address"
+                        value={guestData.address}
+                        onChange={(e) => setGuestData({ ...guestData, address: e.target.value })}
+                        placeholder="Enter your full address"
+                        rows={3}
+                      />
+                      
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <Label htmlFor="city">City *</Label>
+                          <Select value={selectedCity} onValueChange={(value) => {
+                            setSelectedCity(value);
+                            setGuestData({ ...guestData, city: value });
+                          }}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select a city" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {checkoutData.cities.map((city) => (
+                                <SelectItem key={city.id} value={city.id.toString()}>
+                                  {city.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="zone">Zone *</Label>
+                          <Select value={selectedZone} onValueChange={(value) => {
+                            setSelectedZone(value);
+                            setGuestData({ ...guestData, zone: value });
+                          }}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue placeholder="Select a zone" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {checkoutData.cities
+                                .find(city => city.id.toString() === selectedCity)
+                                ?.zones.map((zone) => (
+                                  <SelectItem key={zone.id} value={zone.id.toString()}>
+                                    {zone.name} ({zone.delivery_fee} EGP)
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="additionalInfo">Additional Information (Optional)</Label>
+                        <Textarea
+                          id="additionalInfo"
+                          value={guestData.additionalInfo || ''}
+                          onChange={(e) => setGuestData({ ...guestData, additionalInfo: e.target.value })}
+                          placeholder="Apartment, suite, etc. (optional)"
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Validation Messages */}
+                {!isStep1Valid() && (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-yellow-800">
+                        <p className="font-medium mb-1">Please complete the following:</p>
+                        <ul className="list-disc list-inside space-y-1">
+                          {isLoggedIn && checkoutData?.userType === 'registered' ? (
+                            <>
+                              {useNewAddress ? (
+                                <>
+                                  {newAddress.street_address.trim() === '' && (
+                                    <li>Enter street address</li>
+                                  )}
+                                  {newAddress.city_id <= 0 && (
+                                    <li>Select a city</li>
+                                  )}
+                                  {newAddress.zone_id <= 0 && (
+                                    <li>Select a zone</li>
+                                  )}
+                                </>
+                              ) : (
+                                selectedAddressId === null && (
+                                  <li>Select a delivery address</li>
+                                )
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {guestData.name.trim() === '' && (
+                                <li>Enter your full name</li>
+                              )}
+                              {guestData.email.trim() === '' && (
+                                <li>Enter your email address</li>
+                              )}
+                              {emailError && (
+                                <li>Enter a valid email address</li>
+                              )}
+                              {guestData.phone.trim() === '' && (
+                                <li>Enter your phone number</li>
+                              )}
+                              {phoneError && (
+                                <li>Enter a valid Egyptian phone number</li>
+                              )}
+                              {guestData.phone.trim() !== '' && !otpVerified && (
+                                <li>Verify your phone number</li>
+                              )}
+                              {guestData.phone.trim() !== '' && otpVerified && guestData.phone !== verifiedPhone && (
+                                <li>Phone number changed - please verify again</li>
+                              )}
+                              {guestData.address.trim() === '' && (
+                                <li>Enter your delivery address</li>
+                              )}
+                              {selectedCity === '' && (
+                                <li>Select a city</li>
+                              )}
+                              {selectedZone === '' && (
+                                <li>Select a zone</li>
+                              )}
+                            </>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-end mt-6">
+                  <Button
+                    onClick={() => {
+                      // For logged-in users, we don't need to check selectedCity/selectedZone
+                      // as they're only used for guest users
+                      if (checkoutData?.userType === 'guest') {
+                        if (!selectedCity || !selectedZone) {
+                          toast.error('Please select both city and zone');
+                          return;
+                        }
+                      }
+                      setStep(2);
+                    }}
+                    disabled={!isStep1Valid()}
+                    className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next: Payment
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-6">
+            <Card className="border-2 border-pink-200 rounded-3xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-pink-800">
+                  <Package className="h-5 w-5" />
+                  Order Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  {checkoutData.cart?.items.map((item) => (
+                    <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
+                      <div className="flex-shrink-0">
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-16 h-16 object-cover rounded-lg"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/images/default-cookie.jpg';
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
+                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                            {item.isPack && (
+                              <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
+                            )}
+                          </div>
+                          <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
+                        </div>
+                        
+                        {item.flavors && item.flavors.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {item.flavors.map((flavor) => (
+                                <Badge key={flavor.id} variant="outline" className="text-xs">
+                                  {flavor.name} ({flavor.quantity})
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mb-4">
+                  <Label htmlFor="promoCode">Promo Code</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="promoCode"
+                      value={promoInput}
+                      onChange={e => setPromoInput(e.target.value)}
+                      placeholder="Enter promo code"
+                      disabled={promoLoading}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleApplyPromo}
+                      disabled={promoLoading || !promoInput}
+                      className="bg-pink-600 hover:bg-pink-700"
+                      type="button"
+                    >
+                      {promoLoading ? 'Applying...' : 'Apply'}
+                    </Button>
+                    {appliedPromoCode && (
+                      <Button variant="ghost" onClick={handleRemovePromo} type="button">Remove</Button>
+                    )}
+                  </div>
+                  {promoError && <p className="text-red-500 text-sm mt-1">{promoError}</p>}
+                  {appliedPromoCode && (
+                    <p className="text-green-600 text-sm mt-1">Promo code <b>{appliedPromoCode.code}</b> applied! Discount: {Number(promoDiscount).toFixed(2)} EGP</p>
+                  )}
+                </div>
+                
+                <div className="border-t pt-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>{subtotal.toFixed(2)} EGP</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Delivery Fee</span>
+                    <span>{Number(deliveryFee).toFixed(2)} EGP</span>
+                  </div>
+                  {appliedPromoCode && (
+                    <div className="flex justify-between text-green-700">
+                      <span>Promo Discount</span>
+                      <span>-{Number(promoDiscount).toFixed(2)} EGP</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between font-semibold text-lg">
+                      <span>Total</span>
+                      <span>{total.toFixed(2)} EGP</span>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
-        )}
-        
-        {/* Step 1: Delivery Info */}
-        {step === 1 && (
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <User className="h-5 w-5" />
-                    Delivery Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {isLoggedIn && checkoutData?.userType === 'registered' ? (
-                    <div className="space-y-4">
-                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-center gap-2 text-green-800">
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="font-medium">Logged in as: {checkoutData.user?.email}</span>
-                        </div>
-                        <p className="text-sm text-green-600 mt-1">
-                          {checkoutData.user?.firstName} {checkoutData.user?.lastName} • {checkoutData.user?.phone}
-                        </p>
-                      </div>
-                      <div className="space-y-3">
-                        <Label className="text-base font-medium">Delivery Address</Label>
-                        {checkoutData.user?.addresses && checkoutData.user.addresses.length > 0 && (
-                          <div className="space-y-2">
-                            {checkoutData.user.addresses.map((address) => (
-                              <div key={address.id} className="flex items-center space-x-2">
-                                <input
-                                  type="radio"
-                                  id={`address-${address.id}`}
-                                  name="address"
-                                  value={address.id}
-                                  checked={selectedAddressId === address.id && !useNewAddress}
-                                  onChange={(e) => { 
-                                    setSelectedAddressId(Number(e.target.value)); 
-                                    setUseNewAddress(false);
-                                    setDeliveryFee(Number(address.delivery_fee));
-                                  }}
-                                  className="text-pink-600 focus:ring-pink-500"
-                                />
-                                <Label htmlFor={`address-${address.id}`} className="flex-1 cursor-pointer">
-                                  <div className="p-3 border rounded-lg hover:bg-pink-50">
-                                    <p className="font-medium">{address.street_address}</p>
-                                    {address.additional_info && (
-                                      <p className="text-sm text-gray-600">{address.additional_info}</p>
-                                    )}
-                                    <p className="text-sm text-gray-600">
-                                      {address.city_name}, {address.zone_name}
-                                    </p>
-                                    <p className="text-sm text-gray-600">Delivery Fee: {address.delivery_fee} EGP</p>
-                                  </div>
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex items-center space-x-2 mt-2">
+        </div>
+      )}
+      {/* Step 2: Payment */}
+      {step === 2 && (
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="border-2 border-pink-200 rounded-3xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-pink-800">
+                  <CreditCard className="h-5 w-5" />
+                  Payment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">Payment Method</Label>
+                  {Object.keys(enabledPaymentMethods).length === 0 ? (
+                    <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+                      <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(enabledPaymentMethods).map(([methodKey, method]) => (
+                        <div key={methodKey} className="flex items-center space-x-2">
                           <input
                             type="radio"
-                            id="new-address"
-                            name="address"
-                            checked={useNewAddress}
-                            onChange={(e) => { setUseNewAddress(e.target.checked); if (e.target.checked) setSelectedAddressId(null); }}
+                            id={`payment-${methodKey}`}
+                            name="paymentMethod"
+                            value={methodKey}
+                            checked={paymentMethod === methodKey}
+                            onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
                             className="text-pink-600 focus:ring-pink-500"
                           />
-                          <Label htmlFor="new-address" className="cursor-pointer">
-                            Deliver to a different address
+                          <Label htmlFor={`payment-${methodKey}`} className="flex-1 cursor-pointer">
+                            <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                  methodKey === 'cod' ? 'bg-green-100' : 'bg-blue-100'
+                                }`}>
+                                  {methodKey === 'cod' ? (
+                                    <span className="text-green-600 font-bold text-sm">$</span>
+                                  ) : (
+                                    <CreditCard className="h-4 w-4 text-blue-600" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{method.name}</p>
+                                  <p className="text-sm text-gray-600">{method.description}</p>
+                                </div>
+                              </div>
+                            </div>
                           </Label>
                         </div>
-                        {useNewAddress && (
-                          <div className="mt-4 animate-fade-in">
-                            <div className="space-y-4">
-                              <div>
-                                <Label htmlFor="newStreetAddress">Street Address *</Label>
-                                <Textarea
-                                  id="newStreetAddress"
-                                  value={newAddress.street_address}
-                                  onChange={(e) => setNewAddress({ ...newAddress, street_address: e.target.value })}
-                                  placeholder="Enter street address"
-                                  rows={3}
-                                />
-                              </div>
-                              
-                              <div>
-                                <Label htmlFor="newAdditionalInfo">Additional Information (Optional)</Label>
-                                <Textarea
-                                  id="newAdditionalInfo"
-                                  value={newAddress.additional_info}
-                                  onChange={(e) => setNewAddress({ ...newAddress, additional_info: e.target.value })}
-                                  placeholder="Apartment, suite, etc. (optional)"
-                                  rows={2}
-                                />
-                              </div>
-                              
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <div>
-                                  <Label htmlFor="newCity">City *</Label>
-                                  <Select value={newAddress.city_id.toString()} onValueChange={(value) => setNewAddress({ ...newAddress, city_id: Number(value) })}>
-                                    <SelectTrigger className="mt-1">
-                                      <SelectValue placeholder="Select a city" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {checkoutData.cities.map((city) => (
-                                        <SelectItem key={city.id} value={city.id.toString()}>
-                                          {city.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div>
-                                  <Label htmlFor="newZone">Zone *</Label>
-                                  <Select value={newAddress.zone_id.toString()} onValueChange={(value) => {
-                                    const zoneId = Number(value);
-                                    const selectedCityData = checkoutData.cities.find(city => city.id === newAddress.city_id);
-                                    const selectedZoneData = selectedCityData?.zones.find(zone => zone.id === zoneId);
-                                    setNewAddress({ ...newAddress, zone_id: zoneId });
-                                    if (selectedZoneData) {
-                                      setDeliveryFee(Number(selectedZoneData.delivery_fee));
-                                    }
-                                  }}>
-                                    <SelectTrigger className="mt-1">
-                                      <SelectValue placeholder="Select a zone" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {checkoutData.cities
-                                        .find(city => city.id.toString() === newAddress.city_id.toString())
-                                        ?.zones.map((zone) => (
-                                          <SelectItem key={zone.id} value={zone.id.toString()}>
-                                            {zone.name} ({zone.delivery_fee} EGP)
-                                          </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              
-                              {/* Save Address Option */}
-                              <div className="flex items-center space-x-2 mt-4">
-                                <Checkbox
-                                  id="save-new-address"
-                                  checked={saveNewAddress}
-                                  onCheckedChange={(checked) => setSaveNewAddress(checked as boolean)}
-                                  className="text-pink-600 focus:ring-pink-500"
-                                />
-                                <Label htmlFor="save-new-address" className="cursor-pointer text-sm text-gray-700">
-                                  <div className="flex items-center gap-2">
-                                    <Save className="h-4 w-4" />
-                                    Save this address to my account for future orders
-                                  </div>
-                                </Label>
-                              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between mt-8">
+                  <Button variant="outline" onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => {
+                        // Save needed data to localStorage
+                        localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+                        localStorage.setItem('guestData', JSON.stringify(guestData));
+                        localStorage.setItem('selectedAddressId', JSON.stringify(selectedAddressId));
+                        localStorage.setItem('useNewAddress', JSON.stringify(useNewAddress));
+                        localStorage.setItem('newAddress', JSON.stringify(newAddress));
+                        localStorage.setItem('saveNewAddress', JSON.stringify(saveNewAddress));
+                        localStorage.setItem('selectedDeliveryDate', selectedDeliveryDate);
+                        localStorage.setItem('currentZoneId', JSON.stringify(currentZoneId));
+                        localStorage.setItem('deliveryRules', JSON.stringify(deliveryRules));
+                        localStorage.setItem('paymentMethod', paymentMethod);
+                        localStorage.setItem('deliveryFee', JSON.stringify(deliveryFee));
+                        localStorage.setItem('subtotal', JSON.stringify(subtotal));
+                        localStorage.setItem('total', JSON.stringify(total));
+                        localStorage.setItem('appliedPromoCode', JSON.stringify(appliedPromoCode));
+                        localStorage.setItem('promoDiscount', JSON.stringify(promoDiscount));
+                        localStorage.setItem('acknowledgeDeliveryRules', JSON.stringify(acknowledgeDeliveryRules));
+                        localStorage.setItem('deliveryDateInitialized', JSON.stringify(deliveryDateInitialized));
+                        // Navigate to confirmation page
+                        router.push('/checkout-new/confirm');
+                      }}
+                      disabled={!paymentMethod}
+                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continue to Confirmation
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-6">
+            <Card className="border-2 border-pink-200 rounded-3xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-pink-800">
+                  <Package className="h-5 w-5" />
+                  Order Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  {checkoutData.cart?.items.map((item) => (
+                    <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
+                      <div className="flex-shrink-0">
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-16 h-16 object-cover rounded-lg"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/images/default-cookie.jpg';
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
+                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                            {item.isPack && (
+                              <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
+                            )}
+                          </div>
+                          <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
+                        </div>
+                        
+                        {item.flavors && item.flavors.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {item.flavors.map((flavor) => (
+                                <Badge key={flavor.id} variant="outline" className="text-xs">
+                                  {flavor.name} ({flavor.quantity})
+                                </Badge>
+                              ))}
                             </div>
                           </div>
                         )}
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {isLoggedIn ? (
-                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                          <div className="flex items-center gap-2 text-yellow-800">
-                            <AlertTriangle className="h-4 w-4" />
-                            <span className="font-medium">Loading user data...</span>
-                          </div>
-                          <p className="text-sm text-yellow-600 mt-1">
-                            Please wait while we load your account information.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-medium text-blue-800">Have an account?</h3>
-                              <p className="text-sm text-blue-600">Login to use your saved addresses and get faster checkout</p>
-                            </div>
-                            <Button
-                              onClick={handleLoginRedirect}
-                              variant="outline"
-                              className="border-blue-300 text-blue-700 hover:bg-blue-100"
-                            >
-                              <LogIn className="h-4 w-4 mr-2" />
-                              Login
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <Label htmlFor="name">Full Name *</Label>
-                          <Input
-                            id="name"
-                            value={guestData.name}
-                            onChange={(e) => setGuestData({ ...guestData, name: e.target.value })}
-                            placeholder="Enter your full name"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="email">Email *</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            value={guestData.email}
-                            onChange={(e) => handleEmailChange(e.target.value)}
-                            placeholder="Enter your email"
-                            className={`mt-1 ${emailError ? 'border-red-500' : ''}`}
-                          />
-                          {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
-                        </div>
-                        <div>
-                          <Label htmlFor="phone">Phone Number *</Label>
-                          <Input
-                            id="phone"
-                            value={guestData.phone}
-                            onChange={(e) => handlePhoneChange(e.target.value)}
-                            placeholder="01234567890"
-                            className={`mt-1 ${phoneError ? 'border-red-500' : ''}`}
-                          />
-                          {phoneError && <p className="text-red-500 text-sm mt-1">{phoneError}</p>}
-                          {guestData.phone && !phoneError && otpVerified && guestData.phone !== verifiedPhone && (
-                            <p className="text-orange-600 text-sm mt-1 flex items-center gap-1">
-                              <AlertTriangle className="h-3 w-3" />
-                              Phone number changed - please verify again
-                            </p>
-                          )}
-                          {guestData.phone && !phoneError && (
-                            <Button
-                              onClick={() => sendOtp(guestData.phone)}
-                              disabled={sendingOtp || (otpVerified && guestData.phone === verifiedPhone)}
-                              size="sm"
-                              className="mt-2 bg-green-600 hover:bg-green-700"
-                            >
-                              {otpVerified && guestData.phone === verifiedPhone ? (
-                                <>
-                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                  Verified
-                                </>
-                              ) : (
-                                <>
-                                  <Shield className="h-4 w-4 mr-2" />
-                                  {sendingOtp ? 'Sending...' : 'Verify Phone'}
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <Label htmlFor="address">Delivery Address *</Label>
-                        <Textarea
-                          id="address"
-                          value={guestData.address}
-                          onChange={(e) => setGuestData({ ...guestData, address: e.target.value })}
-                          placeholder="Enter your full address"
-                          rows={3}
-                        />
-                        
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div>
-                            <Label htmlFor="city">City *</Label>
-                            <Select value={selectedCity} onValueChange={(value) => {
-                              setSelectedCity(value);
-                              setGuestData({ ...guestData, city: value });
-                            }}>
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Select a city" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {checkoutData.cities.map((city) => (
-                                  <SelectItem key={city.id} value={city.id.toString()}>
-                                    {city.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label htmlFor="zone">Zone *</Label>
-                            <Select value={selectedZone} onValueChange={(value) => {
-                              setSelectedZone(value);
-                              setGuestData({ ...guestData, zone: value });
-                            }}>
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Select a zone" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {checkoutData.cities
-                                  .find(city => city.id.toString() === selectedCity)
-                                  ?.zones.map((zone) => (
-                                    <SelectItem key={zone.id} value={zone.id.toString()}>
-                                      {zone.name} ({zone.delivery_fee} EGP)
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <Label htmlFor="additionalInfo">Additional Information (Optional)</Label>
-                          <Textarea
-                            id="additionalInfo"
-                            value={guestData.additionalInfo || ''}
-                            onChange={(e) => setGuestData({ ...guestData, additionalInfo: e.target.value })}
-                            placeholder="Apartment, suite, etc. (optional)"
-                            rows={2}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Validation Messages */}
-                  {!isStep1Valid() && (
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                        <div className="text-sm text-yellow-800">
-                          <p className="font-medium mb-1">Please complete the following:</p>
-                          <ul className="list-disc list-inside space-y-1">
-                            {isLoggedIn && checkoutData?.userType === 'registered' ? (
-                              <>
-                                {useNewAddress ? (
-                                  <>
-                                    {newAddress.street_address.trim() === '' && (
-                                      <li>Enter street address</li>
-                                    )}
-                                    {newAddress.city_id <= 0 && (
-                                      <li>Select a city</li>
-                                    )}
-                                    {newAddress.zone_id <= 0 && (
-                                      <li>Select a zone</li>
-                                    )}
-                                  </>
-                                ) : (
-                                  selectedAddressId === null && (
-                                    <li>Select a delivery address</li>
-                                  )
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                {guestData.name.trim() === '' && (
-                                  <li>Enter your full name</li>
-                                )}
-                                {guestData.email.trim() === '' && (
-                                  <li>Enter your email address</li>
-                                )}
-                                {emailError && (
-                                  <li>Enter a valid email address</li>
-                                )}
-                                {guestData.phone.trim() === '' && (
-                                  <li>Enter your phone number</li>
-                                )}
-                                {phoneError && (
-                                  <li>Enter a valid Egyptian phone number</li>
-                                )}
-                                {guestData.phone.trim() !== '' && !otpVerified && (
-                                  <li>Verify your phone number</li>
-                                )}
-                                {guestData.phone.trim() !== '' && otpVerified && guestData.phone !== verifiedPhone && (
-                                  <li>Phone number changed - please verify again</li>
-                                )}
-                                {guestData.address.trim() === '' && (
-                                  <li>Enter your delivery address</li>
-                                )}
-                                {selectedCity === '' && (
-                                  <li>Select a city</li>
-                                )}
-                                {selectedZone === '' && (
-                                  <li>Select a zone</li>
-                                )}
-                              </>
-                            )}
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex justify-end mt-6">
-                    <Button
-                      onClick={() => {
-                        // For logged-in users, we don't need to check selectedCity/selectedZone
-                        // as they're only used for guest users
-                        if (checkoutData?.userType === 'guest') {
-                          if (!selectedCity || !selectedZone) {
-                            toast.error('Please select both city and zone');
-                            return;
-                          }
-                        }
-                        setStep(2);
-                      }}
-                      disabled={!isStep1Valid()}
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next: Payment
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <Package className="h-5 w-5" />
-                    Order Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-4">
-                    {checkoutData.cart?.items.map((item) => (
-                      <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="w-16 h-16 object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/images/default-cookie.jpg';
-                            }}
-                          />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                              <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                              {item.isPack && (
-                                <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                              )}
-                            </div>
-                            <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
-                          </div>
-                          
-                          {item.flavors && item.flavors.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {item.flavors.map((flavor) => (
-                                  <Badge key={flavor.id} variant="outline" className="text-xs">
-                                    {flavor.name} ({flavor.quantity})
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="border-t pt-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>{subtotal.toFixed(2)} EGP</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Delivery Fee</span>
-                      <span>{Number(deliveryFee).toFixed(2)} EGP</span>
-                    </div>
-                    <div className="border-t pt-2">
-                      <div className="flex justify-between font-semibold text-lg">
-                        <span>Total</span>
-                        <span>{total.toFixed(2)} EGP</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
-        {/* Step 2: Payment */}
-        {step === 2 && (
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <CreditCard className="h-5 w-5" />
-                    Payment
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <Label className="text-base font-medium">Payment Method</Label>
-                    {Object.keys(enabledPaymentMethods).length === 0 ? (
-                      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
-                        <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {Object.entries(enabledPaymentMethods).map(([methodKey, method]) => (
-                          <div key={methodKey} className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              id={`payment-${methodKey}`}
-                              name="paymentMethod"
-                              value={methodKey}
-                              checked={paymentMethod === methodKey}
-                              onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
-                              className="text-pink-600 focus:ring-pink-500"
-                            />
-                            <Label htmlFor={`payment-${methodKey}`} className="flex-1 cursor-pointer">
-                              <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    methodKey === 'cod' ? 'bg-green-100' : 'bg-blue-100'
-                                  }`}>
-                                    {methodKey === 'cod' ? (
-                                      <span className="text-green-600 font-bold text-sm">$</span>
-                                    ) : (
-                                      <CreditCard className="h-4 w-4 text-blue-600" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">{method.name}</p>
-                                    <p className="text-sm text-gray-600">{method.description}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-between mt-8">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      Back
-                    </Button>
-                    <div className="flex gap-3">
-                      <Button
-                        onClick={() => setStep(3)}
-                        disabled={!paymentMethod}
-                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Continue to Confirmation
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <Package className="h-5 w-5" />
-                    Order Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-4">
-                    {checkoutData.cart?.items.map((item) => (
-                      <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="w-16 h-16 object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/images/default-cookie.jpg';
-                            }}
-                          />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                              <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                              {item.isPack && (
-                                <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                              )}
-                            </div>
-                            <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
-                          </div>
-                          
-                          {item.flavors && item.flavors.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {item.flavors.map((flavor) => (
-                                  <Badge key={flavor.id} variant="outline" className="text-xs">
-                                    {flavor.name} ({flavor.quantity})
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="border-t pt-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>{subtotal.toFixed(2)} EGP</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Delivery Fee</span>
-                      <span>{Number(deliveryFee).toFixed(2)} EGP</span>
-                    </div>
-                    <div className="border-t pt-2">
-                      <div className="flex justify-between font-semibold text-lg">
-                        <span>Total</span>
-                        <span>{total.toFixed(2)} EGP</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
-        {/* Step 3: Confirmation */}
-        {step === 3 && (
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <CheckCircle className="h-5 w-5" />
-                    Confirm & Place Order
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Order Summary */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Order Summary</h3>
-                    
-                    {/* Delivery Information */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-2">Delivery Information</h4>
-                      {checkoutData.userType === 'registered' && checkoutData.user ? (
-                        <div>
-                          <p className="text-sm text-gray-600">
-                            <strong>Name:</strong> {checkoutData.user.firstName} {checkoutData.user.lastName}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            <strong>Email:</strong> {checkoutData.user.email}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            <strong>Phone:</strong> {checkoutData.user.phone}
-                          </p>
-                          {selectedAddressId && !useNewAddress && checkoutData.user.addresses && (
-                            <div className="mt-2">
-                              <p className="text-sm text-gray-600">
-                                <strong>Address:</strong> {
-                                  checkoutData.user.addresses.find(addr => addr.id === selectedAddressId)?.street_address
-                                }
-                              </p>
-                            </div>
-                          )}
-                          {useNewAddress && (
-                            <div className="mt-2">
-                              <p className="text-sm text-gray-600">
-                                <strong>Address:</strong> {newAddress.street_address}
-                              </p>
-                              {newAddress.additional_info && (
-                                <p className="text-sm text-gray-600">
-                                  <strong>Additional Info:</strong> {newAddress.additional_info}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-sm text-gray-600">
-                            <strong>Name:</strong> {guestData.name}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            <strong>Email:</strong> {guestData.email}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            <strong>Phone:</strong> {guestData.phone}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            <strong>Address:</strong> {guestData.address}
-                          </p>
-                          {guestData.additionalInfo && (
-                            <p className="text-sm text-gray-600">
-                              <strong>Additional Info:</strong> {guestData.additionalInfo}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Payment Method */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-2">Payment Method</h4>
-                      <p className="text-sm text-gray-600">
-                        {paymentMethod === 'cod' ? 'Cash on Delivery' : 'Pay with Paymob'}
-                      </p>
-                    </div>
-
-                    {/* Cart Items */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h4 className="font-medium text-gray-900 mb-2">Items</h4>
-                      <div className="space-y-2">
-                        {checkoutData.cart?.items.map((item) => (
-                          <div key={item.id} className="flex justify-between text-sm">
-                            <span>{item.name} x {item.quantity}</span>
-                            <span>{item.total.toFixed(2)} EGP</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Totals */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span>Subtotal</span>
-                          <span>{subtotal.toFixed(2)} EGP</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Delivery Fee</span>
-                          <span>{Number(deliveryFee).toFixed(2)} EGP</span>
-                        </div>
-                        <div className="border-t pt-2">
-                          <div className="flex justify-between font-semibold">
-                            <span>Total</span>
-                            <span>{total.toFixed(2)} EGP</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Delivery Date Selection */}
-                  <div className="mb-6">
-                    <DeliveryDatePicker
-                      zoneId={currentZoneId}
-                      onDateSelect={(date) => {
-                        setSelectedDeliveryDate(date);
-                        setDeliveryDateInitialized(true);
-                      }}
-                      selectedDate={selectedDeliveryDate}
-                      disabled={!currentZoneId}
+                  ))}
+                </div>
+                
+                <div className="mb-4">
+                  <Label htmlFor="promoCode">Promo Code</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="promoCode"
+                      value={promoInput}
+                      onChange={e => setPromoInput(e.target.value)}
+                      placeholder="Enter promo code"
+                      disabled={promoLoading}
+                      className="flex-1"
                     />
-                  </div>
-
-                  {/* Delivery Rules Section */}
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Delivery Rules & Conditions
-                    </h4>
-                    
-                    {deliveryRulesLoading ? (
-                      <div className="flex items-center justify-center py-4">
-                        <RefreshCw className="h-5 w-5 animate-spin text-blue-600" />
-                        <span className="ml-2 text-blue-700">Loading delivery rules...</span>
-                      </div>
-                    ) : deliveryRules ? (
-                      <div className="space-y-3">
-                        <div className="bg-white p-3 rounded-lg border border-blue-100">
-                          <h5 className="font-semibold text-blue-900 mb-2">
-                            {deliveryRules.zoneName}, {deliveryRules.cityName}
-                          </h5>
-                          
-                          <div className="space-y-2 text-sm">
-                            {selectedDeliveryDate && (
-                              <div className="flex items-center gap-2">
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <span className="text-green-800">
-                                  <strong>Selected Delivery Date:</strong> {
-                                    new Date(selectedDeliveryDate).toLocaleDateString('en-US', {
-                                      weekday: 'long',
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric'
-                                    })
-                                  }
-                                </span>
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center gap-2">
-                              <CreditCard className="h-4 w-4 text-blue-600" />
-                              <span className="text-blue-800">
-                                <strong>Delivery Fee:</strong> {deliveryRules.deliveryFee.toFixed(2)} EGP
-                              </span>
-                            </div>
-                            
-                            {deliveryRules.timeSlot && (
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Shield className="h-4 w-4 text-blue-600" />
-                                  <span className="text-blue-800">
-                                    <strong>Time Slot:</strong> {deliveryRules.timeSlot.name}
-                                  </span>
-                                </div>
-                                <div className="ml-6 text-blue-700">
-                                  <p><strong>Hours:</strong> {deliveryRules.timeSlot.fromHour} - {deliveryRules.timeSlot.toHour}</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-start space-x-2">
-                          <Checkbox
-                            id="acknowledge-rules"
-                            checked={acknowledgeDeliveryRules}
-                            onCheckedChange={(checked) => setAcknowledgeDeliveryRules(checked as boolean)}
-                          />
-                          <label htmlFor="acknowledge-rules" className="text-sm text-blue-800 leading-relaxed">
-                            I acknowledge and agree to the delivery rules and conditions for {deliveryRules.zoneName}. 
-                            I understand that delivery will be made according to the specified time frame and conditions.
-                          </label>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-4">
-                        <AlertTriangle className="h-6 w-6 text-red-500 mx-auto mb-2" />
-                        <p className="text-red-600 text-sm">Failed to load delivery rules</p>
-                      </div>
+                    <Button
+                      onClick={handleApplyPromo}
+                      disabled={promoLoading || !promoInput}
+                      className="bg-pink-600 hover:bg-pink-700"
+                      type="button"
+                    >
+                      {promoLoading ? 'Applying...' : 'Apply'}
+                    </Button>
+                    {appliedPromoCode && (
+                      <Button variant="ghost" onClick={handleRemovePromo} type="button">Remove</Button>
                     )}
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-between mt-8">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setStep(2)}
-                      disabled={placingOrder}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      onClick={placeOrder}
-                      disabled={placingOrder || !acknowledgeDeliveryRules || !selectedDeliveryDate || !deliveryDateInitialized}
-                      className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {placingOrder ? (
-                        <div className="flex items-center gap-2">
-                          <RefreshCw className="h-5 w-5 animate-spin" />
-                          {paymentMethod === 'cod' ? 'Placing Order...' : 'Processing Payment...'}
-                        </div>
-                      ) : (
-                        paymentMethod === 'cod' ? 'Place Order' : 'Pay Now'
-                      )}
-                    </Button>
+                  {promoError && <p className="text-red-500 text-sm mt-1">{promoError}</p>}
+                  {appliedPromoCode && (
+                    <p className="text-green-600 text-sm mt-1">Promo code <b>{appliedPromoCode.code}</b> applied! Discount: {Number(promoDiscount).toFixed(2)} EGP</p>
+                  )}
+                </div>
+                
+                <div className="border-t pt-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span>{subtotal.toFixed(2)} EGP</span>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="flex justify-between">
+                    <span>Delivery Fee</span>
+                    <span>{Number(deliveryFee).toFixed(2)} EGP</span>
+                  </div>
+                  {appliedPromoCode && (
+                    <div className="flex justify-between text-green-700">
+                      <span>Promo Discount</span>
+                      <span>-{Number(promoDiscount).toFixed(2)} EGP</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between font-semibold text-lg">
+                      <span>Total</span>
+                      <span>{total.toFixed(2)} EGP</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+      
+      <Dialog open={otpModalOpen} onOpenChange={setOtpModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify Phone Number</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Enter the 6-digit code sent to {phoneToVerify}
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="otp">OTP Code</Label>
+              <Input
+                id="otp"
+                type="text"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter 6-digit code"
+                maxLength={6}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && otpCode.length === 6) {
+                    verifyOtp()
+                  }
+                }}
+              />
             </div>
-            <div className="space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <Package className="h-5 w-5" />
-                    Order Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-4">
-                    {checkoutData.cart?.items.map((item) => (
-                      <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="w-16 h-16 object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/images/default-cookie.jpg';
-                            }}
-                          />
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                              <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                              {item.isPack && (
-                                <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                              )}
-                            </div>
-                            <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
-                          </div>
-                          
-                          {item.flavors && item.flavors.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {item.flavors.map((flavor) => (
-                                  <Badge key={flavor.id} variant="outline" className="text-xs">
-                                    {flavor.name} ({flavor.quantity})
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="border-t pt-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>{subtotal.toFixed(2)} EGP</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Delivery Fee</span>
-                      <span>{Number(deliveryFee).toFixed(2)} EGP</span>
-                    </div>
-                    <div className="border-t pt-2">
-                      <div className="flex justify-between font-semibold text-lg">
-                        <span>Total</span>
-                        <span>{total.toFixed(2)} EGP</span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="flex gap-2">
+              <Button
+                onClick={verifyOtp}
+                disabled={otpCode.length !== 6 || verifyingOtp}
+                className="flex-1"
+              >
+                {verifyingOtp ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Verify'
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={resendOtp}
+                disabled={otpCountdown > 0}
+              >
+                {otpCountdown > 0 ? `${otpCountdown}s` : 'Resend'}
+              </Button>
             </div>
           </div>
-        )}
-        
-        <Dialog open={otpModalOpen} onOpenChange={setOtpModalOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Verify Phone Number</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <p className="text-sm text-gray-600">
-                Enter the 6-digit code sent to {phoneToVerify}
-              </p>
-              <div className="space-y-2">
-                <Label htmlFor="otp">OTP Code</Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Enter 6-digit code"
-                  maxLength={6}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && otpCode.length === 6) {
-                      verifyOtp()
-                    }
-                  }}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={verifyOtp}
-                  disabled={otpCode.length !== 6 || verifyingOtp}
-                  className="flex-1"
-                >
-                  {verifyingOtp ? (
-                    <>
-                      <RefreshCw className="mr-2 h-4 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    'Verify'
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={resendOtp}
-                  disabled={otpCountdown > 0}
-                >
-                  {otpCountdown > 0 ? `${otpCountdown}s` : 'Resend'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

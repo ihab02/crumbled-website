@@ -54,6 +54,9 @@ interface Order {
       quantity: number;
     }>;
   }>;
+  promo_code_id?: number | null;
+  promo_code?: string | null;
+  discount_amount?: number | null;
 }
 
 interface DeliveryPerson {
@@ -977,6 +980,15 @@ export default function AdminOrdersPage() {
             )}
 
             <div className="overflow-x-auto">
+              {/* Collapse All Button */}
+              <div className="mb-2 flex justify-end">
+                <button
+                  onClick={() => setExpandedOrders(new Set())}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Collapse All
+                </button>
+              </div>
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
@@ -1014,6 +1026,12 @@ export default function AdminOrdersPage() {
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Promo Code
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Discount
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -1118,6 +1136,8 @@ export default function AdminOrdersPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         EGP {Number(order.total).toFixed(2)}
                       </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{order.promo_code || order.promo_code_id || '-'}</td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{order.discount_amount ? `EGP ${Number(order.discount_amount).toFixed(2)}` : '-'}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}
@@ -1388,6 +1408,16 @@ export default function AdminOrdersPage() {
                           {selectedOrder.otp_verified && (
                             <span className="text-green-600 ml-2">✓ Verified</span>
                           )}
+                        </p>
+                      )}
+                      {selectedOrder.promo_code && (
+                        <p className="text-sm text-gray-500">
+                          <span className="font-medium">Promo Code:</span> {selectedOrder.promo_code}
+                        </p>
+                      )}
+                      {selectedOrder.discount_amount && (
+                        <p className="text-sm text-gray-500">
+                          <span className="font-medium">Discount:</span> EGP {Number(selectedOrder.discount_amount).toFixed(2)}
                         </p>
                       )}
                     </div>

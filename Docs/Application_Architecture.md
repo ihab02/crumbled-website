@@ -187,6 +187,7 @@ debugLog('Component mounted', { props });
 - **Analytics**: Sales and performance metrics
 - **Inventory Management**: Stock tracking and updates
 - **Promo Codes Management**: Create, edit, and manage promotional codes
+- **Pricing Management**: Advanced product pricing and pricing rules management
 
 #### Admin Components
 - `AdminLayout`: Admin dashboard layout
@@ -232,6 +233,13 @@ PUT    /api/admin/delivery-men/:id    # Update delivery person
 - **POST /api/admin/promo-codes**: Create new promotional code
 - **PUT /api/admin/promo-codes/:id**: Update existing promotional code
 - **DELETE /api/admin/promo-codes/:id**: Delete promotional code
+- **GET /api/admin/pricing-rules**: Fetch all pricing rules
+- **POST /api/admin/pricing-rules**: Create new pricing rule
+- **PUT /api/admin/pricing-rules/:id**: Update existing pricing rule
+- **DELETE /api/admin/pricing-rules/:id**: Delete pricing rule
+- **GET /api/admin/product-prices**: Fetch product pricing
+- **POST /api/admin/product-prices**: Set product prices
+- **PUT /api/admin/product-prices/:id**: Update product prices
 
 #### Promo Code Features
 - **Flexible Discount Types**: Percentage or fixed amount discounts
@@ -240,6 +248,15 @@ PUT    /api/admin/delivery-men/:id    # Update delivery person
 - **Minimum Order Requirements**: Enforce minimum order amounts
 - **Usage Tracking**: Monitor code usage and effectiveness
 - **Admin Management**: Full CRUD operations through admin interface
+
+#### Pricing Management Features
+- **Product-Specific Pricing**: Individual product price management
+- **Category-Based Rules**: Apply pricing rules to product categories
+- **Time-Based Pricing**: Scheduled price changes and promotions
+- **Customer Group Pricing**: VIP and member pricing tiers
+- **Advanced Pricing Tiers**: Regular, sale, member, wholesale pricing
+- **Bulk Operations**: Mass price updates and rule creation
+- **Pricing Analytics**: Revenue impact and rule effectiveness tracking
 
 ### API Response Format
 ```typescript
@@ -280,6 +297,9 @@ class DatabaseService {
 - CustomerService: Customer data management
 - DeliveryService: Delivery operations
 - AuthService: Authentication and authorization
+- PricingService: Product pricing and pricing rules management
+- PricingRuleService: Pricing rule operations and validation
+- ProductPricingService: Product-specific pricing operations
 ```
 
 ## State Management
@@ -451,6 +471,7 @@ class DatabaseService {
 5. **Payment Gateway**: Online payment integration
 6. **Inventory Management**: Advanced stock tracking
 7. **Customer Loyalty**: Rewards and referral system
+8. **Product Pricing Management**: Advanced pricing strategies and rules
 
 ### Technical Improvements
 1. **Microservices**: Service-oriented architecture

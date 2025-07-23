@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
-import { sendOrderConfirmationEmail } from '@/lib/email-service';
+import { EmailService } from '@/lib/email-service';
 
 interface CheckoutPaymentRequest {
   cartId?: string;
@@ -174,7 +174,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
   try {
     console.log('🔍 [DEBUG] Payment API called')
     const session = await getServerSession(authOptions);
-    const { paymentMethod, orderData } = await request.json() as CheckoutPaymentRequest;
+    const { paymentMethod, orderData, promoCodeId, discountAmount } = await request.json() as CheckoutPaymentRequest & { promoCodeId?: number, discountAmount?: number };
+    console.log('🔍 [DEBUG] Payment API - Received promoCodeId:', promoCodeId)
+    console.log('🔍 [DEBUG] Payment API - Received discountAmount:', discountAmount)
     const cartId = await getOrCreateCart();
 
     console.log('🔍 [DEBUG] Payment API - Session:', session?.user?.email)
@@ -282,11 +284,25 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       
       console.log('🔍 [DEBUG] Payment API - Final customer ID:', customerId)
 
+      // Fallback to orderData.promoCode if top-level promoCodeId/discountAmount are undefined
+      let finalPromoCodeId = promoCodeId;
+      let finalDiscountAmount = discountAmount;
+      if (typeof finalPromoCodeId === 'undefined' && orderData && typeof orderData === 'object' && 'promoCode' in orderData && orderData.promoCode && (orderData.promoCode as any).id) {
+        finalPromoCodeId = (orderData.promoCode as any).id;
+      }
+      if (typeof finalDiscountAmount === 'undefined' && orderData && typeof orderData === 'object' && 'promoCode' in orderData && orderData.promoCode && (orderData.promoCode as any).discount_amount) {
+        finalDiscountAmount = (orderData.promoCode as any).discount_amount;
+      }
+      console.log('🔍 [DEBUG] Payment API - Using finalPromoCodeId:', finalPromoCodeId);
+      console.log('🔍 [DEBUG] Payment API - Using finalDiscountAmount:', finalDiscountAmount);
+
       const [orderResult] = await connection.query(
         `INSERT INTO orders (
           customer_id, 
+          promo_code_id,
           customer_phone,
           total, 
+          discount_amount,
           status, 
           payment_method,
           delivery_address,
@@ -296,11 +312,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           delivery_fee,
           subtotal,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           customerId,
+          finalPromoCodeId || null,
           orderData.customerInfo.phone,
           Number(orderData.cart.total),
+          finalDiscountAmount || 0,
           orderStatus,
           paymentMethod === 'cod' ? 'cash' : 'card',
           orderData.deliveryAddress.street_address,
@@ -311,6 +329,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           orderData.cart.subtotal
         ]
       );
+      console.log('🔍 [DEBUG] Payment API - Inserted order with finalPromoCodeId:', finalPromoCodeId, 'and finalDiscountAmount:', finalDiscountAmount);
 
       const orderId = (orderResult as any).insertId;
       console.log(`🔍 [DEBUG] Payment API - Order created with ID: ${orderId}`)
@@ -447,6 +466,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       // Clear cart
       await connection.query('DELETE FROM cart_items WHERE cart_id = ?', [cartId]);
 
+      // After order is created, increment promo code usage if applicable
+      if (finalPromoCodeId && customerId) {
+        await connection.query(
+          `INSERT INTO promo_code_usages (promo_code_id, customer_id, usage_count, last_used_at)
+           VALUES (?, ?, 1, NOW())
+           ON DUPLICATE KEY UPDATE usage_count = usage_count + 1, last_used_at = NOW()`,
+          [finalPromoCodeId, customerId]
+        );
+      }
+
       return { orderId };
     });
 
@@ -478,22 +507,97 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           // Continue without delivery rules if fetch fails
         }
 
-        // Send order confirmation email
-        await sendOrderConfirmationEmail(
-          orderData.customerInfo.email, 
-          orderId, 
-          {
-            items: orderData.cart.items,
-            subtotal: orderData.cart.subtotal,
-            deliveryFee: orderData.cart.deliveryFee,
-            total: orderData.cart.total,
-            status: 'pending',
-            paymentMethod: 'cod',
-            customerInfo: orderData.customerInfo,
-            deliveryAddress: orderData.deliveryAddress,
-            deliveryRules: deliveryRules
+        // Extract delivery details from deliveryRules
+        const deliveryTime = deliveryRules?.formattedDeliveryDate || '';
+        const deliverySlot = deliveryRules?.timeSlot
+          ? `${deliveryRules.timeSlot.name} (${deliveryRules.timeSlot.fromHour} - ${deliveryRules.timeSlot.toHour})`
+          : '';
+        // Fetch order items and use flavor_details for pack flavors
+        const orderItemsResult = await databaseService.query('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
+        const orderItems = Array.isArray(orderItemsResult) ? orderItemsResult : (orderItemsResult ? [orderItemsResult] : []);
+        
+        console.log('🔍 [DEBUG] Payment API - Order items result:', orderItemsResult);
+        console.log('🔍 [DEBUG] Payment API - Processed order items:', orderItems);
+        
+        for (const item of orderItems) {
+          if (item.flavor_details) {
+            try {
+              item.flavors = JSON.parse(item.flavor_details);
+            } catch {
+              item.flavors = [];
+            }
           }
-        );
+          if (typeof item.unit_price === 'undefined') {
+            item.unit_price = item.price || 0;
+          }
+        }
+        // Fetch promo code string if present
+        let promoCode = '';
+        let promoId = null;
+        if (typeof orderData === 'object' && orderData !== null) {
+          if ('promoCode' in orderData && orderData.promoCode && typeof orderData.promoCode === 'object' && 'id' in orderData.promoCode) {
+            promoId = (orderData.promoCode as any).id;
+            promoCode = (orderData.promoCode as any).code; // Use the code directly from orderData
+          } else if ('promo_code' in orderData && orderData.promo_code) {
+            promoId = orderData.promo_code;
+          } else if (promoCodeId) {
+            promoId = promoCodeId;
+          }
+        }
+        if (promoId && !promoCode) {
+          const [promoRows] = await databaseService.query('SELECT code FROM promo_codes WHERE id = ?', [promoId]);
+          if (promoRows && promoRows.length > 0) promoCode = promoRows[0].code;
+        }
+        
+        console.log('🔍 [DEBUG] Payment API - Promo code processing:', {
+          promoId,
+          promoCode,
+          orderDataPromoCode: (orderData as any).promoCode
+        });
+        // Get the correct discount amount from orderData.promoCode
+        const emailDiscountAmount = (orderData as any).promoCode?.discount_amount || discountAmount || 0;
+        
+        console.log('🔍 [DEBUG] Payment API - Email discount calculation:', {
+          orderDataPromoCode: (orderData as any).promoCode,
+          orderDataPromoCodeDiscount: (orderData as any).promoCode?.discount_amount,
+          discountAmount,
+          finalEmailDiscountAmount: emailDiscountAmount
+        });
+        
+        // Build order object for email
+        const orderObj = {
+          id: orderId,
+          items: orderItems,
+          subtotal: orderData.cart.subtotal,
+          delivery_fee: orderData.cart.deliveryFee,
+          discount: emailDiscountAmount,
+          discount_amount: emailDiscountAmount,
+          promo_code: promoCode,
+          promoCode: promoCode,
+          created_at: new Date(),
+          delivery_address: orderData.deliveryAddress.street_address,
+          delivery_city: orderData.deliveryAddress.city_name,
+          delivery_zone: orderData.deliveryAddress.zone_name,
+          status: 'pending',
+          paymentMethod: paymentMethod,
+          customer_name: orderData.customerInfo.name,
+          customer_phone: orderData.customerInfo.phone,
+          customer_email: orderData.customerInfo.email,
+          additional_info: orderData.deliveryAddress.additional_info,
+          delivery_time: deliveryTime,
+          delivery_slot: deliverySlot
+        };
+        
+        console.log('🔍 [DEBUG] Payment API - Email order object:', {
+          id: orderObj.id,
+          subtotal: orderObj.subtotal,
+          delivery_fee: orderObj.delivery_fee,
+          discount: orderObj.discount,
+          discount_amount: orderObj.discount_amount,
+          promo_code: orderObj.promo_code,
+          promoCode: orderObj.promoCode
+        });
+        await EmailService.sendOrderConfirmation(orderData.customerInfo.email, orderObj);
         console.log('✅ Order confirmation email sent for COD order');
       } catch (emailError) {
         console.error('❌ Failed to send order confirmation email:', emailError);

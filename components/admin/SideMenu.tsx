@@ -113,9 +113,26 @@ const menuItems = [
     icon: MapPin
   },
   {
-    title: 'Promo Codes',
-    href: '/admin/promo-codes',
-    icon: Tag
+    title: 'Pricing Management',
+    href: '/admin/pricing-rules',
+    icon: Tag,
+    submenu: [
+      {
+        title: 'Enhanced Promo Codes',
+        href: '/admin/enhanced-promo-codes',
+        icon: Tag
+      },
+      {
+        title: 'Pricing Rules',
+        href: '/admin/pricing-rules',
+        icon: Target
+      },
+      {
+        title: 'Product Prices',
+        href: '/admin/product-prices',
+        icon: Package
+      }
+    ]
   },
   {
     title: 'Stock Management',
@@ -230,6 +247,7 @@ export function SideMenu() {
   const isProductActive = pathname.startsWith('/admin/products') || pathname.startsWith('/admin/flavors') || pathname.startsWith('/admin/product-') || pathname.startsWith('/admin/sliding-');
   const isCustomerActive = pathname.startsWith('/admin/customers') || pathname.startsWith('/admin/customer-') || pathname.startsWith('/admin/messages');
   const isAnalyticsActive = pathname.startsWith('/admin/analytics');
+  const isPricingActive = pathname.startsWith('/admin/enhanced-promo-codes') || pathname.startsWith('/admin/pricing-rules') || pathname.startsWith('/admin/product-prices');
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-white">
@@ -262,7 +280,8 @@ export function SideMenu() {
             isProductionActive || 
             isProductActive || 
             isCustomerActive || 
-            isAnalyticsActive
+            isAnalyticsActive ||
+            isPricingActive
           );
 
           return (

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
-import { sendOrderConfirmationEmail } from '@/lib/email-service';
+import { EmailService } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -158,23 +158,22 @@ export async function POST(request: NextRequest) {
               // Continue without delivery rules if fetch fails
             }
             
-            await sendOrderConfirmationEmail(
+            await EmailService.sendOrderConfirmation(
               orderDetails.email,
-              ourOrderId,
               {
-                items: [], // TODO: Get actual order items
+                id: ourOrderId,
+                customer_name: `${orderDetails.first_name} ${orderDetails.last_name}`,
+                customer_email: orderDetails.email,
+                customer_phone: orderDetails.phone,
                 subtotal: orderDetails.total,
-                deliveryFee: 0, // TODO: Get actual delivery fee
+                delivery_fee: 0, // TODO: Get actual delivery fee
                 total: orderDetails.total,
                 status: 'confirmed',
-                paymentMethod: 'paymob',
-                customerInfo: {
-                  name: `${orderDetails.first_name} ${orderDetails.last_name}`,
-                  email: orderDetails.email,
-                  phone: orderDetails.phone
-                },
-                deliveryAddress: {}, // TODO: Get actual delivery address
-                deliveryRules: deliveryRules
+                payment_method: 'paymob',
+                delivery_address: '', // TODO: Get actual delivery address
+                delivery_city: '',
+                delivery_zone: '',
+                items: [] // TODO: Get actual order items
               }
             );
             

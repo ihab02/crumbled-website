@@ -7,14 +7,6 @@ const nextConfig = {
     },
   },
   
-  // Configure API route body size limits
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-    responseLimit: '50mb',
-  },
-  
   // Disable webpack caching to prevent file system errors
   webpack: (config, { dev, isServer }) => {
     if (dev) {

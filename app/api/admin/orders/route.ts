@@ -95,6 +95,9 @@ export async function GET(request: any) {
         o.subtotal,
         o.created_at,
         o.updated_at,
+        o.promo_code_id,
+        o.discount_amount,
+        pc.code AS promo_code,
         COALESCE(CONCAT(IFNULL(c.first_name, ''), ' ', IFNULL(c.last_name, '')), 'Guest User') as customer_name,
         c.email as customer_email,
         c.phone as customer_phone,
@@ -113,6 +116,7 @@ export async function GET(request: any) {
         dts.to_hour
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
+       LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
        LEFT JOIN zones z ON o.delivery_zone COLLATE utf8mb4_general_ci = z.name COLLATE utf8mb4_general_ci
        LEFT JOIN delivery_men dm ON o.delivery_man_id = dm.id
        LEFT JOIN delivery_time_slots dts ON z.time_slot_id = dts.id

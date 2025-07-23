@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { databaseService } from '@/lib/services/databaseService'
 import { sendOrderNotification } from "@/lib/sms-service"
-import { sendOrderConfirmationEmail, sendOrderStatusUpdateEmail } from '@/lib/email-service'
+import { EmailService } from '@/lib/email-service'
 
 const db = databaseService
 
@@ -112,14 +112,20 @@ export async function POST(request: NextRequest) {
 
       // Send email confirmation if email is provided
       if (customer.email) {
-        await sendOrderConfirmationEmail(
+        await EmailService.sendOrderConfirmation(
           customer.email,
-          result,
           {
-            customerName: customer.name || 'Valued Customer',
-            items,
+            id: result,
+            customer_name: customer.name || 'Valued Customer',
+            customer_email: customer.email,
+            items: items.map(item => ({
+              name: item.name,
+              quantity: item.quantity,
+              price: item.price,
+              image: item.image
+            })),
             subtotal,
-            deliveryFee,
+            delivery_fee: deliveryFee,
             total
           }
         )
@@ -222,10 +228,14 @@ export async function PATCH(request: NextRequest) {
 
     // Send email notification if email exists
     if (order?.customer_email) {
-      await sendOrderStatusUpdateEmail(
+      await EmailService.sendOrderStatusUpdate(
         order.customer_email,
-        orderId,
-        status
+        {
+          id: orderId,
+          customer_name: order.customer_name || 'Valued Customer',
+          customer_email: order.customer_email,
+          status
+        }
       )
     }
 

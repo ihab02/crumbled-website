@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import Image from "next/image"
 import { useDebugLogger } from "@/hooks/use-debug-mode"
+import EnhancedPromoCodeInput from "@/components/EnhancedPromoCodeInput"
+import { useSession } from "next-auth/react"
 
 // Types matching the API response
 interface CartItemFlavor {
@@ -41,11 +43,24 @@ interface CartResponse {
   itemCount: number
 }
 
+interface PromoCode {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  discount_type: 'percentage' | 'fixed_amount';
+  enhanced_type: 'basic' | 'free_delivery' | 'buy_one_get_one' | 'buy_x_get_y' | 'category_specific' | 'first_time_customer' | 'loyalty_reward';
+  discount_value: number;
+  discount_amount: number;
+  combination_allowed: boolean;
+  stack_with_pricing_rules: boolean;
+}
+
 export default function CartPage() {
   const router = useRouter()
   const { debugLog } = useDebugLogger()
-  const [promoCode, setPromoCode] = useState('')
-  const [discount, setDiscount] = useState(0)
+  const { data: session } = useSession()
+  const [appliedPromoCode, setAppliedPromoCode] = useState<PromoCode | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
@@ -146,18 +161,10 @@ export default function CartPage() {
     return cartItems.reduce((sum, item) => sum + calculateItemTotal(item), 0)
   }
 
-  const applyPromoCode = () => {
-    if (promoCode.toLowerCase() === "welcome10") {
-      setDiscount(0.1)
-      toast.success("Promo code applied! 10% off")
-    } else {
-      toast.error("Invalid promo code")
-    }
-  }
-
   const subtotal = calculateCartTotal()
   const shippingCost = subtotal > 500 ? 0 : 50
-  const total = (subtotal + shippingCost) * (1 - discount)
+  const promoDiscount = appliedPromoCode ? appliedPromoCode.discount_amount : 0
+  const total = subtotal + shippingCost - promoDiscount
 
   const handleUpdateQuantity = async (itemId: number, newQuantity: number) => {
     if (newQuantity < 1) return
@@ -207,7 +214,7 @@ export default function CartPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-pink-800">Your Cart</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-pink-800">Your Bag</h1>
           <div className="animate-pulse space-y-3 sm:space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-24 sm:h-32 bg-gray-200 rounded-lg"></div>
@@ -267,8 +274,8 @@ export default function CartPage() {
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
           <div className="text-center py-8 sm:py-12">
             <ShoppingBag className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400 mx-auto mb-4" />
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Your cart is empty</h1>
-            <p className="text-gray-500 mb-6 sm:mb-8 text-sm sm:text-base">Add some delicious cookies to your cart!</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Your Bag is empty</h1>
+            <p className="text-gray-500 mb-6 sm:mb-8 text-sm sm:text-base">Add some delicious cookies to your Bag!</p>
             <Button
               onClick={() => router.push("/shop")}
               className="bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
@@ -295,7 +302,7 @@ export default function CartPage() {
             </Button>
             <div className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6" />
-              <h1 className="text-xl sm:text-2xl font-bold">Your Cart</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">Your Bag</h1>
               {cartItems.length > 0 && (
                 <Badge variant="secondary" className="text-xs sm:text-sm">{cartItems.length} items</Badge>
               )}
@@ -376,9 +383,11 @@ export default function CartPage() {
                                         x{flavor.quantity}
                                       </Badge>
                                     </div>
-                                    <span className="text-xs sm:text-sm font-semibold text-pink-600 flex-shrink-0 ml-2">
-                                      +{(flavor.price * flavor.quantity).toFixed(2)} EGP
-                                    </span>
+                                    {Number(flavor.price) > 0 && (
+                                      <span className="text-xs sm:text-sm font-semibold text-pink-600 flex-shrink-0 ml-2">
+                                        +{(flavor.price * flavor.quantity).toFixed(2)} EGP
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -430,28 +439,22 @@ export default function CartPage() {
           </div>
 
           <div className="order-1 lg:order-2">
-            <Card className="border-2 border-pink-200 rounded-2xl sm:rounded-3xl">
-              <CardContent className="p-4 sm:p-6">
-                <h3 className="mb-3 sm:mb-4 font-bold text-base sm:text-lg text-pink-800">Promo Code</h3>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter promo code"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    className="border-pink-200 text-sm sm:text-base"
-                  />
-                  <Button
-                    onClick={applyPromoCode}
-                    className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-sm sm:text-base px-3 sm:px-4"
-                  >
-                    Apply
-                  </Button>
-                </div>
-                {discount > 0 && (
-                  <p className="mt-2 text-xs sm:text-sm text-green-600">Promo code applied! {discount * 100}% off</p>
-                )}
-              </CardContent>
-            </Card>
+            <EnhancedPromoCodeInput
+              cartItems={cartItems.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.basePrice,
+                quantity: item.quantity,
+                category: item.isPack ? 'pack' : 'single',
+                flavor: item.flavorDetails
+              }))}
+              subtotal={subtotal}
+              customerId={session?.user?.id?.toString()}
+              customerEmail={session?.user?.email}
+              onPromoCodeApplied={setAppliedPromoCode}
+              appliedPromoCode={appliedPromoCode}
+              className="border-2 border-pink-200 rounded-2xl sm:rounded-3xl"
+            />
 
             <Card className="mt-4 sm:mt-6 border-2 border-pink-200 rounded-2xl sm:rounded-3xl">
               <CardContent className="p-4 sm:p-6">
@@ -465,10 +468,10 @@ export default function CartPage() {
                     <span>Shipping</span>
                     <span>{shippingCost.toFixed(2)} EGP</span>
                   </div>
-                  {discount > 0 && (
+                  {promoDiscount > 0 && (
                     <div className="flex justify-between text-xs sm:text-sm text-green-600">
-                      <span>Discount</span>
-                      <span>-{(subtotal * discount).toFixed(2)} EGP</span>
+                      <span>Promo Discount</span>
+                      <span>-{promoDiscount.toFixed(2)} EGP</span>
                     </div>
                   )}
                   <div className="border-t pt-3 sm:pt-4">

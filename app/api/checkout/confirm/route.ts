@@ -35,6 +35,11 @@ interface CheckoutConfirmRequest {
     zone_id: number;
   };
   saveNewAddress?: boolean;
+  promoCode?: {
+    id: number;
+    code: string;
+    discount_amount: number;
+  };
 }
 
 interface CheckoutConfirmResponse {
@@ -594,6 +599,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     console.log(`  - Delivery fee: ${deliveryFee}`)
     console.log(`  - Total: ${total}`)
 
+    // Extract promo code info from request if present
+    let promoCode = undefined;
+    if ('promoCode' in requestBody && requestBody.promoCode && requestBody.promoCode.id) {
+      promoCode = {
+        id: requestBody.promoCode.id,
+        code: requestBody.promoCode.code,
+        discount_amount: requestBody.promoCode.discount_amount
+      };
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Order confirmed successfully',
@@ -606,7 +621,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
           itemCount
         },
         deliveryAddress,
-        customerInfo
+        customerInfo,
+        ...(promoCode ? { promoCode } : {})
       }
     });
 

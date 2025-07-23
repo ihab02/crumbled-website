@@ -39,6 +39,7 @@ interface PromoCode {
   valid_until: string | null
   is_active: boolean
   created_at: string
+  usage_per_customer: number | null
 }
 
 export default function PromoCodesPage() {
@@ -55,13 +56,37 @@ export default function PromoCodesPage() {
     minimum_order_amount: 0,
     maximum_discount: 0,
     usage_limit: 0,
+    usage_per_customer: '', // new field, always string
     valid_until: '',
     is_active: true
   })
+  const [usageCounts, setUsageCounts] = useState<{ [promoId: number]: { registered: number, guest: number } }>({})
 
   useEffect(() => {
     fetchPromoCodes()
   }, [])
+
+  useEffect(() => {
+    // Fetch usage counts for all promo codes
+    const fetchAllUsage = async () => {
+      const counts: { [promoId: number]: { registered: number, guest: number } } = {}
+      await Promise.all(promoCodes.map(async (code) => {
+        try {
+          const res = await fetch(`/api/admin/promo-code-usage?promo_code_id=${code.id}`)
+          const data = await res.json()
+          let registered = 0
+          for (const row of data.data || []) {
+            if (row.user_id) registered += row.usage_count
+          }
+          counts[code.id] = { registered, guest: data.guestUsage || 0 }
+        } catch {
+          counts[code.id] = { registered: 0, guest: 0 }
+        }
+      }))
+      setUsageCounts(counts)
+    }
+    if (promoCodes.length > 0) fetchAllUsage()
+  }, [promoCodes])
 
   const fetchPromoCodes = async () => {
     try {
@@ -84,6 +109,10 @@ export default function PromoCodesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const payload = {
+      ...formData,
+      usage_per_customer: formData.usage_per_customer ? parseInt(formData.usage_per_customer) : null,
+    }
     
     try {
       const url = editingCode 
@@ -97,7 +126,7 @@ export default function PromoCodesPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       })
 
       if (!response.ok) {
@@ -125,6 +154,7 @@ export default function PromoCodesPage() {
       minimum_order_amount: code.minimum_order_amount,
       maximum_discount: code.maximum_discount || 0,
       usage_limit: code.usage_limit || 0,
+      usage_per_customer: code.usage_per_customer ? code.usage_per_customer.toString() : '',
       valid_until: code.valid_until ? code.valid_until.split('T')[0] : '',
       is_active: code.is_active
     })
@@ -189,6 +219,7 @@ export default function PromoCodesPage() {
       minimum_order_amount: 0,
       maximum_discount: 0,
       usage_limit: 0,
+      usage_per_customer: '',
       valid_until: '',
       is_active: true
     })
@@ -338,6 +369,17 @@ export default function PromoCodesPage() {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="usage_per_customer">Max Usage Per User (optional)</Label>
+                  <Input
+                    id="usage_per_customer"
+                    type="number"
+                    min="0"
+                    value={formData.usage_per_customer?.toString() || ''}
+                    onChange={(e) => setFormData({ ...formData, usage_per_customer: e.target.value })}
+                    placeholder="Leave blank for unlimited"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="valid_until">Valid Until</Label>
                   <Input
                     id="valid_until"
@@ -474,18 +516,10 @@ export default function PromoCodesPage() {
                       <Users className="h-4 w-4 text-purple-500" />
                       <span className="text-sm font-medium text-gray-600">Usage</span>
                     </div>
-                    <p className="text-lg font-bold text-gray-900">
-                      {code.used_count}
-                      {code.usage_limit ? ` / ${code.usage_limit}` : ''}
+                    <p className="text-sm text-gray-900">
+                      Registered: {usageCounts[code.id]?.registered ?? '-'}<br />
+                      Guests: {usageCounts[code.id]?.guest ?? '-'}
                     </p>
-                    {code.usage_limit && (
-                      <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
-                        <div 
-                          className="bg-blue-500 h-1 rounded-full" 
-                          style={{ width: `${getUsagePercentage(code.used_count, code.usage_limit)}%` }}
-                        ></div>
-                      </div>
-                    )}
                   </div>
                   
                   <div className="bg-gray-50 p-3 rounded-lg">

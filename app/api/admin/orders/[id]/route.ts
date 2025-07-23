@@ -43,9 +43,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
     // Get order details with customer information
     const orderResult = await databaseService.query(
       `SELECT o.*, 
-              c.first_name, c.last_name, c.email as customer_email, c.phone as customer_phone, c.type as customer_type
+              c.first_name, c.last_name, c.email as customer_email, c.phone as customer_phone, c.type as customer_type, pc.code as promo_code
        FROM orders o 
        LEFT JOIN customers c ON o.customer_id = c.id 
+       LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
        WHERE o.id = ?`,
       [orderId]
     );
@@ -151,6 +152,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
       total_amount: order.total, // Use the total from orders table
       payment_method: order.payment_method || 'cash',
       created_at: order.created_at,
+      promo_code_id: order.promo_code_id,
+      promo_code: order.promo_code,
+      discount_amount: order.discount_amount,
       items: itemsWithFlavors
     };
 

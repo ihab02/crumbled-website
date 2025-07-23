@@ -382,7 +382,7 @@ export default function AdminProductsPage() {
         base_price: parseFloat(formData.base_price),
         count: formData.is_pack ? parseInt(formData.count) : null,
         is_active: true,
-        image_url: null // Initialize as null
+        image_url: editingProduct ? editingProduct.image_url : null // Preserve existing image if editing
       };
 
       // Handle image upload if an image is selected

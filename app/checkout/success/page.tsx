@@ -302,6 +302,18 @@ export default function CheckoutSuccessPage() {
                           <span className="text-orange-700">Delivery Fee:</span>
                           <span className="font-bold text-orange-800">{orderInfo.delivery_fee ? Number(orderInfo.delivery_fee).toFixed(2) : '0.00'} EGP</span>
                         </div>
+                        {orderInfo.promo_code && (
+                          <div className="flex justify-between">
+                            <span className="text-green-700">Promo Code:</span>
+                            <span className="font-bold text-green-800">{orderInfo.promo_code}</span>
+                          </div>
+                        )}
+                        {orderInfo.discount_amount && Number(orderInfo.discount_amount) > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-green-700">Promo Discount:</span>
+                            <span className="font-bold text-green-800">-{Number(orderInfo.discount_amount).toFixed(2)} EGP</span>
+                          </div>
+                        )}
                         <div className="border-t border-orange-300 pt-2 mt-2">
                           <div className="flex justify-between">
                             <span className="text-lg font-bold text-orange-800">Total:</span>

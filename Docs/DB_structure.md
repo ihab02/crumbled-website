@@ -305,6 +305,98 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 ]
 ```
 
+### 12. Product Pricing Management System
+
+#### `pricing_rules` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- name (VARCHAR(255)) - Rule name (e.g., "Summer Sale", "VIP Discount")
+- description (TEXT) - Detailed rule description
+- rule_type (ENUM: 'product', 'category', 'flavor', 'time', 'location', 'customer_group') - Type of pricing rule
+- target_id (INT, NULL) - Product ID, category ID, etc.
+- target_value (VARCHAR(255), NULL) - For non-ID targets like customer groups
+- discount_type (ENUM: 'percentage', 'fixed_amount', 'free_delivery') - Type of discount
+- discount_value (DECIMAL(10, 2)) - Discount amount or percentage
+- minimum_order_amount (DECIMAL(10, 2), DEFAULT 0.00) - Minimum order for discount
+- maximum_discount (DECIMAL(10, 2), NULL) - Maximum discount cap
+- start_date (DATETIME, DEFAULT CURRENT_TIMESTAMP) - Rule activation date
+- end_date (DATETIME, NULL) - Rule expiration date
+- is_active (BOOLEAN, DEFAULT true) - Whether rule is active
+- priority (INT, DEFAULT 0) - Higher priority rules apply first
+- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who created rule
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+```
+
+**Purpose**: Manages flexible pricing rules for products, categories, and customer groups.
+
+**Business Logic**:
+- **Rule Types**: Product-specific, category-based, time-based, customer group pricing
+- **Priority System**: Higher priority rules apply first when multiple rules match
+- **Time-Based**: Rules can be scheduled with start and end dates
+- **Validation**: Minimum order amounts and maximum discount caps
+- **Flexibility**: Supports percentage, fixed amount, and free delivery discounts
+
+#### `product_prices` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- product_id (INT, FOREIGN KEY -> products.id) - Reference to product
+- price_type (ENUM: 'regular', 'sale', 'member', 'wholesale') - Type of price
+- price (DECIMAL(10, 2)) - Price amount
+- start_date (DATETIME, DEFAULT CURRENT_TIMESTAMP) - Price activation date
+- end_date (DATETIME, NULL) - Price expiration date
+- is_active (BOOLEAN, DEFAULT true) - Whether price is active
+- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who set price
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+```
+
+**Purpose**: Manages different price tiers for products (regular, sale, member, wholesale).
+
+**Business Logic**:
+- **Price Tiers**: Multiple price types for different customer segments
+- **Time-Based**: Prices can be scheduled with start and end dates
+- **Historical Tracking**: Complete audit trail of price changes
+- **Active Management**: Only active prices are applied
+- **Admin Control**: Full control over pricing through admin interface
+
+#### `pricing_categories` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- name (VARCHAR(255)) - Category name (e.g., "Premium Flavors", "Bulk Orders")
+- description (TEXT) - Category description
+- category_type (ENUM: 'product_type', 'flavor_category', 'size_category', 'customer_group') - Type of category
+- target_value (VARCHAR(255)) - Category value (e.g., "Chocolate", "Large", "VIP")
+- is_active (BOOLEAN, DEFAULT true) - Whether category is active
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+```
+
+**Purpose**: Defines pricing categories for grouping products and customers.
+
+**Business Logic**:
+- **Category Types**: Product types, flavor categories, size categories, customer groups
+- **Flexible Grouping**: Dynamic categorization for pricing rules
+- **Active Management**: Only active categories are used in pricing
+- **Target Values**: Specific values within each category type
+
+#### Updated `products` Table (Pricing Fields)
+```sql
+- original_price (DECIMAL(10, 2), NULL) - Original product price
+- sale_price (DECIMAL(10, 2), NULL) - Current sale price
+- sale_start_date (DATETIME, NULL) - Sale start date
+- sale_end_date (DATETIME, NULL) - Sale end date
+- is_on_sale (BOOLEAN, DEFAULT false) - Whether product is currently on sale
+```
+
+**Purpose**: Enhanced product pricing with sale management capabilities.
+
+**Business Logic**:
+- **Original Price Preservation**: Maintains original price for comparison
+- **Sale Management**: Automatic sale price activation/deactivation
+- **Sale Indicators**: Clear indication of products on sale
+- **Time-Based Sales**: Scheduled sale periods with automatic management
+
 ### 7. Cart Management
 
 #### `carts` Table
@@ -533,6 +625,15 @@ orders ←→ promo_code_usage (1:many) - Order usage records
 customers ←→ promo_code_usage (1:many) - Customer usage tracking
 ```
 
+### Pricing Management
+```
+products ←→ product_prices (1:many) - Product pricing tiers
+admin_users ←→ pricing_rules (1:many) - Pricing rule creation
+admin_users ←→ product_prices (1:many) - Price setting
+pricing_categories ←→ pricing_rules (1:many) - Category-based rules
+products ←→ pricing_rules (1:many) - Product-specific rules
+```
+
 ### Cart Management
 ```
 customers ←→ carts (1:many)
@@ -590,6 +691,34 @@ CREATE INDEX idx_promo_code_usage_order_id ON promo_code_usage(order_id);
 CREATE INDEX idx_promo_code_usage_customer_id ON promo_code_usage(customer_id);
 ```
 
+### Product Pricing Management
+```sql
+-- Pricing rules indexes
+CREATE INDEX idx_pricing_rules_rule_type ON pricing_rules(rule_type);
+CREATE INDEX idx_pricing_rules_target_id ON pricing_rules(target_id);
+CREATE INDEX idx_pricing_rules_start_date ON pricing_rules(start_date);
+CREATE INDEX idx_pricing_rules_end_date ON pricing_rules(end_date);
+CREATE INDEX idx_pricing_rules_is_active ON pricing_rules(is_active);
+CREATE INDEX idx_pricing_rules_priority ON pricing_rules(priority);
+
+-- Product prices indexes
+CREATE INDEX idx_product_prices_product_id ON product_prices(product_id);
+CREATE INDEX idx_product_prices_price_type ON product_prices(price_type);
+CREATE INDEX idx_product_prices_start_date ON product_prices(start_date);
+CREATE INDEX idx_product_prices_end_date ON product_prices(end_date);
+CREATE INDEX idx_product_prices_is_active ON product_prices(is_active);
+
+-- Pricing categories indexes
+CREATE INDEX idx_pricing_categories_category_type ON pricing_categories(category_type);
+CREATE INDEX idx_pricing_categories_target_value ON pricing_categories(target_value);
+CREATE INDEX idx_pricing_categories_is_active ON pricing_categories(is_active);
+
+-- Products table pricing indexes
+CREATE INDEX idx_products_is_on_sale ON products(is_on_sale);
+CREATE INDEX idx_products_sale_start_date ON products(sale_start_date);
+CREATE INDEX idx_products_sale_end_date ON products(sale_end_date);
+```
+
 ## Data Integrity Constraints
 
 ### Foreign Key Constraints
@@ -633,4 +762,4 @@ The system implements a flexible delivery coverage system:
 
 ---
 
-**This database structure supports the complete Crumbled e-commerce platform with comprehensive customer management, product catalog, order processing, and delivery management capabilities.** 
+**This database structure supports the complete Crumbled e-commerce platform with comprehensive customer management, product catalog, order processing, delivery management, and advanced pricing management capabilities.** 

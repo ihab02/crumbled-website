@@ -116,6 +116,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       };
     }));
 
+    // For each item, use flavor_details for pack flavors
+    for (const item of itemsWithFlavors) {
+      const flavorDetails = (item as any).flavor_details;
+      if (flavorDetails) {
+        try {
+          item.flavors = JSON.parse(flavorDetails);
+        } catch {
+          item.flavors = [];
+        }
+      }
+    }
+
     // Calculate totals from order items
     let subtotal = 0;
     for (const item of itemsWithFlavors) {
@@ -126,7 +138,20 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const deliveryFee = order.delivery_fee || 30.00;
     const calculatedSubtotal = order.subtotal || subtotal;
 
+    // Fetch promo code string if promo_code_id is present
+    let promoCodeString = null;
+    if (order.promo_code_id) {
+      const promoResult = await databaseService.query(
+        'SELECT code FROM promo_codes WHERE id = ?',
+        [order.promo_code_id]
+      );
+      if (Array.isArray(promoResult) && promoResult.length > 0) {
+        promoCodeString = promoResult[0].code;
+      }
+    }
+
     // Format the order data
+    const calculatedTotal = Number(calculatedSubtotal) + Number(deliveryFee) - Number(order.discount_amount || 0);
     const formattedOrder = {
       id: order.id,
       order_status: order.status,
@@ -139,10 +164,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       delivery_zone: order.delivery_zone || 'General',
       delivery_fee: deliveryFee,
       subtotal: calculatedSubtotal,
-      total_amount: order.total, // Use the total from orders table
+      total_amount: calculatedTotal,
       payment_method: order.payment_method || 'cash',
       created_at: order.created_at,
-      items: itemsWithFlavors
+      items: itemsWithFlavors,
+      promo_code: promoCodeString,
+      discount_amount: order.discount_amount || 0
     };
 
     console.log('🔍 [DEBUG] Orders API - Formatted order data:', formattedOrder);

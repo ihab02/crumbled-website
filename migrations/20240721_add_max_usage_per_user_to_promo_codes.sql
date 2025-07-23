@@ -1,0 +1,1 @@
+ALTER TABLE promo_codes ADD COLUMN max_usage_per_user INT DEFAULT 1; 

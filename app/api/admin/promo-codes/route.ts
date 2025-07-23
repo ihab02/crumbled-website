@@ -29,9 +29,15 @@ export async function GET(request: NextRequest) {
       ORDER BY pc.created_at DESC
     `);
 
+    // Map max_usage_per_user to usage_per_customer for frontend compatibility
+    const mappedPromoCodes = promoCodes.map((pc: any) => ({
+      ...pc,
+      usage_per_customer: pc.max_usage_per_user
+    }));
+
     return NextResponse.json({
       success: true,
-      promoCodes
+      promoCodes: mappedPromoCodes
     });
 
   } catch (error) {
@@ -70,7 +76,8 @@ export async function POST(request: NextRequest) {
       maximum_discount,
       usage_limit,
       valid_until,
-      is_active
+      is_active,
+      usage_per_customer // new field
     } = await request.json();
 
     // Validate required fields
@@ -105,10 +112,11 @@ export async function POST(request: NextRequest) {
         minimum_order_amount,
         maximum_discount,
         usage_limit,
+        max_usage_per_user,
         valid_until,
         is_active,
         created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       code.toUpperCase(),
       name,
@@ -118,10 +126,15 @@ export async function POST(request: NextRequest) {
       minimum_order_amount || 0,
       maximum_discount || null,
       usage_limit || null,
+      usage_per_customer || null,
       valid_until || null,
       is_active,
       decoded.id
     ]);
+
+    const DEBUG = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+    if (DEBUG) console.debug('[DEBUG] PromoCode POST payload:', { code, name, discount_type, discount_value });
+    if (DEBUG) console.debug('[DEBUG] PromoCode created, insertId:', result.insertId);
 
     return NextResponse.json({
       success: true,
@@ -133,6 +146,75 @@ export async function POST(request: NextRequest) {
     console.error('Error creating promo code:', error);
     return NextResponse.json(
       { error: 'Failed to create promo code' },
+      { status: 500 }
+    );
+  }
+} 
+
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const cookieStore = cookies();
+    const adminToken = cookieStore.get('adminToken')?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    let decoded;
+    try {
+      decoded = verifyJWT(adminToken, 'admin');
+    } catch (error) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const id = params.id;
+    const {
+      code,
+      name,
+      description,
+      discount_type,
+      discount_value,
+      minimum_order_amount,
+      maximum_discount,
+      usage_limit,
+      valid_until,
+      is_active,
+      usage_per_customer // new field
+    } = await request.json();
+    // Update promo code
+    await databaseService.query(`
+      UPDATE promo_codes SET
+        code = ?,
+        name = ?,
+        description = ?,
+        discount_type = ?,
+        discount_value = ?,
+        minimum_order_amount = ?,
+        maximum_discount = ?,
+        usage_limit = ?,
+        max_usage_per_user = ?,
+        valid_until = ?,
+        is_active = ?
+      WHERE id = ?
+    `, [
+      code.toUpperCase(),
+      name,
+      description,
+      discount_type,
+      discount_value,
+      minimum_order_amount || 0,
+      maximum_discount || null,
+      usage_limit || null,
+      usage_per_customer || null,
+      valid_until || null,
+      is_active,
+      id
+    ]);
+    const DEBUG = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
+    if (DEBUG) console.debug('[DEBUG] PromoCode PUT payload:', { code, name, discount_type, discount_value });
+    if (DEBUG) console.debug('[DEBUG] PromoCode updated, id:', id);
+    return NextResponse.json({ success: true, message: 'Promo code updated successfully' });
+  } catch (error) {
+    console.error('Error updating promo code:', error);
+    return NextResponse.json(
+      { error: 'Failed to update promo code' },
       { status: 500 }
     );
   }
