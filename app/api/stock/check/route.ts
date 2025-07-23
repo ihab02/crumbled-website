@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
         is_active,
         is_available
       FROM flavors 
-      WHERE is_active = true
+      WHERE is_active = true AND is_enabled = true AND deleted_at IS NULL
       ORDER BY name`
     );
 

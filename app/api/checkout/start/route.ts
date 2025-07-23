@@ -251,7 +251,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutS
                       END as price
                FROM cart_item_flavors cif
                JOIN flavors f ON cif.flavor_id = f.id
-               WHERE cif.cart_item_id = ?`,
+               WHERE cif.cart_item_id = ? AND f.is_active = true AND f.is_enabled = true AND f.deleted_at IS NULL`,
               [item.pack_size, item.pack_size, item.pack_size, item.id]
             );
 

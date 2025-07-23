@@ -162,7 +162,7 @@ class OrderModeService {
       });
 
       // Interpolate the column name directly into the SQL string
-      const sql = `SELECT f.id, f.name, f.allow_out_of_stock_order, f.${stockField} FROM flavors f WHERE f.id = ? AND f.is_active = true`;
+      const sql = `SELECT f.id, f.name, f.allow_out_of_stock_order, f.${stockField} FROM flavors f WHERE f.id = ? AND f.is_active = true AND f.is_enabled = true AND f.deleted_at IS NULL`;
       const result = await databaseService.query(sql, [flavorId]);
 
       console.log(`🔍 [DEBUG] Flavor ${flavorId} query result:`, result);

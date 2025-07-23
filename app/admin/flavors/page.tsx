@@ -29,6 +29,7 @@ interface Flavor {
   large_price: number;
   category: string;
   is_active: boolean;
+  is_enabled: boolean;
   deleted_at?: string;
   status?: string;
   images: Array<{
@@ -184,7 +185,7 @@ export default function FlavorsPage() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          is_active: !flavor.is_active
+          is_enabled: !flavor.is_enabled
         })
       });
 
@@ -198,13 +199,13 @@ export default function FlavorsPage() {
       
       setFlavors(prevFlavors => 
         prevFlavors.map(f => 
-          f.id === flavor.id ? { ...f, is_active: updatedFlavor.is_active } : f
+          f.id === flavor.id ? { ...f, is_enabled: updatedFlavor.is_enabled } : f
         )
       );
 
       toast({
         title: 'Success',
-        description: `Flavor ${updatedFlavor.is_active ? 'activated' : 'deactivated'} successfully`
+        description: `Flavor ${updatedFlavor.is_enabled ? 'made visible to customers' : 'hidden from customers'} successfully`
       });
     } catch (error) {
       console.error('Error toggling flavor status:', error);
@@ -262,11 +263,23 @@ export default function FlavorsPage() {
                   <div className="min-w-0 flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 truncate">{flavor.name}</h3>
                     <p className="text-sm text-gray-500">{flavor.category}</p>
-                    {flavor.deleted_at && (
-                      <Badge variant="destructive" className="mt-1">
-                        Deleted
-                      </Badge>
-                    )}
+                    <div className="flex gap-1 mt-1">
+                      {flavor.deleted_at && (
+                        <Badge variant="destructive" className="text-xs">
+                          Deleted
+                        </Badge>
+                      )}
+                      {!flavor.deleted_at && !flavor.is_active && (
+                        <Badge variant="secondary" className="text-xs">
+                          Inactive
+                        </Badge>
+                      )}
+                      {!flavor.deleted_at && !flavor.is_enabled && (
+                        <Badge variant="outline" className="text-xs">
+                          Hidden
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 ml-2">
                     {!flavor.deleted_at && (
@@ -301,16 +314,16 @@ export default function FlavorsPage() {
                 
                 {/* Status Toggle */}
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-700">Status:</span>
+                  <span className="text-sm font-medium text-gray-700">Customer Visible:</span>
                   <button
                     onClick={() => handleToggleActive(flavor)}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      flavor.is_active
+                      flavor.is_enabled
                         ? 'bg-green-100 text-green-800 hover:bg-green-200'
                         : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                     }`}
                   >
-                    {flavor.is_active ? 'Active' : 'Inactive'}
+                    {flavor.is_enabled ? 'Visible' : 'Hidden'}
                   </button>
                 </div>
 

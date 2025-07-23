@@ -59,9 +59,11 @@ export async function GET(
       mini_price: parseFloat(flavorData.mini_price) || 0,
       medium_price: parseFloat(flavorData.medium_price) || 0,
       large_price: parseFloat(flavorData.large_price) || 0,
-      is_active: Boolean(flavorData.is_enabled),
+      is_active: Boolean(flavorData.is_active),
+      is_enabled: Boolean(flavorData.is_enabled),
       created_at: flavorData.created_at,
       updated_at: flavorData.updated_at,
+      deleted_at: flavorData.deleted_at,
       images: images
     };
 
@@ -95,7 +97,7 @@ export async function PUT(
 
     // Check if this is a status toggle request (only is_active field)
     if (Object.keys(body).length === 1 && body.hasOwnProperty('is_active')) {
-      // Simple status toggle
+      // Simple status toggle - update is_enabled field (which controls customer visibility)
       await db.query(
         `UPDATE flavors SET is_enabled = ? WHERE id = ?`,
         [body.is_active, params.id]
@@ -103,12 +105,26 @@ export async function PUT(
 
       return NextResponse.json({ 
         id: params.id, 
-        is_active: body.is_active 
+        is_enabled: body.is_active 
+      });
+    }
+
+    // Check if this is an enabled toggle request (only is_enabled field)
+    if (Object.keys(body).length === 1 && body.hasOwnProperty('is_enabled')) {
+      // Simple enabled toggle
+      await db.query(
+        `UPDATE flavors SET is_enabled = ? WHERE id = ?`,
+        [body.is_enabled, params.id]
+      );
+
+      return NextResponse.json({ 
+        id: params.id, 
+        is_enabled: body.is_enabled 
       });
     }
 
     // Full update - validate required fields
-    const { name, description, category, mini_price, medium_price, large_price, is_active } = body;
+    const { name, description, category, mini_price, medium_price, large_price, is_active, is_enabled } = body;
 
     if (!name || !description || mini_price === undefined || medium_price === undefined || large_price === undefined) {
       console.log('Missing required fields:', { name, description, mini_price, medium_price, large_price });
@@ -118,9 +134,10 @@ export async function PUT(
     await db.query(
       `UPDATE flavors 
        SET name = ?, description = ?, category = ?,
-           mini_price = ?, medium_price = ?, large_price = ?, is_enabled = ?
+           mini_price = ?, medium_price = ?, large_price = ?, 
+           is_active = ?, is_enabled = ?
        WHERE id = ?`,
-      [name, description, category || 'Classic', mini_price, medium_price, large_price, is_active, params.id]
+      [name, description, category || 'Classic', mini_price, medium_price, large_price, is_active, is_enabled, params.id]
     );
 
     return NextResponse.json({ 
@@ -131,7 +148,8 @@ export async function PUT(
       mini_price, 
       medium_price, 
       large_price, 
-      is_active 
+      is_active,
+      is_enabled
     });
   } catch (error) {
     console.error('Error updating flavor:', error);

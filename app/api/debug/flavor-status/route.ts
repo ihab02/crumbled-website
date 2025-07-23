@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     // Test the exact query from order mode service
     const stockField = `stock_quantity_${size.toLowerCase()}`;
-    const sql = `SELECT f.id, f.name, f.allow_out_of_stock_order, f.${stockField} FROM flavors f WHERE f.id = ? AND f.is_active = true`;
+    const sql = `SELECT f.id, f.name, f.allow_out_of_stock_order, f.${stockField} FROM flavors f WHERE f.id = ? AND f.is_active = true AND f.is_enabled = true AND f.deleted_at IS NULL`;
     
     console.log(`🔍 [DEBUG] Testing query: ${sql} with params: [${flavorId}]`);
     

@@ -159,7 +159,7 @@ export async function GET() {
         COALESCE(f.average_rating, 0.00) as average_rating
       FROM flavors f
       LEFT JOIN flavor_images fi ON f.id = fi.flavor_id
-      WHERE f.is_active = 1
+      WHERE f.is_active = 1 AND f.is_enabled = 1 AND f.deleted_at IS NULL
       ORDER BY f.created_at DESC, fi.display_order
     `);
 

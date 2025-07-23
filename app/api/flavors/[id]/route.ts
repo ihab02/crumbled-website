@@ -51,7 +51,7 @@ export async function GET(
         COALESCE(f.review_count_4_star, 0) as review_count_4_star,
         COALESCE(f.review_count_5_star, 0) as review_count_5_star
       FROM flavors f
-      WHERE f.id = ? AND f.is_enabled = 1
+      WHERE f.id = ? AND f.is_enabled = 1 AND f.deleted_at IS NULL
     `, [flavorId]);
 
     if (flavors.length === 0) {

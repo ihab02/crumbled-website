@@ -57,7 +57,7 @@ export async function GET(
     // If it's a pack, get flavor availability
     if (Array.isArray(productResult) && productResult.length > 0 && (productResult[0] as any).is_pack) {
       const [flavorResult] = await databaseService.query(
-        'SELECT id, name FROM flavors WHERE is_active = true'
+        'SELECT id, name FROM flavors WHERE is_active = true AND is_enabled = true AND deleted_at IS NULL'
       );
 
       if (Array.isArray(flavorResult)) {

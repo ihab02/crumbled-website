@@ -196,7 +196,7 @@ export async function GET() {
           cif.quantity
         FROM cart_item_flavors cif
         JOIN flavors f ON cif.flavor_id = f.id
-        WHERE cif.cart_item_id IN (${packItemIds.join(',')})
+        WHERE cif.cart_item_id IN (${packItemIds.join(',')}) AND f.is_active = true AND f.is_enabled = true AND f.deleted_at IS NULL
         ORDER BY cif.cart_item_id, f.name
       `);
 

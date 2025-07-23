@@ -43,7 +43,7 @@ export async function GET(
         ) as images
       FROM flavors f
       LEFT JOIN flavor_images fi ON f.id = fi.flavor_id
-      WHERE f.is_active = 1
+      WHERE f.is_active = 1 AND f.is_enabled = 1 AND f.deleted_at IS NULL
       GROUP BY f.id
       ORDER BY f.created_at DESC`
     );

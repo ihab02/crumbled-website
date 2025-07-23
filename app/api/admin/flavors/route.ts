@@ -40,8 +40,13 @@ export async function GET(request: Request) {
     // Update admin view preferences
     await ViewService.updateAdminViewPreferences(adminUserId, 'flavors', showDeleted);
 
-    // Get flavors using ViewService
-    const flavors = await ViewService.getFlavors(showDeleted);
+    // Get flavors directly from the flavors table to show all flavors regardless of enabled status
+    // This allows admins to see and manage both enabled and disabled flavors
+    const flavorsQuery = showDeleted 
+      ? 'SELECT * FROM flavors ORDER BY name ASC'
+      : 'SELECT * FROM flavors WHERE deleted_at IS NULL ORDER BY name ASC';
+    
+    const flavors = await databaseService.query(flavorsQuery);
 
     // Get images and stock information for all flavors
     const flavorIds = flavors.map(f => f.id);
@@ -146,7 +151,8 @@ export async function GET(request: Request) {
         mini_price: parseFloat(flavor.mini_price) || 0,
         medium_price: parseFloat(flavor.medium_price) || 0,
         large_price: parseFloat(flavor.large_price) || 0,
-        is_active: Boolean(flavor.is_enabled),
+        is_active: Boolean(flavor.is_active),
+        is_enabled: Boolean(flavor.is_enabled),
         category: flavor.category,
         created_at: flavor.created_at,
         updated_at: flavor.updated_at,
