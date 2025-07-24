@@ -1,7 +1,7 @@
 # Crumbled Application Architecture Documentation
 
 ## Overview
-Crumbled is a full-stack e-commerce platform built with Next.js 14, React 18, TypeScript, and MySQL. The application serves as a cookie delivery service with comprehensive admin management capabilities.
+Crumbled is a full-stack e-commerce platform built with Next.js 14, React 18, TypeScript, and MySQL. The application serves as a cookie delivery service with comprehensive admin management capabilities, advanced pricing systems, and robust soft delete functionality.
 
 ## Technology Stack
 
@@ -51,6 +51,7 @@ crumbled-website/
 ├── hooks/                 # Custom React hooks
 ├── types/                 # TypeScript type definitions
 ├── styles/                # Global styles
+├── scripts/               # Deployment and utility scripts
 └── Docs/                  # Documentation files
 ```
 
@@ -188,6 +189,7 @@ debugLog('Component mounted', { props });
 - **Inventory Management**: Stock tracking and updates
 - **Promo Codes Management**: Create, edit, and manage promotional codes
 - **Pricing Management**: Advanced product pricing and pricing rules management
+- **View Preferences**: Per-user preferences for showing/hiding soft-deleted items
 
 #### Admin Components
 - `AdminLayout`: Admin dashboard layout
@@ -195,6 +197,343 @@ debugLog('Component mounted', { props });
 - `OrderTable`: Order listing and management
 - `ProductForm`: Product creation/editing
 - `DeliveryAssignment`: Delivery personnel assignment
+- `ViewToggle`: Toggle for showing/hiding soft-deleted items
+
+## Database Object Mappings
+
+### Core Entity Relationships
+
+#### Customer Management
+```typescript
+// Customer entity with soft delete support
+interface Customer {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  password?: string; // Hashed for registered users
+  type: 'guest' | 'registered';
+  age_group: '13-17' | '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+  birth_date?: Date;
+  email_verified: boolean;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date; // Soft delete timestamp
+  deleted_by?: number; // Admin who performed deletion
+  deletion_reason?: string; // Reason for deletion
+}
+
+// Address entity
+interface Address {
+  id: number;
+  customer_id: number;
+  city_id: number;
+  zone_id: number;
+  street_address: string;
+  is_default: boolean;
+  created_at: Date;
+}
+```
+
+#### Product Management with Soft Delete
+```typescript
+// Product entity with enhanced pricing
+interface Product {
+  id: number;
+  product_type_id: number;
+  name: string;
+  description?: string;
+  base_price: number;
+  original_price?: number; // Original price for comparison
+  sale_price?: number; // Current sale price
+  sale_start_date?: Date; // Sale activation date
+  sale_end_date?: Date; // Sale expiration date
+  is_on_sale: boolean; // Whether product is currently on sale
+  image_url?: string;
+  is_active: boolean; // Product availability
+  is_enabled: boolean; // Public visibility
+  display_order: number; // Display ordering
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date; // Soft delete timestamp
+  deleted_by?: number; // Admin who performed deletion
+  deletion_reason?: string; // Reason for deletion
+}
+
+// Flavor entity with soft delete
+interface Flavor {
+  id: number;
+  name: string;
+  description?: string;
+  image_url?: string;
+  category: string; // Flavor category
+  is_active: boolean; // Not deleted
+  is_enabled: boolean; // Public visibility
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date; // Soft delete timestamp
+  deleted_by?: number; // Admin who performed deletion
+  deletion_reason?: string; // Reason for deletion
+}
+
+// Product instance with flavor combinations
+interface ProductInstance {
+  id: number;
+  product_type: 'cookie' | 'pack' | 'bundle';
+  product_id: number;
+  size_id: number;
+  base_price: number;
+  is_active: boolean;
+  created_at: Date;
+  deleted_at?: Date; // Soft delete timestamp
+}
+
+// Flavor combination for product instances
+interface ProductInstanceFlavor {
+  id: number;
+  product_instance_id: number;
+  flavor_id: number;
+  flavor_name: string; // Cached flavor name
+  size_id: number;
+  size_name: string; // Cached size name
+  quantity: number;
+  price_adjustment: number;
+  created_at: Date;
+}
+```
+
+#### Order Management with Enhanced Data
+```typescript
+// Order entity with promo code support
+interface Order {
+  id: number;
+  customer_id?: number; // NULL for guest orders
+  total: number;
+  subtotal: number;
+  delivery_fee: number;
+  discount_amount: number; // Promo code discount
+  promo_code_id?: number; // Applied promo code
+  promo_code?: string; // Promo code string for display
+  status: 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  payment_method: 'cash' | 'card' | 'online';
+  payment_status: 'pending' | 'paid' | 'failed';
+  delivery_address: string;
+  delivery_city: string;
+  delivery_zone: string;
+  delivery_additional_info?: string;
+  delivery_days: number;
+  expected_delivery_date: Date;
+  delivery_man_id?: number;
+  delivery_time_slot_name?: string;
+  from_hour?: string;
+  to_hour?: string;
+  guest_otp?: string; // For guest orders
+  otp_verified: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Order item with cached product data
+interface OrderItem {
+  id: number;
+  order_id: number;
+  product_instance_id: number;
+  product_name: string; // Cached product name at order time
+  product_type: 'individual' | 'pack'; // Cached product type at order time
+  pack_size?: string; // Cached pack size (Mini, Medium, Large) at order time
+  flavor_details: FlavorDetail[]; // JSON array of flavor selections
+  quantity: number;
+  unit_price: number;
+  created_at: Date;
+}
+
+// Flavor detail structure
+interface FlavorDetail {
+  id: number;
+  name: string;
+  size: string;
+  price: number;
+  quantity: number;
+}
+```
+
+#### Promo Codes System
+```typescript
+// Promo code entity
+interface PromoCode {
+  id: number;
+  code: string; // Unique promo code (e.g., "WELCOME10")
+  name: string; // Display name (e.g., "Welcome Discount")
+  description?: string;
+  discount_type: 'percentage' | 'fixed_amount';
+  discount_value: number; // Discount amount or percentage
+  minimum_order_amount: number; // Minimum order for discount
+  maximum_discount?: number; // Maximum discount cap
+  usage_limit?: number; // Maximum usage count (NULL = unlimited)
+  used_count: number; // Current usage count
+  valid_from: Date; // Start date
+  valid_until?: Date; // Expiration date
+  is_active: boolean; // Whether code is active
+  created_by: number; // Admin who created
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Promo code usage tracking
+interface PromoCodeUsage {
+  id: number;
+  promo_code_id: number;
+  order_id: number;
+  customer_id?: number; // NULL for guest orders
+  customer_email?: string; // Customer email for tracking
+  discount_amount: number; // Actual discount applied
+  order_amount: number; // Order total before discount
+  used_at: Date; // When code was used
+}
+```
+
+#### Pricing Management System
+```typescript
+// Pricing rule entity
+interface PricingRule {
+  id: number;
+  name: string; // Rule name (e.g., "Summer Sale", "VIP Discount")
+  description?: string;
+  rule_type: 'product' | 'category' | 'flavor' | 'time' | 'location' | 'customer_group';
+  target_id?: number; // Product ID, category ID, etc.
+  target_value?: string; // For non-ID targets like customer groups
+  discount_type: 'percentage' | 'fixed_amount' | 'free_delivery';
+  discount_value: number; // Discount amount or percentage
+  minimum_order_amount: number; // Minimum order for discount
+  maximum_discount?: number; // Maximum discount cap
+  start_date: Date; // Rule activation date
+  end_date?: Date; // Rule expiration date
+  is_active: boolean; // Whether rule is active
+  priority: number; // Higher priority rules apply first
+  created_by: number; // Admin who created rule
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Product pricing tiers
+interface ProductPrice {
+  id: number;
+  product_id: number; // Reference to product
+  price_type: 'regular' | 'sale' | 'member' | 'wholesale'; // Type of price
+  price: number; // Price amount
+  start_date: Date; // Price activation date
+  end_date?: Date; // Price expiration date
+  is_active: boolean; // Whether price is active
+  created_by: number; // Admin who set price
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Pricing categories
+interface PricingCategory {
+  id: number;
+  name: string; // Category name (e.g., "Premium Flavors", "Bulk Orders")
+  description?: string;
+  category_type: 'product_type' | 'flavor_category' | 'size_category' | 'customer_group';
+  target_value: string; // Category value (e.g., "Chocolate", "Large", "VIP")
+  is_active: boolean; // Whether category is active
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+#### Admin Management with View Preferences
+```typescript
+// Admin user entity
+interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  password: string; // Hashed password
+  role: 'super_admin' | 'order_manager' | 'product_manager' | 'delivery_manager' | 'system_admin';
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Admin view preferences
+interface AdminViewPreference {
+  id: number;
+  admin_user_id: number;
+  view_type: 'products' | 'flavors' | 'product_types' | 'orders';
+  show_deleted: boolean; // Whether to show soft-deleted items
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+## Soft Delete System
+
+### Implementation Overview
+The application implements a comprehensive soft delete system that maintains data integrity while allowing for data recovery and audit trails.
+
+### Soft Delete Fields
+All major entities include soft delete fields:
+```typescript
+interface SoftDeleteable {
+  deleted_at?: Date; // Timestamp when item was soft deleted
+  deleted_by?: number; // Admin user ID who performed deletion
+  deletion_reason?: string; // Optional reason for deletion
+}
+```
+
+### Soft Delete Stored Procedures
+The system uses MySQL stored procedures for consistent soft delete operations:
+
+#### `soft_delete_flavor(flavor_id, admin_user_id, reason)`
+- Sets `deleted_at` to current timestamp
+- Sets `deleted_by` to admin user ID
+- Sets `deletion_reason` to provided reason
+- Sets `is_active` to 0 (false)
+- Maintains `is_enabled` status for potential restoration
+
+#### `soft_delete_product(product_id, admin_user_id, reason)`
+- Similar to flavor deletion
+- Handles product-specific cleanup
+- Maintains pricing and inventory relationships
+
+#### `soft_delete_product_type(product_type_id, admin_user_id, reason)`
+- Deletes product type with cascade considerations
+- Maintains product relationships for potential restoration
+
+#### `restore_flavor(flavor_id, admin_user_id)`
+- Clears `deleted_at`, `deleted_by`, `deletion_reason`
+- Sets `is_active` to 1 (true)
+- Preserves original `is_enabled` status
+
+### Public vs Admin Filtering
+
+#### Public API Routes
+All public-facing APIs filter out soft-deleted items:
+```sql
+-- Example: Public flavors API
+SELECT * FROM flavors 
+WHERE is_active = 1 
+  AND is_enabled = 1 
+  AND deleted_at IS NULL
+```
+
+#### Admin API Routes
+Admin routes respect user preferences for showing deleted items:
+```sql
+-- Example: Admin flavors API with preference
+SELECT * FROM flavors 
+WHERE (deleted_at IS NULL OR show_deleted = 1)
+  AND (is_enabled = 1 OR show_deleted = 1)
+```
+
+### Admin View Preferences
+Each admin user can set preferences for different views:
+- **Products View**: Show/hide deleted products
+- **Flavors View**: Show/hide deleted flavors  
+- **Product Types View**: Show/hide deleted product types
+- **Orders View**: Show/hide cancelled orders
 
 ## API Architecture
 
@@ -202,8 +541,8 @@ debugLog('Component mounted', { props });
 
 #### Customer APIs
 ```
-GET    /api/products          # Product catalog
-GET    /api/flavors           # Available flavors
+GET    /api/products          # Product catalog (filtered)
+GET    /api/flavors           # Available flavors (filtered)
 GET    /api/cart              # Shopping cart
 POST   /api/cart/add          # Add to cart
 PUT    /api/cart/update       # Update cart item
@@ -212,6 +551,7 @@ POST   /api/orders            # Create order
 GET    /api/orders/:id        # Order details
 POST   /api/auth/login        # Customer login
 POST   /api/auth/register     # Customer registration
+POST   /api/validate-promo-code # Validate promo code
 ```
 
 #### Admin APIs
@@ -222,41 +562,45 @@ PUT    /api/admin/orders/:id/status   # Update order status
 GET    /api/admin/products            # Product management
 POST   /api/admin/products            # Create product
 PUT    /api/admin/products/:id        # Update product
-DELETE /api/admin/products/:id        # Delete product
+DELETE /api/admin/products/:id        # Soft delete product
+GET    /api/admin/flavors             # Flavor management
+POST   /api/admin/flavors             # Create flavor
+PUT    /api/admin/flavors/:id         # Update flavor
+DELETE /api/admin/flavors/:id         # Soft delete flavor
 GET    /api/admin/delivery-men        # Delivery personnel
 POST   /api/admin/delivery-men        # Add delivery person
 PUT    /api/admin/delivery-men/:id    # Update delivery person
 ```
 
-#### Admin APIs
-- **GET /api/admin/promo-codes**: Fetch all promotional codes
-- **POST /api/admin/promo-codes**: Create new promotional code
-- **PUT /api/admin/promo-codes/:id**: Update existing promotional code
-- **DELETE /api/admin/promo-codes/:id**: Delete promotional code
-- **GET /api/admin/pricing-rules**: Fetch all pricing rules
-- **POST /api/admin/pricing-rules**: Create new pricing rule
-- **PUT /api/admin/pricing-rules/:id**: Update existing pricing rule
-- **DELETE /api/admin/pricing-rules/:id**: Delete pricing rule
-- **GET /api/admin/product-prices**: Fetch product pricing
-- **POST /api/admin/product-prices**: Set product prices
-- **PUT /api/admin/product-prices/:id**: Update product prices
+#### Promo Codes APIs
+```
+GET    /api/admin/promo-codes         # Fetch all promotional codes
+POST   /api/admin/promo-codes         # Create new promotional code
+PUT    /api/admin/promo-codes/:id     # Update existing promotional code
+DELETE /api/admin/promo-codes/:id     # Delete promotional code
+POST   /api/validate-promo-code       # Validate promo code for orders
+```
 
-#### Promo Code Features
-- **Flexible Discount Types**: Percentage or fixed amount discounts
-- **Usage Limits**: Configurable usage limits per code
-- **Validity Periods**: Time-based activation and expiration
-- **Minimum Order Requirements**: Enforce minimum order amounts
-- **Usage Tracking**: Monitor code usage and effectiveness
-- **Admin Management**: Full CRUD operations through admin interface
+#### Pricing Management APIs
+```
+GET    /api/admin/pricing-rules       # Fetch all pricing rules
+POST   /api/admin/pricing-rules       # Create new pricing rule
+PUT    /api/admin/pricing-rules/:id   # Update existing pricing rule
+DELETE /api/admin/pricing-rules/:id   # Delete pricing rule
+GET    /api/admin/product-prices      # Fetch product pricing
+POST   /api/admin/product-prices      # Set product prices
+PUT    /api/admin/product-prices/:id  # Update product prices
+GET    /api/admin/pricing-categories  # Fetch pricing categories
+POST   /api/admin/pricing-categories  # Create pricing category
+PUT    /api/admin/pricing-categories/:id # Update pricing category
+```
 
-#### Pricing Management Features
-- **Product-Specific Pricing**: Individual product price management
-- **Category-Based Rules**: Apply pricing rules to product categories
-- **Time-Based Pricing**: Scheduled price changes and promotions
-- **Customer Group Pricing**: VIP and member pricing tiers
-- **Advanced Pricing Tiers**: Regular, sale, member, wholesale pricing
-- **Bulk Operations**: Mass price updates and rule creation
-- **Pricing Analytics**: Revenue impact and rule effectiveness tracking
+#### Admin View Preferences APIs
+```
+GET    /api/admin/view-preferences    # Get user view preferences
+POST   /api/admin/view-preferences    # Set view preference
+PUT    /api/admin/view-preferences/:id # Update view preference
+```
 
 ### API Response Format
 ```typescript
@@ -300,6 +644,9 @@ class DatabaseService {
 - PricingService: Product pricing and pricing rules management
 - PricingRuleService: Pricing rule operations and validation
 - ProductPricingService: Product-specific pricing operations
+- PromoCodeService: Promotional code management and validation
+- SoftDeleteService: Soft delete operations and restoration
+- AdminViewPreferenceService: Admin view preference management
 ```
 
 ## State Management
@@ -311,6 +658,7 @@ class DatabaseService {
 - AuthProvider: Authentication state
 - AdminAuthProvider: Admin authentication
 - ThemeProvider: UI theme preferences
+- DebugModeProvider: Debug mode state
 ```
 
 ### Local State Management
@@ -354,6 +702,19 @@ class DatabaseService {
 4. **Query Optimization**: Efficient SQL queries
 5. **Response Compression**: Gzip compression
 
+### Cart System Optimizations
+1. **Enhanced Cart Provider**: Complete cart state management overhaul
+   - **Caching**: 5-minute cache duration for cart data
+   - **Debouncing**: 1-second debounce for cart operations
+   - **Optimistic Updates**: Immediate UI updates with error rollback
+   - **API Endpoints**: New cart add/remove/update/clear endpoints
+   - **Performance Monitor**: Real-time monitoring of API calls
+
+2. **Cart API Optimization**: Eliminated excessive polling
+   - **Before**: Cart API called every 30 seconds from header
+   - **After**: Smart caching with manual refresh capability
+   - **Result**: 90% reduction in unnecessary API calls
+
 ## Error Handling
 
 ### Error Types
@@ -390,7 +751,7 @@ class DatabaseService {
 ## Deployment Architecture
 
 ### Development Environment
-- **Local Development**: Next.js dev server
+- **Local Development**: Next.js dev server (port 3001)
 - **Database**: Local MySQL instance
 - **File Storage**: Local file system
 - **Environment Variables**: .env.local
@@ -401,6 +762,11 @@ class DatabaseService {
 - **File Storage**: Cloud storage service
 - **CDN**: Content delivery network
 - **Monitoring**: Application monitoring
+
+### Deployment Scripts
+- **Linux/Unix**: `scripts/deploy-server.sh`
+- **Windows**: `scripts/deploy-server.ps1`
+- **Documentation**: `Docs/SERVER_DEPLOYMENT.md`
 
 ## Monitoring and Analytics
 
@@ -415,51 +781,81 @@ class DatabaseService {
 2. **Error Logs**: Error tracking and debugging
 3. **Business Logs**: Order and transaction logging
 4. **Security Logs**: Authentication and access logs
+5. **Debug Logs**: Conditional debug logging system
 
-## Recent Updates & Enhancements
+## Special Considerations for Development
 
-### Performance Improvements (Latest)
-1. **Enhanced Cart Provider**: Complete cart state management overhaul
-   - **Caching**: 5-minute cache duration for cart data
-   - **Debouncing**: 1-second debounce for cart operations
-   - **Optimistic Updates**: Immediate UI updates with error rollback
-   - **API Endpoints**: New cart add/remove/update/clear endpoints
-   - **Performance Monitor**: Real-time monitoring of API calls
+### Database Considerations
 
-2. **Cart API Optimization**: Eliminated excessive polling
-   - **Before**: Cart API called every 30 seconds from header
-   - **After**: Smart caching with manual refresh capability
-   - **Result**: 90% reduction in unnecessary API calls
+#### Soft Delete Implementation
+- **Consistency**: All soft delete operations use stored procedures
+- **Performance**: Indexes on `deleted_at` fields for efficient filtering
+- **Data Integrity**: Foreign key relationships maintained during soft delete
+- **Recovery**: Complete restoration capability with audit trail
 
-### Database Structure Improvements
-1. **Enhanced Order Items Storage**: Added cached fields to `order_items` table
-   - `product_name`: Cached product name at order time
-   - `product_type`: Cached product type (individual/pack) at order time
-   - `pack_size`: Cached pack size at order time
-   - `flavor_details`: JSON field for complete flavor selection
+#### Cached Fields in Order Items
+- **Historical Preservation**: Product names, types, and pack sizes cached at order time
+- **Performance**: Reduces complex joins for order history queries
+- **Data Integrity**: Preserves order data even if products are modified/deleted
 
-2. **Admin View Preferences**: Added `admin_view_preferences` table
-   - Per-user preferences for different admin views
-   - Soft delete toggle functionality
-   - Unique constraints for user-view combinations
+#### Admin View Preferences
+- **User-Specific**: Each admin can set preferences per view type
+- **Flexibility**: Toggle between showing/hiding soft-deleted items
+- **Performance**: Preferences cached to minimize database queries
 
-3. **Performance Optimizations**: Added database indexes
-   - Indexes on `product_name`, `product_type` in `order_items`
-   - Indexes on `flavor_name` in `product_instance_flavor`
+### API Design Considerations
 
-### Identified Performance Issues
-1. **Excessive Cart Polling**: Cart API called every few seconds
-   - **Before**: 30-50ms intervals causing unnecessary load
-   - **After**: Implemented enhanced cart provider with caching and debouncing
-   - **Solution**: 
-     - 5-minute cache duration for cart data
-     - 1-second debouncing for cart operations
-     - Optimistic updates for better UX
-     - Removed polling from header component
+#### Public vs Admin Filtering
+- **Public APIs**: Always filter out soft-deleted and disabled items
+- **Admin APIs**: Respect user preferences for showing deleted items
+- **Consistency**: Uniform filtering across all public endpoints
 
-2. **Database Query Optimization**: Enhanced with cached fields
-   - Historical data preservation in order items
-   - Reduced complex joins for flavor details
+#### Promo Code Validation
+- **Real-time Validation**: Validate codes during order creation
+- **Usage Tracking**: Complete audit trail of code usage
+- **Business Rules**: Enforce minimum orders, usage limits, and validity periods
+
+#### Pricing Rule Application
+- **Priority System**: Higher priority rules apply first
+- **Flexible Targeting**: Product, category, customer group, and time-based rules
+- **Performance**: Efficient rule evaluation with proper indexing
+
+### Frontend Considerations
+
+#### Cart System Optimization
+- **Caching Strategy**: 5-minute cache with manual refresh
+- **Debouncing**: 1-second debounce for cart operations
+- **Optimistic Updates**: Immediate UI feedback with error rollback
+- **API Efficiency**: Reduced polling and smart cache invalidation
+
+#### Admin Interface Flexibility
+- **View Toggles**: Easy switching between showing/hiding deleted items
+- **Bulk Operations**: Efficient management of multiple items
+- **Real-time Updates**: Immediate feedback for admin actions
+
+### Performance Considerations
+
+#### Database Indexing
+- **Soft Delete Indexes**: Efficient filtering of deleted items
+- **Cached Field Indexes**: Fast queries on order item cached fields
+- **Composite Indexes**: Optimized queries for complex filtering
+
+#### Caching Strategy
+- **Multi-level Caching**: Browser, application, and database caching
+- **Smart Invalidation**: Cache invalidation based on data changes
+- **Performance Monitoring**: Real-time tracking of cache effectiveness
+
+### Security Considerations
+
+#### Soft Delete Security
+- **Audit Trail**: Complete record of who deleted what and when
+- **Access Control**: Only authorized admins can perform soft deletes
+- **Data Recovery**: Secure restoration process with proper authorization
+
+#### API Security
+- **Input Validation**: Comprehensive validation for all inputs
+- **Rate Limiting**: Protection against abuse
+- **Error Handling**: Secure error responses without information leakage
 
 ## Future Enhancements
 
@@ -480,4 +876,4 @@ class DatabaseService {
 4. **API Versioning**: API version management
 5. **GraphQL**: Alternative to REST APIs
 
-This architecture documentation provides a comprehensive understanding of the Crumbled application's design, components, and implementation strategies for AI assistance. 
+This architecture documentation provides a comprehensive understanding of the Crumbled application's design, components, and implementation strategies for AI assistance, including the latest soft delete system, admin view preferences, and special development considerations. 

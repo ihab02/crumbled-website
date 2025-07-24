@@ -1,7 +1,7 @@
 # Crumbled Database Structure Documentation
 
 ## Overview
-Crumbled is a Next.js-based e-commerce platform for cookie delivery. The database uses MySQL with a comprehensive structure supporting customer management, product catalog, order processing, delivery management, and admin operations.
+Crumbled is a Next.js-based e-commerce platform for cookie delivery. The database uses MySQL with a comprehensive structure supporting customer management, product catalog, order processing, delivery management, admin operations, advanced pricing systems, and robust soft delete functionality.
 
 ## Database Name
 `crumbled_nextDB`
@@ -24,15 +24,19 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - email_verified (BOOLEAN) - Email verification status
 - created_at (TIMESTAMP)
 - updated_at (TIMESTAMP)
+- deleted_at (TIMESTAMP, NULL) - Soft delete timestamp
+- deleted_by (INT, NULL) - Admin who performed deletion
+- deletion_reason (TEXT, NULL) - Reason for deletion
 ```
 
-**Purpose**: Stores customer information for both guest and registered users.
+**Purpose**: Stores customer information for both guest and registered users with soft delete support.
 
 **Registration Features**:
 - **Age Group Tracking**: Captures customer age demographics for marketing
 - **Email Verification**: Tracks email verification status for registered users
 - **Password Security**: Hashed passwords for registered customers
 - **Delivery Coverage**: Customers can register from any city/zone, with coverage notifications
+- **Soft Delete Support**: Complete audit trail for customer deletions
 
 #### `addresses` Table
 ```sql
@@ -139,9 +143,13 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - description (TEXT)
 - is_active (BOOLEAN)
 - created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+- deleted_at (TIMESTAMP, NULL) - Soft delete timestamp
+- deleted_by (INT, NULL) - Admin who performed deletion
+- deletion_reason (TEXT, NULL) - Reason for deletion
 ```
 
-**Purpose**: Categorizes products into types (cookies, bundles, packs).
+**Purpose**: Categorizes products into types (cookies, bundles, packs) with soft delete support.
 
 #### `products` Table
 ```sql
@@ -150,12 +158,23 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - name (VARCHAR)
 - description (TEXT)
 - base_price (DECIMAL)
+- original_price (DECIMAL, NULL) - Original price for comparison
+- sale_price (DECIMAL, NULL) - Current sale price
+- sale_start_date (DATETIME, NULL) - Sale activation date
+- sale_end_date (DATETIME, NULL) - Sale expiration date
+- is_on_sale (BOOLEAN, DEFAULT false) - Whether product is currently on sale
 - image_url (VARCHAR)
-- is_active (BOOLEAN)
+- is_active (BOOLEAN) - Product availability
+- is_enabled (BOOLEAN) - Public visibility
+- display_order (INT, DEFAULT 0) - Display ordering
 - created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+- deleted_at (TIMESTAMP, NULL) - Soft delete timestamp
+- deleted_by (INT, NULL) - Admin who performed deletion
+- deletion_reason (TEXT, NULL) - Reason for deletion
 ```
 
-**Purpose**: Base product definitions.
+**Purpose**: Base product definitions with enhanced pricing and soft delete support.
 
 #### `cookie_pack` Table
 ```sql
@@ -175,11 +194,17 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - name (VARCHAR) - e.g., "Oreo", "Strawberry", "Vanilla"
 - description (TEXT)
 - image_url (VARCHAR)
-- is_active (BOOLEAN)
+- category (VARCHAR) - Flavor category
+- is_active (BOOLEAN) - Not deleted
+- is_enabled (BOOLEAN) - Public visibility
 - created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+- deleted_at (TIMESTAMP, NULL) - Soft delete timestamp
+- deleted_by (INT, NULL) - Admin who performed deletion
+- deletion_reason (TEXT, NULL) - Reason for deletion
 ```
 
-**Purpose**: Available cookie flavors.
+**Purpose**: Available cookie flavors with soft delete support and public visibility control.
 
 #### `flavor_images` Table
 ```sql
@@ -203,9 +228,10 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - base_price (DECIMAL)
 - is_active (BOOLEAN)
 - created_at (TIMESTAMP)
+- deleted_at (TIMESTAMP, NULL) - Soft delete timestamp
 ```
 
-**Purpose**: Specific product configurations with sizes and pricing.
+**Purpose**: Specific product configurations with sizes and pricing, with soft delete support.
 
 #### `product_instance_flavor` Table
 ```sql
@@ -220,7 +246,7 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - created_at (TIMESTAMP)
 ```
 
-**Purpose**: Links flavors to product instances with quantity and pricing.
+**Purpose**: Links flavors to product instances with quantity and pricing, with cached names for performance.
 
 #### `sizes` Table
 ```sql
@@ -241,6 +267,9 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - total (DECIMAL)
 - subtotal (DECIMAL)
 - delivery_fee (DECIMAL)
+- discount_amount (DECIMAL, DEFAULT 0.00) - Promo code discount
+- promo_code_id (INT, FOREIGN KEY -> promo_codes.id, NULL) - Applied promo code
+- promo_code (VARCHAR(50), NULL) - Promo code string for display
 - status (ENUM: 'pending', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled')
 - payment_method (ENUM: 'cash', 'card', 'online')
 - payment_status (ENUM: 'pending', 'paid', 'failed')
@@ -260,7 +289,7 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - updated_at (TIMESTAMP)
 ```
 
-**Purpose**: Main order records with delivery and payment information.
+**Purpose**: Main order records with delivery and payment information, including promo code support.
 
 #### `order_items` Table
 ```sql
@@ -276,7 +305,7 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - created_at (TIMESTAMP)
 ```
 
-**Purpose**: Individual items in orders with cached product info and flavor details.
+**Purpose**: Individual items in orders with cached product info and flavor details for historical preservation.
 
 **Important Notes**:
 - **Cached Fields**: `product_name`, `product_type`, `pack_size` are cached at order time to preserve historical data
@@ -284,118 +313,16 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
   ```json
   [
     {
-      "quantity": 1,
-      "size_name": "mini",
-      "flavor_name": "Chocolate Chip"
+      "id": 16,
+      "name": "Brownie Cookie",
+      "size": "Large",
+      "price": "20.00",
+      "quantity": 1
     }
   ]
   ```
 - **Performance**: Indexes on `product_name`, `product_type` for better query performance
-
-**Special Note**: The `flavor_details` JSON field contains the complete flavor selection:
-```json
-[
-  {
-    "id": 16,
-    "name": "Brownie Cookie",
-    "size": "Large",
-    "price": "20.00",
-    "quantity": 1
-  }
-]
-```
-
-### 12. Product Pricing Management System
-
-#### `pricing_rules` Table
-```sql
-- id (PRIMARY KEY, AUTO_INCREMENT)
-- name (VARCHAR(255)) - Rule name (e.g., "Summer Sale", "VIP Discount")
-- description (TEXT) - Detailed rule description
-- rule_type (ENUM: 'product', 'category', 'flavor', 'time', 'location', 'customer_group') - Type of pricing rule
-- target_id (INT, NULL) - Product ID, category ID, etc.
-- target_value (VARCHAR(255), NULL) - For non-ID targets like customer groups
-- discount_type (ENUM: 'percentage', 'fixed_amount', 'free_delivery') - Type of discount
-- discount_value (DECIMAL(10, 2)) - Discount amount or percentage
-- minimum_order_amount (DECIMAL(10, 2), DEFAULT 0.00) - Minimum order for discount
-- maximum_discount (DECIMAL(10, 2), NULL) - Maximum discount cap
-- start_date (DATETIME, DEFAULT CURRENT_TIMESTAMP) - Rule activation date
-- end_date (DATETIME, NULL) - Rule expiration date
-- is_active (BOOLEAN, DEFAULT true) - Whether rule is active
-- priority (INT, DEFAULT 0) - Higher priority rules apply first
-- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who created rule
-- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
-- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
-```
-
-**Purpose**: Manages flexible pricing rules for products, categories, and customer groups.
-
-**Business Logic**:
-- **Rule Types**: Product-specific, category-based, time-based, customer group pricing
-- **Priority System**: Higher priority rules apply first when multiple rules match
-- **Time-Based**: Rules can be scheduled with start and end dates
-- **Validation**: Minimum order amounts and maximum discount caps
-- **Flexibility**: Supports percentage, fixed amount, and free delivery discounts
-
-#### `product_prices` Table
-```sql
-- id (PRIMARY KEY, AUTO_INCREMENT)
-- product_id (INT, FOREIGN KEY -> products.id) - Reference to product
-- price_type (ENUM: 'regular', 'sale', 'member', 'wholesale') - Type of price
-- price (DECIMAL(10, 2)) - Price amount
-- start_date (DATETIME, DEFAULT CURRENT_TIMESTAMP) - Price activation date
-- end_date (DATETIME, NULL) - Price expiration date
-- is_active (BOOLEAN, DEFAULT true) - Whether price is active
-- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who set price
-- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
-- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
-```
-
-**Purpose**: Manages different price tiers for products (regular, sale, member, wholesale).
-
-**Business Logic**:
-- **Price Tiers**: Multiple price types for different customer segments
-- **Time-Based**: Prices can be scheduled with start and end dates
-- **Historical Tracking**: Complete audit trail of price changes
-- **Active Management**: Only active prices are applied
-- **Admin Control**: Full control over pricing through admin interface
-
-#### `pricing_categories` Table
-```sql
-- id (PRIMARY KEY, AUTO_INCREMENT)
-- name (VARCHAR(255)) - Category name (e.g., "Premium Flavors", "Bulk Orders")
-- description (TEXT) - Category description
-- category_type (ENUM: 'product_type', 'flavor_category', 'size_category', 'customer_group') - Type of category
-- target_value (VARCHAR(255)) - Category value (e.g., "Chocolate", "Large", "VIP")
-- is_active (BOOLEAN, DEFAULT true) - Whether category is active
-- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
-- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
-```
-
-**Purpose**: Defines pricing categories for grouping products and customers.
-
-**Business Logic**:
-- **Category Types**: Product types, flavor categories, size categories, customer groups
-- **Flexible Grouping**: Dynamic categorization for pricing rules
-- **Active Management**: Only active categories are used in pricing
-- **Target Values**: Specific values within each category type
-
-#### Updated `products` Table (Pricing Fields)
-```sql
-- original_price (DECIMAL(10, 2), NULL) - Original product price
-- sale_price (DECIMAL(10, 2), NULL) - Current sale price
-- sale_start_date (DATETIME, NULL) - Sale start date
-- sale_end_date (DATETIME, NULL) - Sale end date
-- is_on_sale (BOOLEAN, DEFAULT false) - Whether product is currently on sale
-```
-
-**Purpose**: Enhanced product pricing with sale management capabilities.
-
-**Business Logic**:
-- **Original Price Preservation**: Maintains original price for comparison
-- **Sale Management**: Automatic sale price activation/deactivation
-- **Sale Indicators**: Clear indication of products on sale
-- **Time-Based Sales**: Scheduled sale periods with automatic management
+- **Data Integrity**: Preserves order data even if products are modified or deleted
 
 ### 7. Cart Management
 
@@ -459,9 +386,16 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - show_deleted (BOOLEAN) - Whether to show soft-deleted items
 - created_at (TIMESTAMP)
 - updated_at (TIMESTAMP)
+- UNIQUE KEY unique_user_view (admin_user_id, view_type)
 ```
 
-**Purpose**: Stores admin user preferences for viewing soft-deleted items.
+**Purpose**: Stores admin user preferences for viewing soft-deleted items with unique constraints.
+
+**Business Logic**:
+- **Per-User Preferences**: Each admin can set different preferences for each view type
+- **Soft Delete Toggle**: Toggle between showing/hiding soft-deleted items
+- **Performance**: Preferences cached to minimize database queries
+- **Unique Constraints**: One preference per user per view type
 
 ### 9. Delivery Management
 
@@ -573,20 +507,145 @@ Crumbled is a Next.js-based e-commerce platform for cookie delivery. The databas
 - **Order Association**: Connects discounts to specific orders
 - **Analytics Support**: Enables reporting on promo code effectiveness
 
-#### Orders Table Promo Code Columns
+### 12. Product Pricing Management System
+
+#### `pricing_rules` Table
 ```sql
-- promo_code_id (INT, FOREIGN KEY -> promo_codes.id, NULL) - Applied promo code
-- promo_code (VARCHAR(50), NULL) - Promo code string for display
-- discount_amount (DECIMAL(10,2), DEFAULT 0.00) - Discount applied to order
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- name (VARCHAR(255)) - Rule name (e.g., "Summer Sale", "VIP Discount")
+- description (TEXT) - Detailed rule description
+- rule_type (ENUM: 'product', 'category', 'flavor', 'time', 'location', 'customer_group') - Type of pricing rule
+- target_id (INT, NULL) - Product ID, category ID, etc.
+- target_value (VARCHAR(255), NULL) - For non-ID targets like customer groups
+- discount_type (ENUM: 'percentage', 'fixed_amount', 'free_delivery') - Type of discount
+- discount_value (DECIMAL(10, 2)) - Discount amount or percentage
+- minimum_order_amount (DECIMAL(10, 2), DEFAULT 0.00) - Minimum order for discount
+- maximum_discount (DECIMAL(10, 2), NULL) - Maximum discount cap
+- start_date (DATETIME, DEFAULT CURRENT_TIMESTAMP) - Rule activation date
+- end_date (DATETIME, NULL) - Rule expiration date
+- is_active (BOOLEAN, DEFAULT true) - Whether rule is active
+- priority (INT, DEFAULT 0) - Higher priority rules apply first
+- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who created rule
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
 ```
 
-**Purpose**: Links orders to applied promotional codes and tracks discounts.
+**Purpose**: Manages flexible pricing rules for products, categories, and customer groups.
 
 **Business Logic**:
-- **Order Discounts**: Records discounts applied to specific orders
-- **Code Reference**: Maintains link to original promo code
-- **Display Support**: Stores code string for order display
-- **Historical Preservation**: Maintains discount information even if code is deleted
+- **Rule Types**: Product-specific, category-based, time-based, customer group pricing
+- **Priority System**: Higher priority rules apply first when multiple rules match
+- **Time-Based**: Rules can be scheduled with start and end dates
+- **Validation**: Minimum order amounts and maximum discount caps
+- **Flexibility**: Supports percentage, fixed amount, and free delivery discounts
+
+#### `product_prices` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- product_id (INT, FOREIGN KEY -> products.id) - Reference to product
+- price_type (ENUM: 'regular', 'sale', 'member', 'wholesale') - Type of price
+- price (DECIMAL(10, 2)) - Price amount
+- start_date (DATETIME, DEFAULT CURRENT_TIMESTAMP) - Price activation date
+- end_date (DATETIME, NULL) - Price expiration date
+- is_active (BOOLEAN, DEFAULT true) - Whether price is active
+- created_by (INT, FOREIGN KEY -> admin_users.id) - Admin who set price
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+```
+
+**Purpose**: Manages different price tiers for products (regular, sale, member, wholesale).
+
+**Business Logic**:
+- **Price Tiers**: Multiple price types for different customer segments
+- **Time-Based**: Prices can be scheduled with start and end dates
+- **Historical Tracking**: Complete audit trail of price changes
+- **Active Management**: Only active prices are applied
+- **Admin Control**: Full control over pricing through admin interface
+
+#### `pricing_categories` Table
+```sql
+- id (PRIMARY KEY, AUTO_INCREMENT)
+- name (VARCHAR(255)) - Category name (e.g., "Premium Flavors", "Bulk Orders")
+- description (TEXT) - Category description
+- category_type (ENUM: 'product_type', 'flavor_category', 'size_category', 'customer_group') - Type of category
+- target_value (VARCHAR(255)) - Category value (e.g., "Chocolate", "Large", "VIP")
+- is_active (BOOLEAN, DEFAULT true) - Whether category is active
+- created_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP)
+- updated_at (TIMESTAMP, DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)
+```
+
+**Purpose**: Defines pricing categories for grouping products and customers.
+
+**Business Logic**:
+- **Category Types**: Product types, flavor categories, size categories, customer groups
+- **Flexible Grouping**: Dynamic categorization for pricing rules
+- **Active Management**: Only active categories are used in pricing
+- **Target Values**: Specific values within each category type
+
+## Soft Delete System
+
+### Implementation Overview
+The application implements a comprehensive soft delete system that maintains data integrity while allowing for data recovery and audit trails.
+
+### Soft Delete Fields
+All major entities include soft delete fields:
+```sql
+- deleted_at (TIMESTAMP, NULL) - Timestamp when item was soft deleted
+- deleted_by (INT, NULL) - Admin user ID who performed deletion
+- deletion_reason (TEXT, NULL) - Optional reason for deletion
+```
+
+### Soft Delete Stored Procedures
+The system uses MySQL stored procedures for consistent soft delete operations:
+
+#### `soft_delete_flavor(flavor_id, admin_user_id, reason)`
+- Sets `deleted_at` to current timestamp
+- Sets `deleted_by` to admin user ID
+- Sets `deletion_reason` to provided reason
+- Sets `is_active` to 0 (false)
+- Maintains `is_enabled` status for potential restoration
+
+#### `soft_delete_product(product_id, admin_user_id, reason)`
+- Similar to flavor deletion
+- Handles product-specific cleanup
+- Maintains pricing and inventory relationships
+
+#### `soft_delete_product_type(product_type_id, admin_user_id, reason)`
+- Deletes product type with cascade considerations
+- Maintains product relationships for potential restoration
+
+#### `restore_flavor(flavor_id, admin_user_id)`
+- Clears `deleted_at`, `deleted_by`, `deletion_reason`
+- Sets `is_active` to 1 (true)
+- Preserves original `is_enabled` status
+
+### Public vs Admin Filtering
+
+#### Public API Routes
+All public-facing APIs filter out soft-deleted items:
+```sql
+-- Example: Public flavors API
+SELECT * FROM flavors 
+WHERE is_active = 1 
+  AND is_enabled = 1 
+  AND deleted_at IS NULL
+```
+
+#### Admin API Routes
+Admin routes respect user preferences for showing deleted items:
+```sql
+-- Example: Admin flavors API with preference
+SELECT * FROM flavors 
+WHERE (deleted_at IS NULL OR show_deleted = 1)
+  AND (is_enabled = 1 OR show_deleted = 1)
+```
+
+### Admin View Preferences
+Each admin user can set preferences for different views:
+- **Products View**: Show/hide deleted products
+- **Flavors View**: Show/hide deleted flavors  
+- **Product Types View**: Show/hide deleted product types
+- **Orders View**: Show/hide cancelled orders
 
 ## Key Relationships
 
@@ -642,6 +701,14 @@ cart_items ←→ cart_item_flavors (1:many)
 cart_item_flavors ←→ flavors (many:1)
 ```
 
+### Admin Management
+```
+admin_users ←→ admin_view_preferences (1:many) - View preferences
+admin_users ←→ promo_codes (1:many) - Promo code creation
+admin_users ←→ pricing_rules (1:many) - Pricing rule creation
+admin_users ←→ product_prices (1:many) - Price setting
+```
+
 ## Indexes for Performance
 
 ### Customer Management
@@ -650,6 +717,7 @@ CREATE INDEX idx_customers_email ON customers(email);
 CREATE INDEX idx_customers_phone ON customers(phone);
 CREATE INDEX idx_customers_type ON customers(type);
 CREATE INDEX idx_customers_age_group ON customers(age_group);
+CREATE INDEX idx_customers_deleted_at ON customers(deleted_at);
 ```
 
 ### Location Management
@@ -671,14 +739,45 @@ CREATE INDEX idx_phone_verification_phone ON phone_verification(phone);
 CREATE INDEX idx_phone_verification_expires ON phone_verification(expires_at);
 ```
 
+### Product Management
+```sql
+CREATE INDEX idx_products_product_type_id ON products(product_type_id);
+CREATE INDEX idx_products_is_active ON products(is_active);
+CREATE INDEX idx_products_is_enabled ON products(is_enabled);
+CREATE INDEX idx_products_deleted_at ON products(deleted_at);
+CREATE INDEX idx_products_is_on_sale ON products(is_on_sale);
+CREATE INDEX idx_products_sale_start_date ON products(sale_start_date);
+CREATE INDEX idx_products_sale_end_date ON products(sale_end_date);
+
+CREATE INDEX idx_flavors_is_active ON flavors(is_active);
+CREATE INDEX idx_flavors_is_enabled ON flavors(is_enabled);
+CREATE INDEX idx_flavors_deleted_at ON flavors(deleted_at);
+CREATE INDEX idx_flavors_category ON flavors(category);
+
+CREATE INDEX idx_product_types_is_active ON product_types(is_active);
+CREATE INDEX idx_product_types_deleted_at ON product_types(deleted_at);
+
+CREATE INDEX idx_product_instance_product_type ON product_instance(product_type);
+CREATE INDEX idx_product_instance_is_active ON product_instance(is_active);
+CREATE INDEX idx_product_instance_deleted_at ON product_instance(deleted_at);
+
+CREATE INDEX idx_product_instance_flavor_product_instance_id ON product_instance_flavor(product_instance_id);
+CREATE INDEX idx_product_instance_flavor_flavor_id ON product_instance_flavor(flavor_id);
+CREATE INDEX idx_product_instance_flavor_flavor_name ON product_instance_flavor(flavor_name);
+```
+
 ### Order Management
 ```sql
 CREATE INDEX idx_orders_customer ON orders(customer_id);
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created ON orders(created_at);
+CREATE INDEX idx_orders_promo_code ON orders(promo_code);
+CREATE INDEX idx_orders_promo_code_id ON orders(promo_code_id);
+
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_instance_id);
-CREATE INDEX idx_orders_promo_code ON orders(promo_code);
+CREATE INDEX idx_order_items_product_name ON order_items(product_name);
+CREATE INDEX idx_order_items_product_type ON order_items(product_type);
 ```
 
 ### Promo Codes Management
@@ -712,11 +811,18 @@ CREATE INDEX idx_product_prices_is_active ON product_prices(is_active);
 CREATE INDEX idx_pricing_categories_category_type ON pricing_categories(category_type);
 CREATE INDEX idx_pricing_categories_target_value ON pricing_categories(target_value);
 CREATE INDEX idx_pricing_categories_is_active ON pricing_categories(is_active);
+```
 
--- Products table pricing indexes
-CREATE INDEX idx_products_is_on_sale ON products(is_on_sale);
-CREATE INDEX idx_products_sale_start_date ON products(sale_start_date);
-CREATE INDEX idx_products_sale_end_date ON products(sale_end_date);
+### Admin Management
+```sql
+CREATE INDEX idx_admin_users_username ON admin_users(username);
+CREATE INDEX idx_admin_users_email ON admin_users(email);
+CREATE INDEX idx_admin_users_role ON admin_users(role);
+CREATE INDEX idx_admin_users_is_active ON admin_users(is_active);
+
+CREATE INDEX idx_admin_view_preferences_admin_user_id ON admin_view_preferences(admin_user_id);
+CREATE INDEX idx_admin_view_preferences_view_type ON admin_view_preferences(view_type);
+CREATE INDEX idx_admin_view_preferences_unique_user_view ON admin_view_preferences(admin_user_id, view_type);
 ```
 
 ## Data Integrity Constraints
@@ -730,12 +836,16 @@ CREATE INDEX idx_products_sale_end_date ON products(sale_end_date);
 - Customer email and phone numbers are unique
 - Admin usernames and emails are unique
 - City and zone names are unique within their scope
+- Promo codes are unique
+- Admin view preferences have unique user-view combinations
 
 ### Check Constraints
 - Age group values are restricted to valid ranges
 - Order status values are restricted to valid enum values
 - Delivery fees must be non-negative
 - Quantities must be positive integers
+- Discount values must be non-negative
+- Usage counts must be non-negative
 
 ## Business Logic Implementation
 
@@ -760,6 +870,22 @@ The system implements a flexible delivery coverage system:
 3. **OTP Verification**: Phone verification required for all users
 4. **Email Verification**: Email verification for registered users
 
+### Soft Delete Implementation
+1. **Consistency**: All soft delete operations use stored procedures
+2. **Performance**: Indexes on `deleted_at` fields for efficient filtering
+3. **Data Integrity**: Foreign key relationships maintained during soft delete
+4. **Recovery**: Complete restoration capability with audit trail
+
+### Cached Fields Implementation
+1. **Historical Preservation**: Product names, types, and pack sizes cached at order time
+2. **Performance**: Reduces complex joins for order history queries
+3. **Data Integrity**: Preserves order data even if products are modified/deleted
+
+### Admin View Preferences Implementation
+1. **User-Specific**: Each admin can set preferences per view type
+2. **Flexibility**: Toggle between showing/hiding soft-deleted items
+3. **Performance**: Preferences cached to minimize database queries
+
 ---
 
-**This database structure supports the complete Crumbled e-commerce platform with comprehensive customer management, product catalog, order processing, delivery management, and advanced pricing management capabilities.** 
+**This database structure supports the complete Crumbled e-commerce platform with comprehensive customer management, product catalog, order processing, delivery management, advanced pricing management, promotional codes, and robust soft delete functionality.** 

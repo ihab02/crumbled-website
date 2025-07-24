@@ -4,12 +4,47 @@ import { authOptions } from '@/lib/auth-options';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { cookies } from 'next/headers';
+import jwt from 'jsonwebtoken';
+
+// Verify admin authentication
+const verifyAdminAuth = async (request: NextRequest) => {
+  const cookieStore = await cookies();
+  const adminToken = cookieStore.get('adminToken');
+
+  if (!adminToken) {
+    return null;
+  }
+
+  try {
+    const decoded = jwt.verify(adminToken.value, process.env.JWT_SECRET || 'fallback-secret') as any;
+    if (decoded.type !== 'admin') {
+      return null;
+    }
+    return decoded;
+  } catch (error) {
+    return null;
+  }
+};
 
 export async function POST(request: NextRequest) {
   try {
+    // Try NextAuth session first (for customer uploads)
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.email) {
+    // If no NextAuth session, try admin JWT token
+    let isAuthenticated = false;
+    if (session?.user?.email) {
+      isAuthenticated = true;
+    } else {
+      // Check for admin JWT token
+      const admin = await verifyAdminAuth(request);
+      if (admin) {
+        isAuthenticated = true;
+      }
+    }
+    
+    if (!isAuthenticated) {
       return NextResponse.json({ 
         success: false, 
         error: "Unauthorized" 
