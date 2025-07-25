@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     // Get customer from database
     const [customers] = await connection.query(
-      'SELECT id, email, password, first_name, last_name, phone FROM customers WHERE email = ?',
+      'SELECT id, email, password, first_name, last_name, phone, email_verified FROM customers WHERE email = ?',
       [email]
     );
 
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const customer = customers[0] as Customer;
+    const customer = customers[0] as Customer & { email_verified?: number | boolean };
     let isValidPassword = false;
 
     // Check if password is plain text (legacy) and migrate it
@@ -85,6 +85,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
+      );
+    }
+    // Check if email is verified (handle boolean or numeric)
+    if (customer.email_verified === 0 || customer.email_verified === false) {
+      return NextResponse.json(
+        { error: 'Your email address is not verified. Please check your inbox and click the verification link before logging in.' },
+        { status: 403 }
       );
     }
 

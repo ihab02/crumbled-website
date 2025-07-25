@@ -38,7 +38,8 @@ export async function POST(req: NextRequest) {
       birthDate,
       cityId,
       zoneId,
-      address
+      address,
+      additionalInfo
     } = await req.json();
 
     // Validate required fields
@@ -125,8 +126,8 @@ export async function POST(req: NextRequest) {
       // Add address if provided
       if (cityId && zoneId && address) {
         await connection.query(
-          'INSERT INTO addresses (customer_id, city_id, zone_id, street_address, is_default) VALUES (?, ?, ?, ?, TRUE)',
-          [customerId, cityId, zoneId, address]
+          'INSERT INTO addresses (customer_id, city_id, zone_id, street_address, additional_info, is_default) VALUES (?, ?, ?, ?, ?, TRUE)',
+          [customerId, cityId, zoneId, address, additionalInfo || null]
         );
       }
 

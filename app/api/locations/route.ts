@@ -2,8 +2,30 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
 // Get all cities and all zones, including their active status
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const cityId = searchParams.get('cityId');
+
+    if (cityId) {
+      // Only fetch zones for the given city
+      const [zones] = await db.query(
+        'SELECT id, name, delivery_fee, is_active FROM zones WHERE city_id = ? ORDER BY name',
+        [cityId]
+      );
+      return NextResponse.json({
+        success: true,
+        zones: Array.isArray(zones)
+          ? zones.map(z => ({
+              id: z.id,
+              name: z.name,
+              deliveryFee: parseFloat(z.delivery_fee) || 0,
+              is_active: z.is_active
+            }))
+          : []
+      });
+    }
+
     // Get all cities (active and inactive)
     const [cities] = await db.query(
       'SELECT id, name, is_active FROM cities ORDER BY name'

@@ -72,7 +72,6 @@ export default function ConfirmPage() {
     setSaveNewAddress(JSON.parse(localStorage.getItem('saveNewAddress') || 'false'))
     setSelectedDeliveryDate(localStorage.getItem('selectedDeliveryDate') || "")
     setCurrentZoneId(JSON.parse(localStorage.getItem('currentZoneId') || 'null'))
-    setDeliveryRules(JSON.parse(localStorage.getItem('deliveryRules') || 'null'))
     setPaymentMethod(localStorage.getItem('paymentMethod') || "")
     setDeliveryFee(Number(localStorage.getItem('deliveryFee') || 0))
     setSubtotal(Number(localStorage.getItem('subtotal') || 0))

@@ -80,6 +80,13 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
+          // Check if email is verified
+          if (user.email_verified === 0 || user.email_verified === false) {
+            console.log('Email not verified for user:', credentials.email);
+            // Return null instead of throwing error, but we'll handle this in the frontend
+            return null;
+          }
+
           console.log('Authentication successful for user:', credentials.email);
           return {
             id: user.id.toString(),
@@ -91,7 +98,8 @@ export const authOptions: NextAuthOptions = {
           };
         } catch (error) {
           console.error('NextAuth authorize error:', error);
-          return null;
+          // Re-throw the error so NextAuth can handle it properly
+          throw error;
         }
       }
     })
@@ -115,6 +123,14 @@ export const authOptions: NextAuthOptions = {
       }
       return session;
     }
+  },
+  events: {
+    async signIn({ user, account, profile, isNewUser }) {
+      console.log('Sign in event:', { user: user?.email, isNewUser });
+    },
+    async signOut({ session, token }) {
+      console.log('Sign out event');
+    },
   },
   pages: {
     signIn: '/auth/login',

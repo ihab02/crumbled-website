@@ -17,6 +17,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   // Auto-redirect if already logged in
   useEffect(() => {
@@ -29,6 +31,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setShowResend(false);
 
     console.log('Customer login attempt for email:', email);
 
@@ -40,10 +43,87 @@ export default function LoginPage() {
       });
 
       console.log('NextAuth signIn result:', result);
+      console.log('NextAuth error details:', result?.error);
 
       if (result?.error) {
+        console.log('NextAuth error received:', result.error);
+        
+        // Handle email verification errors - check for multiple variations
+        if (
+          result.error.includes('not verified') ||
+          result.error.toLowerCase().includes('verify your email') ||
+          result.error.includes('email address is not verified') ||
+          result.error.includes('email is not verified') ||
+          result.error.toLowerCase().includes('verification')
+        ) {
+          console.log('Email verification error detected, showing resend option');
+          setShowResend(true);
+          toast.error('Please verify your email before logging in. Check your inbox for the verification link.');
+          return;
+        }
+        
+        // Handle CredentialsSignin error (NextAuth's default when authorize returns null)
+        if (result.error === 'CredentialsSignin') {
+          console.log('🔍 CREDENTIALS SIGNIN ERROR DETECTED - checking user status...');
+          // Check if user exists but login failed (likely email verification issue)
+          try {
+            console.log('📞 Calling check-user-exists API for email:', email);
+            const checkUserRes = await fetch('/api/auth/check-user-exists', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email }),
+            });
+            const userData = await checkUserRes.json();
+            console.log('📋 User data response:', userData);
+            
+            if (userData.exists && !userData.emailVerified) {
+              console.log('✅ User exists but email not verified - SHOWING RESEND OPTION');
+              setShowResend(true);
+              toast.error('Please verify your email before logging in. Check your inbox for the verification link.');
+              return;
+            } else {
+              console.log('❌ User either does not exist or email is verified - showing generic error');
+            }
+          } catch (checkError) {
+            console.log('❌ Could not check user status:', checkError);
+          }
+        }
+        
+        // Handle other specific errors with clear messages
+        let errorMessage = 'Login failed. Please try again.';
+        
+        if (result.error.includes('Invalid credentials') || result.error.includes('Invalid email or password')) {
+          errorMessage = 'Invalid email or password. Please check your credentials.';
+        } else if (result.error.includes('Email and password are required')) {
+          errorMessage = 'Please enter both email and password.';
+        } else if (result.error.includes('Invalid email format')) {
+          errorMessage = 'Please enter a valid email address.';
+        } else if (result.error.includes('Password requirements not met')) {
+          errorMessage = 'Password does not meet requirements.';
+        } else if (result.error.includes('Internal server error')) {
+          errorMessage = 'Server error. Please try again later.';
+        } else {
+          // For any other errors, check if it might be email verification related
+          if (result.error.toLowerCase().includes('email') || result.error.toLowerCase().includes('verify')) {
+            console.log('Possible email verification error, showing resend option');
+            setShowResend(true);
+            toast.error('Please verify your email before logging in. Check your inbox for the verification link.');
+            return;
+          }
+          // For any other errors, use a generic but helpful message
+          errorMessage = 'Unable to log in. Please check your credentials and try again.';
+        }
+        
         console.error('NextAuth error:', result.error);
-        throw new Error(result.error);
+        toast.error(errorMessage);
+        return;
+      }
+
+      // If login failed without any error (edge case), show generic message
+      if (!result?.ok && !result?.error) {
+        console.log('Login failed without error - showing generic message');
+        toast.error('Login failed. Please check your credentials and try again.');
+        return;
       }
 
       if (result?.ok) {
@@ -51,21 +131,44 @@ export default function LoginPage() {
         // Get redirect URL from query param
         const redirectUrl = searchParams.get('redirect') || '/account';
         
-        toast.success('Logged in successfully!');
+        toast.success('Welcome back! Redirecting...');
         
         // Small delay to ensure session is updated
         setTimeout(() => {
           router.push(redirectUrl);
         }, 500);
       } else {
-        console.log('Login failed - no error but not ok');
-        throw new Error('Login failed');
+        console.log('Login successful');
       }
     } catch (error) {
       console.error('Login error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to login');
+      // Show toast for unexpected errors
+      toast.error('Connection error. Please check your internet and try again.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Verification email sent! Please check your inbox and spam folder.');
+        setShowResend(false);
+      } else {
+        const errorMessage = data.error || 'Unable to send verification email. Please try again.';
+        toast.error(errorMessage);
+      }
+    } catch (err) {
+      toast.error('Network error. Please check your connection and try again.');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -147,6 +250,21 @@ export default function LoginPage() {
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
+
+          {showResend && (
+            <div className="mt-4 text-center">
+              <div className="text-pink-700 mb-3 text-sm leading-relaxed">
+                📧 Email not verified. Check your inbox and click the verification link to continue.
+              </div>
+              <Button
+                onClick={handleResendVerification}
+                disabled={resendLoading}
+                className="w-full bg-gradient-to-r from-pink-400 to-rose-400 hover:from-pink-500 hover:to-rose-500 text-sm"
+              >
+                {resendLoading ? 'Sending...' : '📧 Resend Verification Email'}
+              </Button>
+            </div>
+          )}
 
           <div className="mt-6 space-y-4">
             <div className="relative">

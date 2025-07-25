@@ -131,6 +131,45 @@ export class EmailService {
     }
   }
 
+  static async sendThemedEmailVerification(email: string, token: string, customerName: string) {
+    try {
+      const transporter = await this.createTransporter();
+      const settings = await this.getEmailSettings();
+      if (!settings) throw new Error('Email settings not configured');
+      const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/auth/verify-email?token=${token}`;
+      const mailOptions = {
+        from: `"${settings.from_name}" <${settings.from_email}>`,
+        to: email,
+        subject: 'Verify Your Email - Crumbled',
+        html: `
+          <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 18px; box-shadow: 0 2px 12px #f3e8ee; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #fbc2eb 0%, #fcb69f 100%); padding: 32px 24px 24px 24px; text-align: center;">
+              <h1 style="color: #d946ef; font-size: 2.2rem; margin: 0; letter-spacing: 1px;">🍪 Welcome to Crumbled!</h1>
+              <p style="color: #a21caf; font-size: 1.1rem; margin: 12px 0 0 0;">Delicious Cookies Delivered</p>
+            </div>
+            <div style="padding: 32px 24px 24px 24px; background: #fdf6fb;">
+              <h2 style="color: #d946ef; margin-bottom: 18px;">Hello ${customerName}!</h2>
+              <p style="color: #6b7280; font-size: 1.05rem; margin-bottom: 24px;">Thank you for signing up at Crumbled! To start your sweet journey, please verify your email address by clicking the button below.</p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${verificationUrl}" style="background: linear-gradient(90deg, #fbc2eb 0%, #fcb69f 100%); color: #fff; padding: 16px 36px; border-radius: 30px; font-size: 1.1rem; font-weight: bold; text-decoration: none; box-shadow: 0 2px 8px #f3e8ee; display: inline-block;">Verify Email Address</a>
+              </div>
+              <p style="color: #a21caf; font-size: 0.98rem; margin-bottom: 18px;">If the button doesn't work, copy and paste this link into your browser:</p>
+              <p style="color: #d946ef; word-break: break-all; font-size: 0.97rem; margin-bottom: 24px;">${verificationUrl}</p>
+              <p style="color: #6b7280; font-size: 0.95rem;">This link will expire in 24 hours. If you didn't create an account, you can safely ignore this email.</p>
+              <hr style="border: none; border-top: 1px solid #f3e8ee; margin: 32px 0;">
+              <p style="color: #a21caf; font-size: 1rem; text-align: center; margin: 0;">With love and cookies,<br>The Crumbled Team</p>
+            </div>
+          </div>
+        `
+      };
+      const result = await transporter.sendMail(mailOptions);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error('Error sending themed email verification:', error);
+      throw error;
+    }
+  }
+
   static async sendPasswordReset(email: string, token: string, customerName: string) {
     try {
       const transporter = await this.createTransporter();

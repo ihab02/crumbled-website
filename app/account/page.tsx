@@ -507,7 +507,7 @@ function AccountPageContent() {
                             disabled={!addressForm.cityId}
                           >
                             <option value="">Select Zone</option>
-                            {zones.map((zone) => (
+                            {Array.isArray(zones) && zones.map((zone) => (
                               <option key={zone.id} value={zone.id}>{zone.name}</option>
                             ))}
                           </select>

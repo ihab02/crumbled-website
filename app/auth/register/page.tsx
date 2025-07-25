@@ -50,7 +50,8 @@ function RegisterPageContent() {
     phone: '',
     password: '',
     confirmPassword: '',
-    address: '',
+    address: '', // street address
+    additionalInfo: '', // new field
     cityId: '',
     zoneId: '',
     ageGroup: '',
@@ -171,7 +172,7 @@ function RegisterPageContent() {
           toast.success('OTP sent successfully');
         }
       } else {
-        throw new Error(data.error || 'Failed to send OTP');
+        toast.error(data.error || 'Failed to send OTP');
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to send OTP');
@@ -204,7 +205,7 @@ function RegisterPageContent() {
         setOtpSent(false);
         toast.success('Phone number verified successfully');
       } else {
-        throw new Error(data.error || 'Failed to verify OTP');
+        toast.error(data.error || 'Failed to verify OTP');
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to verify OTP');
@@ -233,6 +234,7 @@ function RegisterPageContent() {
     if (!formData.confirmPassword) errors.confirmPassword = "Please confirm your password"
     if (!formData.cityId) errors.cityId = "City is required"
     if (!formData.zoneId) errors.zoneId = "Zone is required"
+    if (!formData.address) errors.address = "Street address is required"
 
     if (formData.password && formData.password.length < 8) errors.password = "Password must be at least 8 characters long"
     if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) errors.confirmPassword = "Passwords do not match"
@@ -266,6 +268,7 @@ function RegisterPageContent() {
           cityId: formData.cityId,
           zoneId: formData.zoneId,
           address: formData.address,
+          additionalInfo: formData.additionalInfo,
           ageGroup: formData.ageGroup,
           birthDate: formData.birthDate
         }),
@@ -294,7 +297,7 @@ function RegisterPageContent() {
         }, 3000)
       } else {
         toast.error(data.error || "Failed to create account")
-        setError("")
+        setError("") // Only use error state for field-level errors
       }
     } catch (error) {
       toast.error("Network error. Please try again.")
@@ -575,21 +578,41 @@ function RegisterPageContent() {
 
                 <div>
                   <Label htmlFor="address" className="text-pink-700">
-                    Address
+                    Street Address
                   </Label>
                   <Input
                     id="address"
                     name="address"
                     type="text"
+                    autoComplete="street-address"
                     required
                     className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.address ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
-                    placeholder="Enter your address"
+                    placeholder="Enter street address"
                     value={formData.address}
                     onChange={handleChange}
                     disabled={isLoading}
                     ref={fieldErrors.address ? firstErrorRef : null}
                   />
                   {fieldErrors.address && <p className="text-red-500 text-xs mt-1">{fieldErrors.address}</p>}
+                </div>
+
+                <div>
+                  <Label htmlFor="additionalInfo" className="text-pink-700">
+                    Additional Info
+                  </Label>
+                  <Input
+                    id="additionalInfo"
+                    name="additionalInfo"
+                    type="text"
+                    autoComplete="off"
+                    className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.additionalInfo ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
+                    placeholder="Apartment, floor, etc. (optional)"
+                    value={formData.additionalInfo}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    ref={fieldErrors.additionalInfo ? firstErrorRef : null}
+                  />
+                  {fieldErrors.additionalInfo && <p className="text-red-500 text-xs mt-1">{fieldErrors.additionalInfo}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
