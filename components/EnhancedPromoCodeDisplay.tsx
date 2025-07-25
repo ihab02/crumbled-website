@@ -242,38 +242,9 @@ export default function EnhancedPromoCodeDisplay({
   };
 
   const renderFreeDeliveryPromo = () => (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Truck className="h-5 w-5 text-orange-600" />
-        <span className="font-semibold">Free Delivery</span>
-      </div>
-      
-      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-        <div className="flex justify-between items-center">
-          <span className="text-sm">Original delivery fee:</span>
-          <span className="text-sm line-through">{deliveryFee.toFixed(2)} EGP</span>
-        </div>
-        <div className="flex justify-between items-center font-semibold">
-          <span>New delivery fee:</span>
-          <span className="text-green-600">FREE</span>
-        </div>
-        <p className="text-xs text-orange-700 mt-2">
-          You saved {deliveryFee.toFixed(2)} EGP on delivery!
-        </p>
-        <div className="mt-2 pt-2 border-t border-orange-200">
-          <p className="text-xs text-orange-700">
-            <strong>Note:</strong> This promotion only affects delivery costs, not your order subtotal.
-          </p>
-        </div>
-        {promoCode.minimum_order_amount > 0 && (
-          <div className="mt-2 pt-2 border-t border-orange-200">
-            <p className="text-xs text-orange-700">
-              Minimum order amount: {Number(promoCode.minimum_order_amount).toFixed(2)} EGP
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 font-semibold">
+      FREE DELIVERY
+    </Badge>
   );
 
   const renderLoyaltyRewardPromo = () => (
@@ -342,6 +313,28 @@ export default function EnhancedPromoCodeDisplay({
         return renderBasicPromo();
     }
   };
+
+  // For free delivery, just return the badge without the card wrapper
+  if (promoCode.enhanced_type === 'free_delivery') {
+    return renderFreeDeliveryPromo();
+  }
+
+  // For loyalty reward, show simplified display
+  if (promoCode.enhanced_type === 'loyalty_reward') {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Star className="h-5 w-5 text-yellow-600" />
+          <span className="font-semibold">Loyalty Reward</span>
+        </div>
+        {promoCode.minimum_order_amount > 0 && (
+          <p className="text-xs text-gray-600">
+            Min. order: {Number(promoCode.minimum_order_amount).toFixed(2)} EGP
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card className={`border-2 ${getPromoColor()}`}>

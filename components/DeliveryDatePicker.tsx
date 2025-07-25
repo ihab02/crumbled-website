@@ -155,10 +155,10 @@ export default function DeliveryDatePicker({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Available Delivery Dates
-          </CardTitle>
+                  <CardTitle className="flex items-center gap-2 text-base">
+          <Calendar className="h-4 w-4" />
+          Available Delivery Dates
+        </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -194,28 +194,10 @@ export default function DeliveryDatePicker({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Calendar className="h-4 w-4" />
           Available Delivery Dates
         </CardTitle>
-        {zoneInfo && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <MapPin className="h-4 w-4" />
-              <span>{zoneInfo.zoneName}, {zoneInfo.cityName}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Info className="h-4 w-4" />
-              <span>
-                Delivery takes {zoneInfo.deliveryDays === 0 ? 'same day' : 
-                               zoneInfo.deliveryDays === 1 ? '1 day' : 
-                               `${zoneInfo.deliveryDays} days`} 
-                (excluding non-working days)
-              </span>
-            </div>
-            {getDeliveryTimeText()}
-          </div>
-        )}
       </CardHeader>
       <CardContent>
         {availableDates.length === 0 ? (
@@ -313,23 +295,7 @@ export default function DeliveryDatePicker({
           </div>
         )}
         
-        {zoneInfo && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-800">
-                <p className="font-medium mb-1">Delivery Information:</p>
-                <ul className="space-y-1 text-xs">
-                  <li>• Delivery fee: {zoneInfo.deliveryFee.toFixed(2)} EGP</li>
-                  <li>• Working days: {zoneInfo.availableDays.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(', ')}</li>
-                  {zoneInfo.timeSlot && (
-                    <li>• Time slot: {zoneInfo.timeSlot.name}</li>
-                  )}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
+
       </CardContent>
     </Card>
   );

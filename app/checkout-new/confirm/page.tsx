@@ -72,6 +72,7 @@ export default function ConfirmPage() {
     setSaveNewAddress(JSON.parse(localStorage.getItem('saveNewAddress') || 'false'))
     setSelectedDeliveryDate(localStorage.getItem('selectedDeliveryDate') || "")
     setCurrentZoneId(JSON.parse(localStorage.getItem('currentZoneId') || 'null'))
+    setDeliveryRules(JSON.parse(localStorage.getItem('deliveryRules') || 'null'))
     setPaymentMethod(localStorage.getItem('paymentMethod') || "")
     setDeliveryFee(Number(localStorage.getItem('deliveryFee') || 0))
     setSubtotal(Number(localStorage.getItem('subtotal') || 0))
@@ -384,11 +385,28 @@ export default function ConfirmPage() {
                       </div>
                       <div className="flex justify-between">
                         <span>Delivery Fee</span>
-                        <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
-                          {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                        <span>
+                          {effectiveDeliveryFee === 0 ? (
+                            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 font-semibold">
+                              FREE DELIVERY
+                            </Badge>
+                          ) : (
+                            `${Number(effectiveDeliveryFee).toFixed(2)} EGP`
+                          )}
                         </span>
                       </div>
-                      {appliedPromoCode && (
+                      {promoDiscount > 0 && (
+                        <div className="flex justify-between">
+                          <span>Discount</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                              {appliedPromoCode?.code}
+                            </Badge>
+                            <span className="text-green-600">-{Number(promoDiscount).toFixed(2)} EGP</span>
+                          </div>
+                        </div>
+                      )}
+                      {appliedPromoCode && appliedPromoCode.enhanced_type !== 'free_delivery' && appliedPromoCode.enhanced_type !== 'loyalty_reward' && (
                         <div className="mt-3">
                           <EnhancedPromoCodeDisplay
                             promoCode={appliedPromoCode}
@@ -456,7 +474,16 @@ export default function ConfirmPage() {
                           <div className="flex items-center gap-2">
                             <CreditCard className="h-4 w-4 text-blue-600" />
                             <span className="text-blue-800">
-                              <strong>Delivery Fee:</strong> {deliveryRules.deliveryFee.toFixed(2)} EGP
+                              <strong>Delivery Fee:</strong> 
+                              {appliedPromoCode?.enhanced_type === 'free_delivery' ? (
+                                <span className="line-through text-gray-500 ml-1">
+                                  {deliveryRules.deliveryFee.toFixed(2)} EGP
+                                </span>
+                              ) : (
+                                <span className="ml-1">
+                                  {deliveryRules.deliveryFee.toFixed(2)} EGP
+                                </span>
+                              )}
                             </span>
                           </div>
                           {deliveryRules.timeSlot && (
