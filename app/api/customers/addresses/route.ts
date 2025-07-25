@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { databaseService } from '@/lib/services/databaseService';
+import databaseService from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -25,21 +25,19 @@ export async function POST(request: Request) {
     }
 
     // Get customer ID
-    const customerResult = await databaseService.query(
+    const [customerResult] = await databaseService.query<any[]>(
       'SELECT id FROM customers WHERE email = ?',
       [session.user.email]
     );
 
-    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
-
-    if (customerArray.length === 0) {
+    if (!customerResult || customerResult.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
       );
     }
 
-    const customerId = customerArray[0].id;
+    const customerId = customerResult[0].id;
 
     // If this is the default address, unset any existing default
     if (isDefault) {
@@ -90,21 +88,19 @@ export async function PUT(request: Request) {
     }
 
     // Get customer ID
-    const customerResult = await databaseService.query(
+    const [customerResult] = await databaseService.query<any[]>(
       'SELECT id FROM customers WHERE email = ?',
       [session.user.email]
     );
 
-    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
-
-    if (customerArray.length === 0) {
+    if (!customerResult || customerResult.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
       );
     }
 
-    const customerId = customerArray[0].id;
+    const customerId = customerResult[0].id;
 
     // If this is the default address, unset any existing default
     if (isDefault) {
@@ -154,30 +150,27 @@ export async function DELETE(request: Request) {
     }
 
     // Get customer ID
-    const customerResult = await databaseService.query(
+    const [customerResult] = await databaseService.query<any[]>(
       'SELECT id FROM customers WHERE email = ?',
       [session.user.email]
     );
 
-    const customerArray = Array.isArray(customerResult) ? customerResult : (customerResult ? [customerResult] : []);
-
-    if (customerArray.length === 0) {
+    if (!customerResult || customerResult.length === 0) {
       return NextResponse.json(
         { error: 'Customer not found' },
         { status: 404 }
       );
     }
 
-    const customerId = customerArray[0].id;
+    const customerId = customerResult[0].id;
 
     // Check if this is the last address
-    const addressCountResult = await databaseService.query(
+    const [addressCountResult] = await databaseService.query<any[]>(
       'SELECT COUNT(*) as count FROM customer_addresses WHERE customer_id = ?',
       [customerId]
     );
 
-    const addressCountArray = Array.isArray(addressCountResult) ? addressCountResult : (addressCountResult ? [addressCountResult] : []);
-    const addressCount = addressCountArray[0]?.count || 0;
+    const addressCount = addressCountResult[0]?.count || 0;
 
     if (addressCount <= 1) {
       return NextResponse.json(
