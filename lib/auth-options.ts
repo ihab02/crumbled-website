@@ -39,13 +39,22 @@ export const authOptions: NextAuthOptions = {
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' }
+        password: { label: 'Password', type: 'password' },
+        autoLogin: { label: 'Auto Login', type: 'text' }
       },
       async authorize(credentials) {
         console.log('NextAuth authorize called with email:', credentials?.email);
         
-        if (!credentials?.email || !credentials?.password) {
-          console.log('Missing credentials');
+        // Check if this is an auto-login attempt (no password required)
+        const isAutoLogin = credentials?.autoLogin === 'verified';
+        
+        if (!credentials?.email) {
+          console.log('Missing email');
+          return null;
+        }
+        
+        if (!isAutoLogin && !credentials?.password) {
+          console.log('Missing password for regular login');
           return null;
         }
 
@@ -71,13 +80,16 @@ export const authOptions: NextAuthOptions = {
             hasPassword: !!user.password
           });
 
-          // Compare password with bcrypt
-          const isPasswordValid = await compare(credentials.password, user.password);
-          console.log('Password valid:', isPasswordValid);
-          
-          if (!isPasswordValid) {
-            console.log('Invalid password for user:', credentials.email);
-            return null;
+          // For auto-login, skip password validation
+          if (!isAutoLogin) {
+            // Compare password with bcrypt
+            const isPasswordValid = await compare(credentials.password, user.password);
+            console.log('Password valid:', isPasswordValid);
+            
+            if (!isPasswordValid) {
+              console.log('Invalid password for user:', credentials.email);
+              return null;
+            }
           }
 
           // Only check email verification if password is correct
@@ -99,55 +111,6 @@ export const authOptions: NextAuthOptions = {
         } catch (error) {
           console.error('NextAuth authorize error:', error);
           // Re-throw the error so NextAuth can handle it properly
-          throw error;
-        }
-      }
-    }),
-    CredentialsProvider({
-      name: 'AutoLogin',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        autoLogin: { label: 'Auto Login', type: 'text' }
-      },
-      async authorize(credentials) {
-        console.log('NextAuth auto-login called with email:', credentials?.email);
-        
-        if (!credentials?.email || credentials?.autoLogin !== 'verified') {
-          console.log('Invalid auto-login credentials');
-          return null;
-        }
-
-        try {
-          const [rows] = await db.query(
-            'SELECT * FROM customers WHERE email = ?',
-            [credentials.email]
-          );
-
-          const user = (rows as any[])[0];
-          console.log('Auto-login user found:', !!user);
-
-          if (!user) {
-            console.log('No user found for auto-login:', credentials.email);
-            return null;
-          }
-
-          // Check if email is verified
-          if (user.email_verified === 0 || user.email_verified === false) {
-            console.log('Email not verified for auto-login:', credentials.email);
-            return null;
-          }
-
-          console.log('Auto-login successful for user:', credentials.email);
-          return {
-            id: user.id.toString(),
-            email: user.email,
-            name: `${user.first_name} ${user.last_name}`,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            phone: user.phone
-          };
-        } catch (error) {
-          console.error('NextAuth auto-login error:', error);
           throw error;
         }
       }

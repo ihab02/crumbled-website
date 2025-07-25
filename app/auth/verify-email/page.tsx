@@ -73,8 +73,8 @@ export default function VerifyEmailPage() {
               try {
                 console.log('🔐 Attempting automatic login for:', data.email)
                 
-                // Use NextAuth auto-login provider
-                const result = await signIn('AutoLogin', {
+                // Use NextAuth credentials provider with auto-login
+                const result = await signIn('credentials', {
                   email: data.email,
                   autoLogin: 'verified',
                   redirect: false,
@@ -165,7 +165,7 @@ export default function VerifyEmailPage() {
                       if (userEmail) {
                         setIsLoggingIn(true)
                         try {
-                          const result = await signIn('AutoLogin', {
+                          const result = await signIn('credentials', {
                             email: userEmail,
                             autoLogin: 'verified',
                             redirect: false,
