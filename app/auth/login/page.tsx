@@ -23,7 +23,7 @@ export default function LoginPage() {
   // Auto-redirect if already logged in
   useEffect(() => {
     if (status === 'authenticated' && session) {
-      const redirectUrl = searchParams.get('redirect') || '/account';
+      const redirectUrl = searchParams.get('redirect') || '/flavors';
       router.push(redirectUrl);
     }
   }, [status, session, router, searchParams]);
@@ -147,7 +147,7 @@ export default function LoginPage() {
         
         // Check if user just verified their email
         const verified = searchParams.get('verified');
-        const redirectUrl = verified === 'true' ? '/flavors' : (searchParams.get('redirect') || '/account');
+        const redirectUrl = verified === 'true' ? '/flavors' : (searchParams.get('redirect') || '/flavors');
         
         const successMessage = verified === 'true' 
           ? 'Welcome! Redirecting to our delicious flavors...' 
