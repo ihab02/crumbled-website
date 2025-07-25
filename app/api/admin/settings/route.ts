@@ -1,17 +1,6 @@
 import { NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import pool from '@/lib/db';
 import { clearDebugModeCache } from '@/lib/debug-utils';
-
-// Create a connection pool
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'Goodmorning@1',
-  database: 'crumbled_nextDB',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
 
 // GET /api/admin/settings
 export async function GET() {

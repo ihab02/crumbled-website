@@ -64,8 +64,8 @@ export default function PricingRulesPage() {
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterActive, setFilterActive] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [filterActive, setFilterActive] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -330,7 +330,7 @@ export default function PricingRulesPage() {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All types</SelectItem>
+                  <SelectItem value="all">All types</SelectItem>
                   <SelectItem value="product">Product</SelectItem>
                   <SelectItem value="category">Category</SelectItem>
                   <SelectItem value="flavor">Flavor</SelectItem>
@@ -348,7 +348,7 @@ export default function PricingRulesPage() {
                   <SelectValue placeholder="All status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All status</SelectItem>
+                  <SelectItem value="all">All status</SelectItem>
                   <SelectItem value="true">Active</SelectItem>
                   <SelectItem value="false">Inactive</SelectItem>
                 </SelectContent>
@@ -360,8 +360,8 @@ export default function PricingRulesPage() {
                 variant="outline" 
                 onClick={() => {
                   setSearchTerm('');
-                  setFilterType('');
-                  setFilterActive('');
+                  setFilterType('all');
+                  setFilterActive('all');
                 }}
               >
                 <Filter className="w-4 h-4 mr-2" />

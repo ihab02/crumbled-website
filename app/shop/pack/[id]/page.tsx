@@ -5,9 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check, AlertTriangle, Star } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingBag, Plus, Minus, Check, AlertTriangle, Star, Heart } from 'lucide-react';
 import { toast } from 'sonner';
 import Image from 'next/image';
+import { useSession } from 'next-auth/react';
 import {
   Dialog,
   DialogContent,
@@ -58,17 +59,21 @@ interface SelectedFlavor {
 type OrderMode = 'stock_based' | 'preorder';
 
 export default function PackProductPage() {
+  const { data: session } = useSession();
   const { id } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectFlavorId = searchParams.get('preselect');
   const [product, setProduct] = useState<Product | null>(null);
   const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
+  const [sortedFlavors, setSortedFlavors] = useState<Flavor[]>([]);
   const [selectedFlavors, setSelectedFlavors] = useState<SelectedFlavor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [orderMode, setOrderMode] = useState<OrderMode>('stock_based');
+  const [userFavorites, setUserFavorites] = useState<Set<number>>(new Set());
+  const [showFloatingButton, setShowFloatingButton] = useState(false);
 
   useEffect(() => {
     fetchProduct();
@@ -81,10 +86,32 @@ export default function PackProductPage() {
     }
   }, [orderMode, product]);
 
+  // Fetch user favorites if logged in
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchUserFavorites();
+    }
+  }, [session]);
+
+  // Sort flavors when availableFlavors or userFavorites change
+  useEffect(() => {
+    if (availableFlavors.length > 0) {
+      sortFlavors();
+    }
+  }, [availableFlavors, userFavorites, preselectFlavorId]);
+
+  // Check if floating button should be shown
+  useEffect(() => {
+    if (product) {
+      const totalSelected = selectedFlavors.reduce((sum, flavor) => sum + flavor.quantity, 0);
+      setShowFloatingButton(totalSelected === product.count);
+    }
+  }, [selectedFlavors, product]);
+
   // Preselect flavor if specified in URL
   useEffect(() => {
-    if (preselectFlavorId && availableFlavors.length > 0 && product) {
-      const flavorToPreselect = availableFlavors.find(f => f.id.toString() === preselectFlavorId);
+    if (preselectFlavorId && sortedFlavors.length > 0 && product) {
+      const flavorToPreselect = sortedFlavors.find(f => f.id.toString() === preselectFlavorId);
       if (flavorToPreselect && selectedFlavors.length === 0) {
         // Add the preselected flavor to the selection
         const flavorSize = product.flavor_size || 'Medium';
@@ -99,7 +126,7 @@ export default function PackProductPage() {
         }]);
       }
     }
-  }, [preselectFlavorId, availableFlavors, product, selectedFlavors.length]);
+  }, [preselectFlavorId, sortedFlavors, product, selectedFlavors.length]);
 
   // Clear selected flavors when product ID changes or component unmounts
   useEffect(() => {
@@ -120,6 +147,42 @@ export default function PackProductPage() {
     } catch (error) {
       console.error('Error fetching order mode:', error);
     }
+  };
+
+  const fetchUserFavorites = async () => {
+    try {
+      const response = await fetch('/api/user-favorites');
+      const data = await response.json();
+      if (data.success) {
+        setUserFavorites(new Set(data.favorites));
+      }
+    } catch (error) {
+      console.error('Error fetching user favorites:', error);
+    }
+  };
+
+  const sortFlavors = () => {
+    const sorted = [...availableFlavors].sort((a, b) => {
+      const aIsPreselected = preselectFlavorId && a.id.toString() === preselectFlavorId;
+      const bIsPreselected = preselectFlavorId && b.id.toString() === preselectFlavorId;
+      const aIsFavorite = userFavorites.has(a.id);
+      const bIsFavorite = userFavorites.has(b.id);
+
+      // First: Preselected flavors
+      if (aIsPreselected && !bIsPreselected) return -1;
+      if (!aIsPreselected && bIsPreselected) return 1;
+
+      // Second: Favorite flavors (only if user is logged in)
+      if (session?.user?.id) {
+        if (aIsFavorite && !bIsFavorite) return -1;
+        if (!aIsFavorite && bIsFavorite) return 1;
+      }
+
+      // Third: Alphabetical order
+      return a.name.localeCompare(b.name);
+    });
+
+    setSortedFlavors(sorted);
   };
 
   const fetchFlavorStock = async (flavorId: number): Promise<Flavor['stock']> => {
@@ -518,8 +581,8 @@ export default function PackProductPage() {
             </div>
 
             <div className="space-y-3 sm:space-y-4">
-              {availableFlavors.length > 0 ? (
-                availableFlavors.map((flavor) => {
+              {sortedFlavors.length > 0 ? (
+                sortedFlavors.map((flavor) => {
                   const selectedCount = getSelectedFlavorCount(flavor.id);
                   const flavorSize = product.flavor_size || 'Medium';
                   const flavorPrice = getFlavorPrice(flavor, flavorSize) || 0;
@@ -573,6 +636,15 @@ export default function PackProductPage() {
                                 className="text-xs bg-green-100 text-green-800 border-green-200"
                               >
                                 ✨ Preselected
+                              </Badge>
+                            )}
+                            {session?.user?.id && userFavorites.has(flavor.id) && (
+                              <Badge 
+                                variant="secondary"
+                                className="text-xs bg-red-100 text-red-800 border-red-200"
+                              >
+                                <Heart className="h-3 w-3 mr-1 fill-current" />
+                                Favorite
                               </Badge>
                             )}
                             {orderMode === 'stock_based' && currentStock > 0 && currentStock < 3 && (
@@ -741,6 +813,19 @@ export default function PackProductPage() {
           </div>
         </div>
       </div>
+
+      {/* Floating Add to My Bag Button - Mobile Only */}
+      {showFloatingButton && (
+        <div className="fixed bottom-4 left-4 right-4 z-50 md:hidden">
+          <Button
+            onClick={handleAddToBag}
+            className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-4 font-bold text-lg shadow-lg transform hover:scale-105 transition-all"
+          >
+            <ShoppingBag className="mr-2 h-5 w-5" />
+            Add to My Bag
+          </Button>
+        </div>
+      )}
 
       {/* Confirmation Dialog */}
       <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>

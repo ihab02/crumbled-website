@@ -371,7 +371,7 @@ export default function EnhancedPromoCodesPage() {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All types</SelectItem>
+                  <SelectItem value="all">All types</SelectItem>
                   <SelectItem value="basic">Basic</SelectItem>
                   <SelectItem value="free_delivery">Free Delivery</SelectItem>
                   <SelectItem value="buy_x_get_y">Buy X Get Y</SelectItem>
@@ -389,7 +389,7 @@ export default function EnhancedPromoCodesPage() {
                   <SelectValue placeholder="All status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All status</SelectItem>
+                  <SelectItem value="all">All status</SelectItem>
                   <SelectItem value="true">Active</SelectItem>
                   <SelectItem value="false">Inactive</SelectItem>
                 </SelectContent>

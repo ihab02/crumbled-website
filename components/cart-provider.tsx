@@ -65,7 +65,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       (now.getTime() - lastFetchRef.current.getTime()) < CART_CACHE_DURATION
 
     if (!forceRefresh && cacheValid) {
-      console.log('🔄 Using cached cart data')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Using cached cart data')
+      }
       return
     }
 
@@ -80,7 +82,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       
       if (data.items) {
         setCart(data.items)
-        setCartCount(calculateCartCount(data.items))
+        const count = data.items.reduce((total: number, item: CartItem) => total + item.quantity, 0)
+        setCartCount(count)
         setLastUpdated(now)
         lastFetchRef.current = now
         if (process.env.NODE_ENV === 'development') {
@@ -92,7 +95,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }, [calculateCartCount])
+  }, [])
 
   // Debounced cart update
   const debouncedCartUpdate = useCallback((updateFn: () => Promise<void>) => {
@@ -251,10 +254,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, 0)
   }, [cart])
 
-  // Initial cart fetch
+  // Initial cart fetch - only run once
   useEffect(() => {
     fetchCart()
-  }, [fetchCart])
+  }, []) // Empty dependency array to run only once
 
   // Cleanup timeouts on unmount
   useEffect(() => {

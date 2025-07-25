@@ -284,9 +284,31 @@ export async function PUT(request: Request) {
 // DELETE - Soft delete a product
 export async function DELETE(request: NextRequest) {
   try {
+    // Check if this is an admin request using both NextAuth and custom admin token
     const session = await getServerSession(authOptions);
+    const adminToken = request.cookies.get('adminToken')?.value;
     
-    if (!session?.user?.id) {
+    let isAdmin = false;
+    let adminUser = null;
+    
+    // Check NextAuth session first
+    if (session?.user?.id && session?.user?.email?.includes('admin')) {
+      isAdmin = true;
+      adminUser = session.user;
+    }
+    
+    // Check custom admin token if NextAuth didn't work
+    if (!isAdmin && adminToken) {
+      try {
+        const decoded = await verifyJWT(adminToken, 'admin') as any;
+        isAdmin = decoded.type === 'admin';
+        adminUser = { id: decoded.id, email: decoded.email || 'admin@example.com' };
+      } catch (error) {
+        console.log('Admin token verification failed:', error);
+      }
+    }
+    
+    if (!isAdmin) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -307,7 +329,7 @@ export async function DELETE(request: NextRequest) {
     const success = await ViewService.softDelete(
       'products',
       parseInt(productId),
-      parseInt(session.user.id),
+      parseInt(adminUser.id),
       reason
     );
 

@@ -8,8 +8,8 @@ set -e  # Exit on any error
 
 echo "🚀 Starting server deployment..."
 
-# Navigate to project directory (adjust path as needed)
-cd /path/to/your/crumbled-website
+# Navigate to project directory
+cd /var/www/crumbled-website
 
 # Stash any local changes (if any)
 echo "📦 Stashing any local changes..."

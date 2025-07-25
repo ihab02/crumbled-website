@@ -290,7 +290,7 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+      <div className="w-full max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-4 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-0 mb-4 sm:mb-6">
           <div className="flex items-center gap-2 sm:gap-4">
             <Button variant="ghost" className="text-pink-600 hover:text-pink-800 text-sm sm:text-base" asChild>

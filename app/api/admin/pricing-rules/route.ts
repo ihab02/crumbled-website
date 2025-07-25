@@ -35,12 +35,12 @@ export async function GET(request: NextRequest) {
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    if (ruleType) {
+    if (ruleType && ruleType !== 'all') {
       whereClause += ' AND rule_type = ?';
       params.push(ruleType);
     }
 
-    if (isActive !== null && isActive !== undefined) {
+    if (isActive && isActive !== 'all') {
       whereClause += ' AND is_active = ?';
       params.push(isActive === 'true' ? 1 : 0);
     }
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const query = `
       SELECT 
         pr.*,
-        au.name as created_by_name
+        au.username as created_by_name
       FROM pricing_rules pr
       LEFT JOIN admin_users au ON pr.created_by = au.id
       ${whereClause}

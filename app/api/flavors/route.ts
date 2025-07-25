@@ -2,18 +2,9 @@ import { NextResponse } from "next/server"
 import { databaseService } from '@/lib/services/databaseService'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
-import mysql from 'mysql2/promise'
-
-// Create a connection pool
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'Goodmorning@1',
-  database: 'crumbled_nextDB',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-})
+import pool from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 
 // Fallback sample data
 const SAMPLE_FLAVORS = [
@@ -147,6 +138,10 @@ function generateSlug(name: string): string {
 
 export async function GET() {
   try {
+    // Get user session to check for favorites
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
     // Get flavors with their images and review statistics
     const [flavors] = await pool.query(`
       SELECT 
@@ -156,12 +151,14 @@ export async function GET() {
         fi.is_cover,
         fi.display_order,
         COALESCE(f.total_reviews, 0) as total_reviews,
-        COALESCE(f.average_rating, 0.00) as average_rating
+        COALESCE(f.average_rating, 0.00) as average_rating,
+        CASE WHEN uf.flavor_id IS NOT NULL THEN 1 ELSE 0 END as is_favorite
       FROM flavors f
       LEFT JOIN flavor_images fi ON f.id = fi.flavor_id
+      LEFT JOIN user_favorites uf ON f.id = uf.flavor_id AND uf.user_id = ?
       WHERE f.is_active = 1 AND f.is_enabled = 1 AND f.deleted_at IS NULL
-      ORDER BY f.created_at DESC, fi.display_order
-    `);
+      ORDER BY is_favorite DESC, f.created_at DESC, fi.display_order
+    `, [userId || 0]);
 
     // Group flavors and their images
     const flavorMap = new Map();
@@ -190,6 +187,7 @@ export async function GET() {
           updated_at: row.updated_at,
           total_reviews: parseInt(row.total_reviews) || 0,
           average_rating: parseFloat(row.average_rating) || 0,
+          is_favorite: Boolean(row.is_favorite),
           images: []
         });
       }

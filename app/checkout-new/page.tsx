@@ -650,9 +650,9 @@ export default function NewCheckoutPage() {
       { label: 'Confirmation', icon: <CheckCircle className="h-4 w-4" /> },
     ]
     return (
-      <div className="flex items-center justify-center gap-4 mb-8">
+      <div className="flex items-center justify-center gap-4 mb-8 overflow-x-auto w-full">
         {steps.map((s, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={i} className="flex items-center gap-2 min-w-max">
             <div className={`rounded-full border-2 px-3 py-1 flex items-center gap-1 font-semibold text-sm transition-all ${step === i+1 ? 'bg-pink-100 border-pink-500 text-pink-700' : 'bg-white border-gray-300 text-gray-400'}`}>{s.icon}{s.label}</div>
             {i < steps.length-1 && <div className="w-8 h-1 bg-gradient-to-r from-pink-300 to-rose-300 rounded-full" />}
           </div>
@@ -718,7 +718,8 @@ export default function NewCheckoutPage() {
 
   // Main return: wrap all JSX in a single parent <div>
   return (
-    <div>
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100">
+      <div className="container py-8 px-2 sm:px-0">
         {/* Out of Stock Alert */}
         {outOfStockItems && outOfStockItems.length > 0 && (
           <div className="mb-6">
@@ -1222,31 +1223,15 @@ export default function NewCheckoutPage() {
                             }}
                           />
                         </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                              <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                              {item.isPack && (
-                                <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                              )}
-                            </div>
-                            <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
+                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                            {item.isPack && (
+                              <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
+                            )}
                           </div>
-                          
-                          {item.flavors && item.flavors.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {item.flavors.map((flavor) => (
-                                  <Badge key={flavor.id} variant="outline" className="text-xs">
-                                    {flavor.name} ({flavor.quantity})
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          <span className="font-semibold text-gray-900 mt-2 block sm:mt-0 sm:inline-block sm:text-right">{item.total.toFixed(2)} EGP</span>
                         </div>
                       </div>
                     ))}
@@ -1310,99 +1295,10 @@ export default function NewCheckoutPage() {
         )}
         {/* Step 2: Payment */}
         {step === 2 && (
-          <div className="grid gap-8 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-pink-800">
-                    <CreditCard className="h-5 w-5" />
-                    Payment
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-4">
-                    <Label className="text-base font-medium">Payment Method</Label>
-                    {Object.keys(enabledPaymentMethods).length === 0 ? (
-                      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
-                        <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {Object.entries(enabledPaymentMethods).map(([methodKey, method]) => (
-                          <div key={methodKey} className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              id={`payment-${methodKey}`}
-                              name="paymentMethod"
-                              value={methodKey}
-                              checked={paymentMethod === methodKey}
-                              onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
-                              className="text-pink-600 focus:ring-pink-500"
-                            />
-                            <Label htmlFor={`payment-${methodKey}`} className="flex-1 cursor-pointer">
-                              <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                    methodKey === 'cod' ? 'bg-green-100' : 'bg-blue-100'
-                                  }`}>
-                                    {methodKey === 'cod' ? (
-                                      <span className="text-green-600 font-bold text-sm">$</span>
-                                    ) : (
-                                      <CreditCard className="h-4 w-4 text-blue-600" />
-                                    )}
-                                  </div>
-                                  <div>
-                                    <p className="font-medium">{method.name}</p>
-                                    <p className="text-sm text-gray-600">{method.description}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-between mt-8">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      Back
-                    </Button>
-                    <div className="flex gap-3">
-                      <Button
-                      onClick={() => {
-                        // Save needed data to localStorage
-                        localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
-                        localStorage.setItem('guestData', JSON.stringify(guestData));
-                        localStorage.setItem('selectedAddressId', JSON.stringify(selectedAddressId));
-                        localStorage.setItem('useNewAddress', JSON.stringify(useNewAddress));
-                        localStorage.setItem('newAddress', JSON.stringify(newAddress));
-                        localStorage.setItem('saveNewAddress', JSON.stringify(saveNewAddress));
-                        localStorage.setItem('selectedDeliveryDate', selectedDeliveryDate);
-                        localStorage.setItem('currentZoneId', JSON.stringify(currentZoneId));
-                        localStorage.setItem('deliveryRules', JSON.stringify(deliveryRules));
-                        localStorage.setItem('paymentMethod', paymentMethod);
-                        localStorage.setItem('deliveryFee', JSON.stringify(deliveryFee));
-                        localStorage.setItem('subtotal', JSON.stringify(subtotal));
-                        localStorage.setItem('total', JSON.stringify(total));
-                        localStorage.setItem('appliedPromoCode', JSON.stringify(appliedPromoCode));
-                        localStorage.setItem('promoDiscount', JSON.stringify(promoDiscount));
-                        localStorage.setItem('acknowledgeDeliveryRules', JSON.stringify(acknowledgeDeliveryRules));
-                        localStorage.setItem('deliveryDateInitialized', JSON.stringify(deliveryDateInitialized));
-                        // Navigate to confirmation page
-                        router.push('/checkout-new/confirm');
-                      }}
-                        disabled={!paymentMethod}
-                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Continue to Confirmation
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            <div className="space-y-6">
-              <Card className="border-2 border-pink-200 rounded-3xl">
+          <div className="grid gap-8 lg:grid-cols-3 max-w-full overflow-x-hidden">
+            {/* Order Summary - First on mobile, right side on lg+ */}
+            <div className="space-y-6 min-w-0 max-w-full lg:order-2">
+              <Card className="border-2 border-pink-200 rounded-3xl max-w-full">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-pink-800">
                     <Package className="h-5 w-5" />
@@ -1424,31 +1320,15 @@ export default function NewCheckoutPage() {
                             }}
                           />
                         </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                              <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                              {item.isPack && (
-                                <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                              )}
-                            </div>
-                            <span className="font-semibold text-gray-900">{item.total.toFixed(2)} EGP</span>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
+                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                            {item.isPack && (
+                              <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
+                            )}
                           </div>
-                          
-                          {item.flavors && item.flavors.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 font-medium mb-1">Selected Flavors:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {item.flavors.map((flavor) => (
-                                  <Badge key={flavor.id} variant="outline" className="text-xs">
-                                    {flavor.name} ({flavor.quantity})
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          <span className="font-semibold text-gray-900 mt-2 block sm:mt-0 sm:inline-block sm:text-right">{item.total.toFixed(2)} EGP</span>
                         </div>
                       </div>
                     ))}
@@ -1508,6 +1388,98 @@ export default function NewCheckoutPage() {
                 </CardContent>
               </Card>
             </div>
+            
+            {/* Payment Card - Second on mobile, left side on lg+ */}
+            <div className="lg:col-span-2 space-y-6 min-w-0 lg:order-1">
+              <Card className="border-2 border-pink-200 rounded-3xl max-w-full">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-pink-800">
+                    <CreditCard className="h-5 w-5" />
+                    Payment
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <Label className="text-base font-medium">Choose your Payment Method</Label>
+                    {Object.keys(enabledPaymentMethods).length === 0 ? (
+                      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+                        <p className="text-red-800 text-sm">No payment methods are currently available. Please contact support.</p>
+                      </div>
+                    ) : (
+                      <div className="flex gap-3 overflow-x-auto w-full px-0 max-w-full">
+                        {Object.entries(enabledPaymentMethods).map(([methodKey, method]) => (
+                          <div key={methodKey} className="flex items-center space-x-2 min-w-max p-0 m-0">
+                            <input
+                              type="radio"
+                              id={`payment-${methodKey}`}
+                              name="paymentMethod"
+                              value={methodKey}
+                              checked={paymentMethod === methodKey}
+                              onChange={(e) => setPaymentMethod(e.target.value as 'cod' | 'paymob')}
+                              className="text-pink-600 focus:ring-pink-500"
+                            />
+                            <Label htmlFor={`payment-${methodKey}`} className="flex-1 cursor-pointer">
+                              <div className="p-4 border rounded-lg hover:bg-pink-50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                    methodKey === 'cod' ? 'bg-green-100' : 'bg-blue-100'
+                                  }`}>
+                                    {methodKey === 'cod' ? (
+                                      <span className="text-green-600 font-bold text-sm">$</span>
+                                    ) : (
+                                      <CreditCard className="h-4 w-4 text-blue-600" />
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium">{method.name}</p>
+                                    <p className="text-sm text-gray-600">{method.description}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between mt-8 flex-col gap-3 sm:flex-row">
+                    <Button variant="outline" onClick={() => setStep(1)} className="w-full sm:w-auto">
+                      Back
+                    </Button>
+                    <div className="flex gap-3 w-full sm:w-auto">
+                      <Button
+                        onClick={() => {
+                          // Save needed data to localStorage
+                          localStorage.setItem('checkoutData', JSON.stringify(checkoutData));
+                          localStorage.setItem('guestData', JSON.stringify(guestData));
+                          localStorage.setItem('selectedAddressId', JSON.stringify(selectedAddressId));
+                          localStorage.setItem('useNewAddress', JSON.stringify(useNewAddress));
+                          localStorage.setItem('newAddress', JSON.stringify(newAddress));
+                          localStorage.setItem('saveNewAddress', JSON.stringify(saveNewAddress));
+                          localStorage.setItem('selectedDeliveryDate', selectedDeliveryDate);
+                          localStorage.setItem('currentZoneId', JSON.stringify(currentZoneId));
+                          localStorage.setItem('deliveryRules', JSON.stringify(deliveryRules));
+                          localStorage.setItem('paymentMethod', paymentMethod);
+                          localStorage.setItem('deliveryFee', JSON.stringify(deliveryFee));
+                          localStorage.setItem('subtotal', JSON.stringify(subtotal));
+                          localStorage.setItem('total', JSON.stringify(total));
+                          localStorage.setItem('appliedPromoCode', JSON.stringify(appliedPromoCode));
+                          localStorage.setItem('promoDiscount', JSON.stringify(promoDiscount));
+                          localStorage.setItem('acknowledgeDeliveryRules', JSON.stringify(acknowledgeDeliveryRules));
+                          localStorage.setItem('deliveryDateInitialized', JSON.stringify(deliveryDateInitialized));
+                          // Navigate to confirmation page
+                          router.push('/checkout-new/confirm');
+                        }}
+                        disabled={!paymentMethod}
+                        className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto max-w-full"
+                      >
+                        Continue to Confirmation
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
         
@@ -1562,6 +1534,7 @@ export default function NewCheckoutPage() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
     </div>
   )
 } 

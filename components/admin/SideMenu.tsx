@@ -32,7 +32,12 @@ import {
   MapPin,
   Users2,
   ClipboardList,
-  TrendingUp
+  TrendingUp,
+  CreditCard,
+  Phone,
+  Star,
+  Building2,
+  Route
 } from 'lucide-react';
 
 const menuItems = [
@@ -42,29 +47,7 @@ const menuItems = [
     icon: LayoutDashboard
   },
   {
-    title: 'Kitchen Management',
-    href: '/admin/kitchen-management',
-    icon: ChefHat,
-    submenu: [
-      {
-        title: 'Kitchen Management',
-        href: '/admin/kitchen-management',
-        icon: ChefHat
-      },
-      {
-        title: 'Kitchen Production',
-        href: '/admin/kitchen-production',
-        icon: Clock
-      },
-      {
-        title: 'Kitchen Roles',
-        href: '/admin/role-management',
-        icon: Shield
-      }
-    ]
-  },
-  {
-    title: 'Order Processing',
+    title: 'Order Management',
     href: '/admin/orders',
     icon: ShoppingCart,
     submenu: [
@@ -79,65 +62,33 @@ const menuItems = [
         icon: ClipboardList
       },
       {
-        title: 'Order Routing',
-        href: '/admin/order-routing',
-        icon: MapPin
+        title: 'Order Mode',
+        href: '/admin/order-mode',
+        icon: Database
       }
     ]
   },
   {
-    title: 'Production Management',
-    href: '/admin/kitchen-production',
-    icon: Clock,
+    title: 'Kitchen Operations',
+    href: '/admin/kitchen-management',
+    icon: ChefHat,
     submenu: [
-      {
-        title: 'Production Dashboard',
-        href: '/admin/kitchen-production',
-        icon: Clock
-      },
       {
         title: 'Kitchen Management',
         href: '/admin/kitchen-management',
         icon: ChefHat
-      }
-    ]
-  },
-  {
-    title: 'Delivery Management',
-    href: '/admin/delivery-management',
-    icon: Truck
-  },
-  {
-    title: 'Locations',
-    href: '/admin/locations',
-    icon: MapPin
-  },
-  {
-    title: 'Pricing Management',
-    href: '/admin/pricing-rules',
-    icon: Tag,
-    submenu: [
-      {
-        title: 'Enhanced Promo Codes',
-        href: '/admin/enhanced-promo-codes',
-        icon: Tag
       },
       {
-        title: 'Pricing Rules',
-        href: '/admin/pricing-rules',
-        icon: Target
+        title: 'Kitchen Production',
+        href: '/admin/kitchen-production',
+        icon: Clock
       },
       {
-        title: 'Product Prices',
-        href: '/admin/product-prices',
-        icon: Package
+        title: 'Role Management',
+        href: '/admin/role-management',
+        icon: Shield
       }
     ]
-  },
-  {
-    title: 'Stock Management',
-    href: '/admin/stock',
-    icon: Warehouse
   },
   {
     title: 'Product Management',
@@ -189,44 +140,100 @@ const menuItems = [
       {
         title: 'Reviews',
         href: '/admin/reviews',
-        icon: MessageSquare
+        icon: Star
       }
     ]
   },
   {
+    title: 'Delivery & Locations',
+    href: '/admin/delivery-management',
+    icon: Truck,
+    submenu: [
+      {
+        title: 'Delivery Management',
+        href: '/admin/delivery-management',
+        icon: Truck
+      },
+      {
+        title: 'Locations',
+        href: '/admin/locations',
+        icon: MapPin
+      },
+      {
+        title: 'Delivery Men',
+        href: '/admin/delivery-men',
+        icon: Users2
+      },
+      {
+        title: 'Time Slots',
+        href: '/admin/delivery-time-slots',
+        icon: Clock
+      }
+    ]
+  },
+  {
+    title: 'Pricing & Promotions',
+    href: '/admin/pricing-rules',
+    icon: Tag,
+    submenu: [
+      {
+        title: 'Pricing Rules',
+        href: '/admin/pricing-rules',
+        icon: Target
+      },
+      {
+        title: 'Enhanced Promo Codes',
+        href: '/admin/enhanced-promo-codes',
+        icon: Tag
+      },
+      {
+        title: 'Promo Codes',
+        href: '/admin/promo-codes',
+        icon: CreditCard
+      }
+    ]
+  },
+  {
+    title: 'Inventory & Stock',
+    href: '/admin/stock',
+    icon: Warehouse
+  },
+  {
     title: 'Analytics & Reports',
     href: '/admin/analytics',
-    icon: BarChart
+    icon: BarChart,
+    submenu: [
+      {
+        title: 'Analytics',
+        href: '/admin/analytics',
+        icon: BarChart
+      },
+      {
+        title: 'SMS Monitoring',
+        href: '/admin/sms-monitoring',
+        icon: Phone
+      }
+    ]
   },
   {
-    title: 'SMS Monitoring',
-    href: '/admin/sms-monitoring',
-    icon: MessageSquare
-  },
-  {
-    title: 'Settings',
+    title: 'System Settings',
     href: '/admin/settings',
     icon: Settings,
     submenu: [
       {
-        title: 'General',
+        title: 'General Settings',
         href: '/admin/settings',
         icon: Settings
       },
       {
-        title: 'Email',
+        title: 'Email Settings',
         href: '/admin/settings/email',
         icon: Mail
       },
       {
-        title: 'Order Mode',
-        href: '/admin/order-mode',
-        icon: Database
-      },
-      {
-        title: 'Kitchen Settings',
-        href: '/admin/kitchen-settings',
-        icon: ChefHat
+        title: 'Payment Methods',
+        href: '/admin/settings/payment-methods',
+        icon: CreditCard
       }
     ]
   }
@@ -240,14 +247,16 @@ export function SideMenu() {
   debugLog('SideMenu render:', { user, loading, pathname });
 
   const isActive = (href: string) => pathname === href;
-  const isSettingsActive = pathname.startsWith('/admin/settings');
-  const isKitchenActive = pathname.startsWith('/admin/kitchen-management') || pathname.startsWith('/admin/kitchen-production') || pathname.startsWith('/admin/role-management');
-  const isOrderActive = pathname.startsWith('/admin/orders') || pathname.startsWith('/admin/order-');
-  const isProductionActive = pathname.startsWith('/admin/kitchen-production') || pathname.startsWith('/admin/kitchen-management');
-  const isProductActive = pathname.startsWith('/admin/products') || pathname.startsWith('/admin/flavors') || pathname.startsWith('/admin/product-') || pathname.startsWith('/admin/sliding-');
-  const isCustomerActive = pathname.startsWith('/admin/customers') || pathname.startsWith('/admin/customer-') || pathname.startsWith('/admin/messages');
-  const isAnalyticsActive = pathname.startsWith('/admin/analytics');
-  const isPricingActive = pathname.startsWith('/admin/enhanced-promo-codes') || pathname.startsWith('/admin/pricing-rules') || pathname.startsWith('/admin/product-prices');
+  
+  // Check if any submenu should be expanded based on current path
+  const shouldExpandSubmenu = (item: any) => {
+    if (!item.submenu) return false;
+    
+    return item.submenu.some((subItem: any) => {
+      const subPath = subItem.href;
+      return pathname === subPath || pathname.startsWith(subPath + '/');
+    });
+  };
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-white">
@@ -272,17 +281,7 @@ export function SideMenu() {
       <nav className="flex-1 space-y-1 p-2 overflow-y-auto">
         {menuItems.map((item) => {
           const isItemActive = isActive(item.href);
-          const showSubmenu = item.submenu && (
-            isItemActive || 
-            isSettingsActive || 
-            isKitchenActive || 
-            isOrderActive || 
-            isProductionActive || 
-            isProductActive || 
-            isCustomerActive || 
-            isAnalyticsActive ||
-            isPricingActive
-          );
+          const showSubmenu = item.submenu && shouldExpandSubmenu(item);
 
           return (
             <div key={item.href}>

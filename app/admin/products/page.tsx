@@ -355,18 +355,21 @@ export default function AdminProductsPage() {
   };
 
   const handleEdit = (product: Product) => {
+    console.log('🔍 Editing product:', product); // Debug log
     setEditingProduct(product);
-    setFormData({
+    const formDataToSet = {
       id: product.id,
       name: product.name,
       description: product.description || '',
       product_type_id: product.product_type_id.toString(),
-      is_pack: product.is_pack,
+      is_pack: Boolean(product.is_pack), // Ensure it's a boolean
       count: product.count?.toString() || '',
       flavor_size: product.flavor_size,
-      base_price: product.base_price.toString(),
+      base_price: product.base_price > 0 ? product.base_price.toString() : '',
       image_url: product.image_url || '',
-    });
+    };
+    console.log('🔍 Setting form data:', formDataToSet); // Debug log
+    setFormData(formDataToSet);
     setImagePreview(product.image_url || null);
     setShowForm(true);
   };
@@ -694,6 +697,10 @@ export default function AdminProductsPage() {
                         alt="Preview"
                         fill
                         className="object-cover rounded-md"
+                        onError={(e) => {
+                          console.error('Image preview error:', e);
+                          setImagePreview(null);
+                        }}
                       />
                     </div>
                   )}

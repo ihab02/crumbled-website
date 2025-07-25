@@ -28,7 +28,7 @@ export async function GET(
     const [promoCode] = await db.execute(
       `SELECT 
         pc.*,
-        au.name as created_by_name
+        au.username as created_by_name
       FROM promo_codes pc
       LEFT JOIN admin_users au ON pc.created_by = au.id
       WHERE pc.id = ?`,

@@ -340,6 +340,16 @@ export class EmailService {
       flavorsLength: item.flavors?.length || 0
     })));
 
+    // Debug delivery information
+    console.log('🔍 [DEBUG] Email Service - Delivery information:', {
+      delivery_time: order.delivery_time,
+      delivery_slot: order.delivery_slot,
+      expected_delivery_date: order.expected_delivery_date,
+      delivery_address: order.delivery_address,
+      delivery_city: order.delivery_city,
+      delivery_zone: order.delivery_zone
+    });
+
     const mailOptions = {
       from: `"${settings.from_name}" <${settings.from_email}>`,
       to: email,
@@ -479,8 +489,9 @@ export class EmailService {
                             <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Location:</strong> ${order.delivery_city || ''}, ${order.delivery_zone || ''}</p>
                             <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Phone:</strong> ${order.customerInfo?.phone || order.customer_phone || ''}</p>
                             <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Email:</strong> ${order.customerInfo?.email || order.customer_email || ''}</p>
-                            ${order.delivery_time ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Delivery Time:</strong> ${order.delivery_time}</p>` : ''}
-                            ${order.delivery_slot ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Time Slot:</strong> ${order.delivery_slot}</p>` : ''}
+                            ${order.delivery_time ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Delivery Date:</strong> ${order.delivery_time}</p>` : ''}
+                            ${order.delivery_slot ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Delivery Time Slot:</strong> ${order.delivery_slot}</p>` : ''}
+                            ${order.expected_delivery_date ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Expected Delivery:</strong> ${order.expected_delivery_date}</p>` : ''}
                           </td>
                         </tr>
                       </table>

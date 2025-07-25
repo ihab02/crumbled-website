@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJWT } from '@/lib/middleware/auth';
-import db from '@/lib/db';
+import { databaseService } from '@/lib/services/databaseService';
 
 const DEBUG = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
 
@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit;
 
+
+
     // Build WHERE clause
     let whereClause = 'WHERE 1=1';
     const params: any[] = [];
@@ -37,39 +39,52 @@ export async function GET(request: NextRequest) {
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    if (enhancedType) {
+    if (enhancedType && enhancedType !== 'all') {
       whereClause += ' AND enhanced_type = ?';
       params.push(enhancedType);
     }
 
-    if (isActive !== null && isActive !== undefined) {
+    if (isActive && isActive !== 'all') {
       whereClause += ' AND is_active = ?';
       params.push(isActive === 'true' ? 1 : 0);
     }
 
+
+
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM promo_codes ${whereClause}`;
-    const [countResult] = await db.execute(countQuery, params);
-    const total = (countResult as any)[0].total;
+    const countResult = await databaseService.query(countQuery, params);
+    const total = countResult[0].total;
 
     // Get promo codes with pagination
     const query = `
       SELECT 
         pc.*,
-        au.name as created_by_name
+        au.username as created_by_name
       FROM promo_codes pc
       LEFT JOIN admin_users au ON pc.created_by = au.id
       ${whereClause}
       ORDER BY pc.created_at DESC
       LIMIT ? OFFSET ?
     `;
+    
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - Final query:', query);
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - WHERE clause:', whereClause);
 
-    const [promoCodes] = await db.execute(query, [...params, limit, offset]);
 
-    // Map max_usage_per_user to usage_per_customer for frontend compatibility
-    const mappedPromoCodes = (promoCodes as any[]).map((pc) => ({
+
+    // Debug logging to see what's happening
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - Final params array:', [...params, Number(limit), Number(offset)]);
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - Params length:', params.length);
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - Limit:', Number(limit), 'Offset:', Number(offset));
+    
+    const promoCodes = await databaseService.query(query, [...params, Number(limit), Number(offset)]);
+
+    // Map fields for frontend compatibility
+    const mappedPromoCodes = promoCodes.map((pc) => ({
       ...pc,
-      usage_per_customer: pc.max_usage_per_user
+      usage_per_customer: pc.max_usage_per_user || pc.usage_per_customer || 1,
+      // All other enhanced fields should already exist in the database
     }));
 
     return NextResponse.json({
@@ -144,12 +159,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if promo code already exists
-    const [existingCode] = await db.execute(
+    const existingCode = await databaseService.query(
       'SELECT id FROM promo_codes WHERE code = ?',
       [code]
     );
 
-    if ((existingCode as any[]).length > 0) {
+    if (existingCode.length > 0) {
       return NextResponse.json(
         { error: 'Promo code already exists' },
         { status: 400 }
@@ -168,7 +183,7 @@ export async function POST(request: NextRequest) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    const [result] = await db.execute(insertQuery, [
+    const result = await databaseService.query(insertQuery, [
       code, name, description, discount_type, enhanced_type, discount_value,
       minimum_order_amount || 0, maximum_discount, usage_limit, valid_until, is_active !== false,
       JSON.stringify(category_restrictions), JSON.stringify(product_restrictions),
@@ -181,17 +196,17 @@ export async function POST(request: NextRequest) {
 
     if (DEBUG) console.debug('[DEBUG] Enhanced PromoCode created, insertId:', (result as any).insertId);
 
-    const promoCodeId = (result as any).insertId;
+    const promoCodeId = result.insertId;
 
     // Fetch the created promo code
-    const [newPromoCode] = await db.execute(
+    const newPromoCode = await databaseService.query(
       'SELECT * FROM promo_codes WHERE id = ?',
       [promoCodeId]
     );
 
     return NextResponse.json({
       message: 'Enhanced promo code created successfully',
-      data: (newPromoCode as any[])[0]
+      data: newPromoCode[0]
     }, { status: 201 });
 
   } catch (error) {

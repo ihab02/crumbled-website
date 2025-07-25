@@ -18,6 +18,7 @@ export default function ContactPage() {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showThankYou, setShowThankYou] = useState(false);
   const { toast } = useToast();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -44,10 +45,7 @@ export default function ContactPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast({
-          title: "Success!",
-          description: "Your message has been sent successfully. We'll get back to you soon!",
-        });
+        setShowThankYou(true);
         // Reset form
         setFormData({
           first_name: '',
@@ -83,89 +81,97 @@ export default function ContactPage() {
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-3xl shadow-xl p-8 border-2 border-pink-200">
             <h2 className="text-3xl font-bold text-pink-800 mb-8 text-center">Send Us a Message</h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {showThankYou ? (
+              <div className="text-center py-16">
+                <h3 className="text-2xl font-bold text-pink-700 mb-4">Thank you for contacting us!</h3>
+                <p className="text-pink-600 mb-6">We appreciate your message and will get back to you soon.</p>
+                <a href="/flavors" className="inline-block bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-semibold rounded-full px-8 py-4 text-lg shadow-lg transition-all">Continue Enjoying Crumbled</a>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="first_name" className="text-pink-700 font-semibold">
+                      First Name *
+                    </Label>
+                    <Input
+                      id="first_name"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleInputChange}
+                      placeholder="Enter your first name"
+                      className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 h-12"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name" className="text-pink-700 font-semibold">
+                      Last Name *
+                    </Label>
+                    <Input
+                      id="last_name"
+                      name="last_name"
+                      value={formData.last_name}
+                      onChange={handleInputChange}
+                      placeholder="Enter your last name"
+                      className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 h-12"
+                      required
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="first_name" className="text-pink-700 font-semibold">
-                    First Name *
+                  <Label htmlFor="email" className="text-pink-700 font-semibold">
+                    Email *
                   </Label>
                   <Input
-                    id="first_name"
-                    name="first_name"
-                    value={formData.first_name}
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
                     onChange={handleInputChange}
-                    placeholder="Enter your first name"
+                    placeholder="Enter your email"
                     className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 h-12"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="last_name" className="text-pink-700 font-semibold">
-                    Last Name *
+                  <Label htmlFor="subject" className="text-pink-700 font-semibold">
+                    Subject *
                   </Label>
                   <Input
-                    id="last_name"
-                    name="last_name"
-                    value={formData.last_name}
+                    id="subject"
+                    name="subject"
+                    value={formData.subject}
                     onChange={handleInputChange}
-                    placeholder="Enter your last name"
+                    placeholder="Enter subject"
                     className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 h-12"
                     required
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-pink-700 font-semibold">
-                  Email *
-                </Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="Enter your email"
-                  className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 h-12"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="subject" className="text-pink-700 font-semibold">
-                  Subject *
-                </Label>
-                <Input
-                  id="subject"
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleInputChange}
-                  placeholder="Enter subject"
-                  className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 h-12"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="message" className="text-pink-700 font-semibold">
-                  Message *
-                </Label>
-                <Textarea
-                  id="message"
-                  name="message"
-                  value={formData.message}
-                  onChange={handleInputChange}
-                  placeholder="Enter your message"
-                  rows={6}
-                  className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 resize-none"
-                  required
-                />
-              </div>
-              <Button 
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-semibold text-white shadow-lg transform hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Sending...' : 'Send Message'}
-              </Button>
-            </form>
+                <div className="space-y-2">
+                  <Label htmlFor="message" className="text-pink-700 font-semibold">
+                    Message *
+                  </Label>
+                  <Textarea
+                    id="message"
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
+                    placeholder="Enter your message"
+                    rows={6}
+                    className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 resize-none"
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full py-6 text-lg font-semibold text-white shadow-lg transform hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Sending...' : 'Send Message'}
+                </Button>
+              </form>
+            )}
           </div>
         </div>
       </div>

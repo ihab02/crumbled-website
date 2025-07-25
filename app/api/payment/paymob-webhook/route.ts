@@ -131,10 +131,13 @@ export async function POST(request: NextRequest) {
             
             // Fetch delivery rules for the zone (if available)
             let deliveryRules = null;
+            let deliveryTime = '';
+            let deliverySlot = '';
+            let addressData = null;
             try {
               // Get delivery address from order (if available)
               const [addressResult] = await databaseService.query(
-                `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee
+                `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee, ca.zone_id
                  FROM customer_addresses ca
                  JOIN cities c ON ca.city_id = c.id
                  JOIN zones z ON ca.zone_id = z.id
@@ -143,13 +146,17 @@ export async function POST(request: NextRequest) {
               );
               
               if (Array.isArray(addressResult) && addressResult.length > 0) {
-                const address = addressResult[0];
+                addressData = addressResult[0];
                 const currentDate = new Date().toISOString().split('T')[0];
-                const deliveryRulesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/zones/delivery-rules?zoneId=${address.zone_id}&orderDate=${currentDate}`);
+                const deliveryRulesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/zones/delivery-rules?zoneId=${addressData.zone_id}&orderDate=${currentDate}`);
                 if (deliveryRulesResponse.ok) {
                   const deliveryRulesData = await deliveryRulesResponse.json();
                   if (deliveryRulesData.success) {
                     deliveryRules = deliveryRulesData.deliveryRules;
+                    deliveryTime = deliveryRules?.formattedDeliveryDate || '';
+                    deliverySlot = deliveryRules?.timeSlot
+                      ? `${deliveryRules.timeSlot.name} (${deliveryRules.timeSlot.fromHour} - ${deliveryRules.timeSlot.toHour})`
+                      : '';
                   }
                 }
               }
@@ -170,9 +177,11 @@ export async function POST(request: NextRequest) {
                 total: orderDetails.total,
                 status: 'confirmed',
                 payment_method: 'paymob',
-                delivery_address: '', // TODO: Get actual delivery address
-                delivery_city: '',
-                delivery_zone: '',
+                delivery_address: addressData?.street_address || '',
+                delivery_city: addressData?.city_name || '',
+                delivery_zone: addressData?.zone_name || '',
+                delivery_time: deliveryTime,
+                delivery_slot: deliverySlot,
                 items: [] // TODO: Get actual order items
               }
             );

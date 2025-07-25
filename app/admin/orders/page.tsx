@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
@@ -1049,8 +1049,8 @@ export default function AdminOrdersPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {searchFilteredOrders.map((order) => (
-                    <>
-                      <tr key={order.id} className="hover:bg-gray-50">
+                    <React.Fragment key={order.id}>
+                      <tr className="hover:bg-gray-50">
                         <td className="px-4 py-4 whitespace-nowrap">
                           <input
                             type="checkbox"
@@ -1265,7 +1265,7 @@ export default function AdminOrdersPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                   ))}
                 </tbody>
               </table>

@@ -28,7 +28,7 @@ export async function GET(
     const [pricingRule] = await db.execute(
       `SELECT 
         pr.*,
-        au.name as created_by_name
+        au.username as created_by_name
       FROM pricing_rules pr
       LEFT JOIN admin_users au ON pr.created_by = au.id
       WHERE pr.id = ?`,

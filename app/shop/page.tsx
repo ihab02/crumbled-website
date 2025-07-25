@@ -29,6 +29,7 @@ interface Product {
 interface ProductType {
   id: number;
   name: string;
+  display_order: number;
   products: Product[];
 }
 
@@ -46,18 +47,33 @@ function ShopPageContent() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/products');
-      const data = await response.json();
+      // Fetch both products and product types
+      const [productsResponse, productTypesResponse] = await Promise.all([
+        fetch('/api/products'),
+        fetch('/api/product-types')
+      ]);
+
+      const productsData = await productsResponse.json();
+      const productTypesData = await productTypesResponse.json();
       
-      if (data.success) {
-        // Group products by product type - filter for pack products only
-        const productsArr: Product[] = data.data || [];
+      if (productsData.success && productTypesData.success) {
+        // Get products and filter for pack products only
+        const productsArr: Product[] = productsData.data || [];
         const packProducts = productsArr.filter(product => product.is_pack && product.is_active);
+        
+        // Get product types and create a map for easy lookup
+        const productTypesMap = new Map(
+          productTypesData.productTypes.map((pt: { id: number; display_order: number }) => [pt.id, pt])
+        );
+        
+        // Group products by product type
         const groupedProducts: { [key: string]: ProductType } = packProducts.reduce((acc: { [key: string]: ProductType }, product: Product) => {
           if (!acc[product.product_type_id]) {
+            const productType = productTypesMap.get(product.product_type_id);
             acc[product.product_type_id] = {
               id: product.product_type_id,
               name: product.product_type_name,
+              display_order: productType?.display_order || 0,
               products: []
             };
           }
@@ -65,13 +81,16 @@ function ShopPageContent() {
           return acc;
         }, {});
 
-        // Convert to array and sort by display order
+        // Convert to array and sort by product type display_order (database order)
         const sortedProductTypes: ProductType[] = Object.values(groupedProducts)
           .filter((type: ProductType) => type.products.length > 0)
           .sort((a: ProductType, b: ProductType) => {
-            const aOrder = Math.min(...a.products.map((p: Product) => p.display_order));
-            const bOrder = Math.min(...b.products.map((p: Product) => p.display_order));
-            return aOrder - bOrder;
+            // First sort by product type display_order
+            if (a.display_order !== b.display_order) {
+              return a.display_order - b.display_order;
+            }
+            // If display_order is the same, sort by name
+            return a.name.localeCompare(b.name);
           });
 
         setProductTypes(sortedProductTypes);
@@ -98,13 +117,39 @@ function ShopPageContent() {
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse space-y-8">
+        <div className="animate-pulse space-y-12">
+          {/* Header skeleton */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="space-y-2">
+              <div className="h-12 w-64 bg-gradient-to-r from-pink-200 to-rose-200 rounded-lg"></div>
+              <div className="h-6 w-80 bg-pink-200 rounded"></div>
+            </div>
+            <div className="h-12 w-32 bg-pink-200 rounded-full"></div>
+          </div>
+          
+          {/* Product types skeleton */}
           {[1, 2, 3].map((i) => (
-            <div key={i}>
-              <div className="h-8 w-48 bg-gray-200 rounded mb-4"></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div key={i} className="space-y-8">
+              <div className="text-center">
+                <div className="h-10 w-48 bg-pink-200 rounded mx-auto mb-3"></div>
+                <div className="w-24 h-1 bg-pink-200 rounded-full mx-auto"></div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {[1, 2, 3].map((j) => (
-                  <div key={j} className="h-64 bg-gray-200 rounded"></div>
+                  <div key={j} className="bg-gradient-to-br from-pink-50 to-rose-50 border-2 border-pink-200 rounded-3xl overflow-hidden">
+                    <div className="aspect-square bg-pink-100"></div>
+                    <div className="p-6 space-y-4">
+                      <div className="h-6 bg-pink-200 rounded"></div>
+                      <div className="h-4 bg-pink-200 rounded w-3/4"></div>
+                      <div className="flex justify-between items-center">
+                        <div className="h-8 w-24 bg-pink-200 rounded"></div>
+                        <div className="h-6 w-16 bg-pink-200 rounded-full"></div>
+                      </div>
+                    </div>
+                    <div className="p-6 pt-0">
+                      <div className="h-12 bg-pink-200 rounded-full"></div>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -116,26 +161,45 @@ function ShopPageContent() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Mix My Bundle</h1>
-        <Button variant="outline" onClick={() => router.push('/flavors')}>
-          <Cookie className="h-4 w-4 mr-2" />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 gap-4">
+        <div className="space-y-2">
+          <h1 className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 via-rose-600 to-pink-800">
+            Mix My Bundle
+          </h1>
+          <p className="text-lg text-pink-600 font-medium">
+            Create your perfect cookie combination
+          </p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={() => router.push('/flavors')}
+          className="border-2 border-pink-300 text-pink-600 hover:bg-pink-50 hover:border-pink-400 hover:shadow-lg transition-all duration-300 px-6 py-3 rounded-full font-semibold"
+        >
+          <Cookie className="h-5 w-5 mr-2" />
           View Flavors
         </Button>
       </div>
       
       {preselectFlavorId && (
-        <div className="mb-6 p-4 bg-pink-50 rounded-xl border border-pink-200">
-          <p className="text-pink-700 text-center">
-            💡 You've selected a flavor! Choose a pack below to customize with your favorite flavors.
-          </p>
+        <div className="mb-8 p-6 bg-gradient-to-r from-pink-50 to-rose-50 rounded-2xl border-2 border-pink-200 shadow-lg">
+          <div className="flex items-center justify-center gap-3">
+            <div className="text-2xl">✨</div>
+            <p className="text-pink-700 text-center font-medium text-lg">
+              You've selected a flavor! Choose a pack below to customize with your favorite flavors.
+            </p>
+          </div>
         </div>
       )}
 
       {productTypes.map((type) => (
-        <div key={type.id} className="mb-12">
-          <h2 className="text-2xl font-semibold mb-6">{type.name}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div key={type.id} className="mb-16 w-full max-w-6xl">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl sm:text-4xl font-bold text-pink-800 mb-3">
+              {type.name}
+            </h2>
+            <div className="w-24 h-1 bg-gradient-to-r from-pink-400 to-rose-400 mx-auto rounded-full"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
             {type.products.map((product) => (
               <Card
                 key={product.id}
@@ -151,37 +215,40 @@ function ShopPageContent() {
                       className="h-full w-full object-cover transition-transform group-hover:scale-110"
                     />
                   ) : (
-                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
                       {product.is_pack ? (
-                        <Package className="h-12 w-12 text-gray-400" />
+                        <Package className="h-12 w-12 text-pink-400" />
                       ) : (
-                        <Cookie className="h-12 w-12 text-gray-400" />
+                        <Cookie className="h-12 w-12 text-pink-400" />
                       )}
                     </div>
                   )}
                 </div>
                 <CardContent className="p-6 space-y-4">
                   <div>
-                    <h3 className="font-bold text-lg text-pink-800 line-clamp-1 group-hover:text-pink-600 transition-colors">
+                    <h3 className="font-bold text-xl sm:text-2xl text-pink-800 line-clamp-1 group-hover:text-pink-600 transition-colors mb-2">
                       {product.name}
                     </h3>
                     {product.description && (
-                      <p className="text-sm text-pink-600 line-clamp-2 mt-2">{product.description}</p>
+                      <p className="text-sm sm:text-base text-pink-600 line-clamp-2 leading-relaxed">{product.description}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
-                      {product.base_price.toFixed(2)} EGP
-                    </span>
-                    {product.is_pack && (
-                      <span className="text-sm text-gray-500">{product.count} pcs</span>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
+                        {product.base_price.toFixed(2)} EGP
+                      </span>
+                      {product.is_pack && (
+                        <span className="text-sm font-semibold text-pink-700 bg-gradient-to-r from-pink-100 to-rose-100 px-3 py-1.5 rounded-full border border-pink-200 shadow-sm">
+                          {product.count} pcs
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter className="p-6 pt-0">
                   <Button
-                    className="w-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-full py-3 font-bold text-lg shadow-lg transform hover:scale-105 transition-all"
-                    variant={product.is_pack ? "outline" : "default"}
+                    className="w-full rounded-full py-4 font-bold text-lg shadow-xl transform hover:scale-105 transition-all duration-300 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white hover:shadow-2xl"
                   >
                     {product.is_pack ? (
                       <>

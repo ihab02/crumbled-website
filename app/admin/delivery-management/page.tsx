@@ -39,52 +39,6 @@ export default function DeliveryManagementPage() {
               </p>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="-mb-px flex space-x-8 overflow-x-auto">
-                <button
-                  onClick={() => setActiveTab('delivery-men')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'delivery-men'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Delivery Men
-                </button>
-                <button
-                  onClick={() => setActiveTab('time-slots')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'time-slots'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Time Slots
-                </button>
-                <button
-                  onClick={() => setActiveTab('cities')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'cities'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Cities
-                </button>
-                <button
-                  onClick={() => setActiveTab('zones')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'zones'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Zones
-                </button>
-              </nav>
-            </div>
-
             {/* Tab Content */}
             {activeTab === 'delivery-men' && <DeliveryMenTab />}
             {activeTab === 'time-slots' && <TimeSlotsTab />}
