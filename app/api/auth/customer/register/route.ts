@@ -89,6 +89,11 @@ export async function POST(req: NextRequest) {
     if (birthDate && !ageGroup) {
       finalAgeGroup = calculateAgeGroup(birthDate);
     }
+    
+    // Ensure finalAgeGroup is either a valid value or null
+    if (!finalAgeGroup || finalAgeGroup === '') {
+      finalAgeGroup = null;
+    }
 
     connection = await pool.getConnection();
 
