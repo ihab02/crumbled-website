@@ -7,6 +7,8 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, CheckCircle, XCircle, Mail, ArrowLeft } from "lucide-react"
+import { signIn } from "next-auth/react"
+import { toast } from "sonner"
 
 export default function VerifyEmailPage() {
   const router = useRouter()
@@ -18,6 +20,8 @@ export default function VerifyEmailPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [hasVerified, setHasVerified] = useState(false)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   useEffect(() => {
     if (!token) {
@@ -56,10 +60,16 @@ export default function VerifyEmailPage() {
           setVerificationStatus('success')
           setHasVerified(true)
           
-          // Auto-redirect after 3 seconds
+          // Store the user's email for automatic login
+          if (data.email) {
+            setUserEmail(data.email)
+            console.log('📧 User email for auto-login:', data.email)
+          }
+          
+          // Redirect to login page with verification success parameter
           setTimeout(() => {
-            router.push('/auth/login')
-          }, 3000)
+            router.push(`/auth/login?verified=true&email=${encodeURIComponent(data.email || '')}`)
+          }, 2000)
         } else {
           console.log('❌ Email verification failed:', data.error)
           setError(data.error || "Failed to verify email")
@@ -115,20 +125,24 @@ export default function VerifyEmailPage() {
               
               <div className="space-y-4">
                 <p className="text-gray-600">
-                  Your email has been successfully verified! You can now log in to your account and enjoy our delicious cookies.
+                  Your email has been successfully verified! You will be automatically logged in and redirected to our delicious flavors.
                 </p>
                 
-                <Button
-                  onClick={() => {
-                    // Small delay to ensure user sees success message
-                    setTimeout(() => {
-                      router.push('/auth/login')
-                    }, 1000)
-                  }}
-                  className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700"
-                >
-                  Continue to Login
-                </Button>
+                {isLoggingIn ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <Loader2 className="h-5 w-5 animate-spin text-pink-600" />
+                    <span className="text-pink-600">Logging you in...</span>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      router.push(`/auth/login?verified=true&email=${encodeURIComponent(userEmail || '')}`)
+                    }}
+                    className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700"
+                  >
+                    Continue to Login
+                  </Button>
+                )}
               </div>
             </div>
           )}

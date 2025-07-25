@@ -28,6 +28,17 @@ export default function LoginPage() {
     }
   }, [status, session, router, searchParams]);
 
+  // Handle email verification success
+  useEffect(() => {
+    const verified = searchParams.get('verified');
+    const verifiedEmail = searchParams.get('email');
+    
+    if (verified === 'true' && verifiedEmail) {
+      toast.success('Email verified successfully! Please log in to continue.');
+      setEmail(verifiedEmail);
+    }
+  }, [searchParams]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -133,10 +144,16 @@ export default function LoginPage() {
 
       if (result?.ok) {
         console.log('Login successful, redirecting');
-        // Get redirect URL from query param
-        const redirectUrl = searchParams.get('redirect') || '/account';
         
-        toast.success('Welcome back! Redirecting...');
+        // Check if user just verified their email
+        const verified = searchParams.get('verified');
+        const redirectUrl = verified === 'true' ? '/flavors' : (searchParams.get('redirect') || '/account');
+        
+        const successMessage = verified === 'true' 
+          ? 'Welcome! Redirecting to our delicious flavors...' 
+          : 'Welcome back! Redirecting...';
+        
+        toast.success(successMessage);
         
         // Small delay to ensure session is updated
         setTimeout(() => {

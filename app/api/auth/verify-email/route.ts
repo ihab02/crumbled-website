@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     // Find the token
     console.log('🔍 Searching for token in database...');
     const [rows] = await databaseService.query<any[]>(
-      'SELECT * FROM email_verification_tokens WHERE token = ?',
+      'SELECT evt.*, c.email FROM email_verification_tokens evt JOIN customers c ON evt.customer_id = c.id WHERE evt.token = ?',
       [token]
     );
     console.log('📋 Found tokens:', rows.length);
@@ -83,7 +83,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ 
           success: true, 
           message: 'Email already verified successfully.',
-          alreadyVerified: true 
+          alreadyVerified: true,
+          email: record.email 
         });
       } else {
         console.log('❌ Token used but email not verified - this is an error state');
@@ -108,7 +109,11 @@ export async function GET(request: Request) {
     );
     
     console.log('✅ Email verification successful');
-    return NextResponse.json({ success: true, message: 'Email verified successfully.' });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Email verified successfully.',
+      email: record.email 
+    });
   } catch (error) {
     console.error('❌ Email verification error:', error);
     return NextResponse.json({ error: 'Failed to verify email.' }, { status: 500 });
