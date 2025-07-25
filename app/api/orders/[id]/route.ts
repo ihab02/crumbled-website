@@ -135,23 +135,31 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Default values for missing columns
-    const deliveryFee = order.delivery_fee || 30.00;
+    const originalDeliveryFee = order.delivery_fee || 30.00;
     const calculatedSubtotal = order.subtotal || subtotal;
 
-    // Fetch promo code string if promo_code_id is present
+    // Fetch promo code details if promo_code_id is present
     let promoCodeString = null;
+    let promoCodeDetails = null;
     if (order.promo_code_id) {
       const promoResult = await databaseService.query(
-        'SELECT code FROM promo_codes WHERE id = ?',
+        'SELECT * FROM promo_codes WHERE id = ?',
         [order.promo_code_id]
       );
       if (Array.isArray(promoResult) && promoResult.length > 0) {
-        promoCodeString = promoResult[0].code;
+        promoCodeDetails = promoResult[0];
+        promoCodeString = promoCodeDetails.code;
       }
+    }
+    
+    // Calculate effective delivery fee based on promo code type
+    let effectiveDeliveryFee = originalDeliveryFee;
+    if (promoCodeDetails?.enhanced_type === 'free_delivery') {
+      effectiveDeliveryFee = 0;
     }
 
     // Format the order data
-    const calculatedTotal = Number(calculatedSubtotal) + Number(deliveryFee) - Number(order.discount_amount || 0);
+    const calculatedTotal = Number(calculatedSubtotal) + Number(effectiveDeliveryFee) - Number(order.discount_amount || 0);
     const formattedOrder = {
       id: order.id,
       order_status: order.status,
@@ -162,13 +170,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       delivery_additional_info: order.delivery_additional_info || null,
       delivery_city: order.delivery_city || 'Cairo',
       delivery_zone: order.delivery_zone || 'General',
-      delivery_fee: deliveryFee,
+      delivery_fee: effectiveDeliveryFee,
+      original_delivery_fee: originalDeliveryFee,
       subtotal: calculatedSubtotal,
       total_amount: calculatedTotal,
       payment_method: order.payment_method || 'cash',
       created_at: order.created_at,
       items: itemsWithFlavors,
       promo_code: promoCodeString,
+      promo_code_details: promoCodeDetails,
       discount_amount: order.discount_amount || 0
     };
 

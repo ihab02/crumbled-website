@@ -65,20 +65,19 @@ export async function GET(request: NextRequest) {
       LEFT JOIN admin_users au ON pc.created_by = au.id
       ${whereClause}
       ORDER BY pc.created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${Number(offset)}, ${Number(limit)}
     `;
     
     console.log('🔍 [DEBUG] Enhanced Promo Codes - Final query:', query);
     console.log('🔍 [DEBUG] Enhanced Promo Codes - WHERE clause:', whereClause);
 
-
-
     // Debug logging to see what's happening
-    console.log('🔍 [DEBUG] Enhanced Promo Codes - Final params array:', [...params, Number(limit), Number(offset)]);
-    console.log('🔍 [DEBUG] Enhanced Promo Codes - Params length:', params.length);
+    const finalParams = params || [];
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - Final params array:', finalParams);
+    console.log('🔍 [DEBUG] Enhanced Promo Codes - Params length:', finalParams.length);
     console.log('🔍 [DEBUG] Enhanced Promo Codes - Limit:', Number(limit), 'Offset:', Number(offset));
     
-    const promoCodes = await databaseService.query(query, [...params, Number(limit), Number(offset)]);
+    const promoCodes = await databaseService.query(query, finalParams);
 
     // Map fields for frontend compatibility
     const mappedPromoCodes = promoCodes.map((pc) => ({
@@ -151,9 +150,17 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!code || !name || !discount_type || !enhanced_type || !discount_value) {
+    if (!code || !name || !enhanced_type) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: code, name, and enhanced_type are required' },
+        { status: 400 }
+      );
+    }
+
+    // For free delivery promos, discount_type and discount_value are not needed
+    if (enhanced_type !== 'free_delivery' && (!discount_type || discount_value === undefined)) {
+      return NextResponse.json(
+        { error: 'Missing required fields: discount_type and discount_value are required for non-free-delivery promos' },
         { status: 400 }
       );
     }
@@ -184,8 +191,13 @@ export async function POST(request: NextRequest) {
     `;
 
     const result = await databaseService.query(insertQuery, [
-      code, name, description, discount_type, enhanced_type, discount_value,
-      minimum_order_amount || 0, maximum_discount, usage_limit, valid_until, is_active !== false,
+      code, name, description, 
+      enhanced_type === 'free_delivery' ? 'percentage' : discount_type, // Default to percentage for free delivery
+      enhanced_type, 
+      enhanced_type === 'free_delivery' ? 0 : discount_value, // Default to 0 for free delivery
+      minimum_order_amount || 0, maximum_discount, usage_limit, 
+      valid_until && valid_until.trim() !== '' ? valid_until : null, // Convert empty string to null
+      is_active !== false,
       JSON.stringify(category_restrictions), JSON.stringify(product_restrictions),
       JSON.stringify(customer_group_restrictions), first_time_only || false,
       minimum_quantity, maximum_quantity, combination_allowed !== false,

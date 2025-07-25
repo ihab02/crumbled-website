@@ -69,7 +69,7 @@ function ShopPageContent() {
         // Group products by product type
         const groupedProducts: { [key: string]: ProductType } = packProducts.reduce((acc: { [key: string]: ProductType }, product: Product) => {
           if (!acc[product.product_type_id]) {
-            const productType = productTypesMap.get(product.product_type_id);
+            const productType = productTypesMap.get(product.product_type_id) as { id: number; display_order: number } | undefined;
             acc[product.product_type_id] = {
               id: product.product_type_id,
               name: product.product_type_name,

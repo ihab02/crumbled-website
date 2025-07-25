@@ -564,16 +564,64 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           finalEmailDiscountAmount: emailDiscountAmount
         });
         
+        // Calculate effective delivery fee based on promo code type
+        let effectiveDeliveryFee = orderData.cart.deliveryFee;
+        let promoCodeDetails = null;
+        // Always fetch promo code details if a promo code is present
+        if (promoId) {
+          // Fetch promo code details to check enhanced_type
+          console.log('🔍 [DEBUG] Payment API - Fetching promo code details for ID:', promoId);
+          let promoRows;
+          try {
+            const promoResult = await databaseService.query(
+              'SELECT * FROM promo_codes WHERE id = ?',
+              [promoId]
+            );
+            if (Array.isArray(promoResult)) {
+              if (Array.isArray(promoResult[0])) {
+                promoRows = promoResult[0];
+              } else {
+                promoRows = promoResult;
+              }
+            } else {
+              promoRows = [];
+            }
+          } catch (err) {
+            console.error('❌ [DEBUG] Payment API - Error fetching promo code details:', err);
+            promoRows = [];
+          }
+          console.log('🔍 [DEBUG] Payment API - Promo rows result:', promoRows);
+          if (promoRows && promoRows.length > 0) {
+            promoCodeDetails = promoRows[0];
+            console.log('🔍 [DEBUG] Payment API - Promo code details:', {
+              id: promoCodeDetails.id,
+              code: promoCodeDetails.code,
+              enhanced_type: promoCodeDetails.enhanced_type
+            });
+            // Check if it's a free delivery promo
+            if (promoCodeDetails.enhanced_type === 'free_delivery') {
+              effectiveDeliveryFee = 0;
+              console.log('🔍 [DEBUG] Payment API - Free delivery promo detected, setting effectiveDeliveryFee to 0');
+            }
+          } else {
+            console.log('🔍 [DEBUG] Payment API - No promo code found for ID:', promoId);
+          }
+        }
+        
+        console.log('🔍 [DEBUG] Payment API - Final effectiveDeliveryFee:', effectiveDeliveryFee);
+        
         // Build order object for email
         const orderObj = {
           id: orderId,
           items: orderItems,
           subtotal: orderData.cart.subtotal,
-          delivery_fee: orderData.cart.deliveryFee,
+          delivery_fee: effectiveDeliveryFee, // <-- FIXED: use effectiveDeliveryFee
+          original_delivery_fee: orderData.cart.deliveryFee,
           discount: emailDiscountAmount,
           discount_amount: emailDiscountAmount,
           promo_code: promoCode,
           promoCode: promoCode,
+          promo_code_details: promoCodeDetails, // <-- FIXED: always set promo_code_details
           created_at: new Date(),
           delivery_address: orderData.deliveryAddress.street_address,
           delivery_city: orderData.deliveryAddress.city_name,
@@ -592,10 +640,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           id: orderObj.id,
           subtotal: orderObj.subtotal,
           delivery_fee: orderObj.delivery_fee,
+          original_delivery_fee: orderObj.original_delivery_fee,
+          effectiveDeliveryFee: effectiveDeliveryFee,
           discount: orderObj.discount,
           discount_amount: orderObj.discount_amount,
           promo_code: orderObj.promo_code,
-          promoCode: orderObj.promoCode
+          promoCode: orderObj.promoCode,
+          promo_code_details: orderObj.promo_code_details ? {
+            id: orderObj.promo_code_details.id,
+            code: orderObj.promo_code_details.code,
+            enhanced_type: orderObj.promo_code_details.enhanced_type
+          } : null
         });
         await EmailService.sendOrderConfirmation(orderData.customerInfo.email, orderObj);
         console.log('✅ Order confirmation email sent for COD order');

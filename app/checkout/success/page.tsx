@@ -300,12 +300,25 @@ export default function CheckoutSuccessPage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-orange-700">Delivery Fee:</span>
-                          <span className="font-bold text-orange-800">{orderInfo.delivery_fee ? Number(orderInfo.delivery_fee).toFixed(2) : '0.00'} EGP</span>
+                          <span className={`font-bold ${orderInfo.delivery_fee === 0 && orderInfo.original_delivery_fee > 0 ? 'text-green-600' : 'text-orange-800'}`}>
+                            {orderInfo.delivery_fee === 0 && orderInfo.original_delivery_fee > 0 ? 'FREE' : `${orderInfo.delivery_fee ? Number(orderInfo.delivery_fee).toFixed(2) : '0.00'} EGP`}
+                          </span>
                         </div>
                         {orderInfo.promo_code && (
                           <div className="flex justify-between">
                             <span className="text-green-700">Promo Code:</span>
-                            <span className="font-bold text-green-800">{orderInfo.promo_code}</span>
+                            <div className="text-right">
+                              <span className="font-bold text-green-800">{orderInfo.promo_code}</span>
+                              {orderInfo.promo_code_details?.enhanced_type === 'free_delivery' && (
+                                <div className="text-xs text-green-600">(Free Delivery)</div>
+                              )}
+                              {orderInfo.promo_code_details?.enhanced_type === 'category_specific' && (
+                                <div className="text-xs text-green-600">(Category Specific)</div>
+                              )}
+                              {orderInfo.promo_code_details?.enhanced_type === 'first_time_customer' && (
+                                <div className="text-xs text-green-600">(First Time Customer)</div>
+                              )}
+                            </div>
                           </div>
                         )}
                         {orderInfo.discount_amount && Number(orderInfo.discount_amount) > 0 && (

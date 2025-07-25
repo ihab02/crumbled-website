@@ -271,8 +271,10 @@ export class EmailService {
     // Extract and calculate
     const subtotal = Number(order.subtotal ?? 0);
     const deliveryFee = Number(order.delivery_fee ?? 0);
+    const originalDeliveryFee = Number(order.original_delivery_fee ?? deliveryFee);
     const discount = Number(order.discount || order.discount_amount || 0);
     const promoCode = order.promoCode || order.promo_code || '';
+    const promoCodeDetails = order.promo_code_details;
     const total = subtotal + deliveryFee - discount;
     
     console.log('🔍 [DEBUG] Email Service - Raw order data:', {
@@ -362,11 +364,11 @@ export class EmailService {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Order Confirmation - Crumbled</title>
         </head>
-        <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8f9fa;">
+        <body style="margin: 0; padding: 0 5px; font-family: Arial, sans-serif; background-color: #f8f9fa;">
           <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa;">
             <tr>
               <td align="center" style="padding: 20px 0;">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width:600px; width:100%; box-sizing:border-box;">
                   <!-- Header -->
                   <tr>
                     <td style="background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%); padding: 30px 20px; text-align: center; border-radius: 10px 10px 0 0;">
@@ -451,12 +453,31 @@ export class EmailService {
                               </tr>
                               <tr>
                                 <td style="padding: 5px 0; color: #6b7280; font-size: 14px;">Delivery Fee:</td>
-                                <td style="padding: 5px 0; color: #6b7280; font-size: 14px; text-align: right;">${deliveryFee.toFixed(2)} EGP</td>
+                                <td style="padding: 5px 0; color: #6b7280; font-size: 14px; text-align: right;">
+                                  ${deliveryFee === 0 && originalDeliveryFee > 0 ? 
+                                    `<span style="color: #059669; font-weight: bold;">FREE</span>` : 
+                                    `${deliveryFee.toFixed(2)} EGP`
+                                  }
+                                </td>
                               </tr>
                               ${promoCode ? `
                                 <tr>
                                   <td style="padding: 5px 0; color: #6b7280; font-size: 14px;">Promo Code:</td>
-                                  <td style="padding: 5px 0; color: #6b7280; font-size: 14px; text-align: right;">${promoCode}</td>
+                                  <td style="padding: 5px 0; color: #6b7280; font-size: 14px; text-align: right;">
+                                    ${promoCode}
+                                    ${promoCodeDetails?.enhanced_type === 'free_delivery' ? 
+                                      `<br><span style="color: #059669; font-size: 12px;">(Free Delivery)</span>` : 
+                                      ''
+                                    }
+                                    ${promoCodeDetails?.enhanced_type === 'category_specific' ? 
+                                      `<br><span style="color: #059669; font-size: 12px;">(Category Specific)</span>` : 
+                                      ''
+                                    }
+                                    ${promoCodeDetails?.enhanced_type === 'first_time_customer' ? 
+                                      `<br><span style="color: #059669; font-size: 12px;">(First Time Customer)</span>` : 
+                                      ''
+                                    }
+                                  </td>
                                 </tr>
                               ` : ''}
                               ${discount > 0 ? `
@@ -501,9 +522,9 @@ export class EmailService {
                   <!-- Footer -->
                   <tr>
                     <td style="padding: 20px; text-align: center; background-color: #fef7f7; border-radius: 0 0 10px 10px;">
-                      <p style="color: #6b7280; margin: 0 0 10px 0; font-size: 14px;">Thank you for choosing Crumbled!</p>
+                      <p style="color: #6b7280; margin: 0 0 10px 0; font-size: 14px;">Thank you for choosing Crumbled Egypt!</p>
                       <p style="color: #6b7280; margin: 0 0 10px 0; font-size: 14px;">For support, contact us at <a href="mailto:support@crumbled-eg.com" style="color: #ec4899;">support@crumbled-eg.com</a></p>
-                      <p style="color: #ec4899; margin: 10px 0 0 0; font-size: 14px; font-weight: bold;">Crumbled Cookies © ${new Date().getFullYear()}</p>
+                      <p style="color: #ec4899; margin: 10px 0 0 0; font-size: 14px; font-weight: bold;">Crumbled Egypt © ${new Date().getFullYear()}</p>
                       <p style="color: #9ca3af; margin: 10px 0 0 0; font-size: 12px;">This is an automated message, please do not reply to this email.</p>
                     </td>
                   </tr>

@@ -704,7 +704,12 @@ export default function PackProductPage() {
                               </span>
                             </div>
                           )}
-                          <div className="text-base sm:text-lg font-bold text-pink-700 mt-1">+{Number(flavorPrice).toFixed(2)} EGP</div>
+                          {/* Only show price addon if > 0 */}
+                          {Number(flavorPrice) > 0 && (
+                            <div className="text-base sm:text-lg font-bold text-pink-700 mt-1">
+                              +{Number(flavorPrice).toFixed(2)} EGP
+                            </div>
+                          )}
                         </div>
 
                         {/* Selection Controls */}

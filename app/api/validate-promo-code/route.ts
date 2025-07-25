@@ -113,15 +113,73 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Calculate discount amount
+    // Calculate discount amount and prepare enhanced response
     let discountAmount = 0;
-    if (promoCode.discount_type === 'percentage') {
-      discountAmount = (subtotal * promoCode.discount_value) / 100;
-      if (promoCode.maximum_discount) {
-        discountAmount = Math.min(discountAmount, promoCode.maximum_discount);
+    let freeDelivery = false;
+    let eligibleItems = [];
+    let buyXGetYDetails = null;
+    
+    if (promoCode.enhanced_type === 'free_delivery') {
+      freeDelivery = true;
+      // For free delivery, we don't apply a discount to subtotal
+      // The delivery fee will be handled separately in the frontend
+      discountAmount = 0;
+    } else if (promoCode.enhanced_type === 'category_specific') {
+      // Calculate discount only for eligible items
+      try {
+        const categoryRestrictions = promoCode.category_restrictions 
+          ? JSON.parse(promoCode.category_restrictions) 
+          : [];
+        
+        eligibleItems = cartItems.filter(item => {
+          if (!categoryRestrictions.length) return true;
+          return categoryRestrictions.some(category => 
+            item.category === category || 
+            item.flavors?.some(flavor => flavor.name.toLowerCase().includes(category.toLowerCase()))
+          );
+        });
+        
+        const eligibleSubtotal = eligibleItems.reduce((sum, item) => sum + item.price, 0);
+        
+        if (promoCode.discount_type === 'percentage') {
+          discountAmount = (eligibleSubtotal * promoCode.discount_value) / 100;
+          if (promoCode.maximum_discount) {
+            discountAmount = Math.min(discountAmount, promoCode.maximum_discount);
+          }
+        } else if (promoCode.discount_type === 'fixed_amount') {
+          discountAmount = Math.min(promoCode.discount_value, eligibleSubtotal);
+        }
+      } catch (error) {
+        console.error('Error parsing category restrictions:', error);
+        discountAmount = 0;
       }
-    } else if (promoCode.discount_type === 'fixed_amount') {
-      discountAmount = promoCode.discount_value;
+    } else if (promoCode.enhanced_type === 'buy_x_get_y') {
+      // For buy X get Y, calculate the discount based on the promotion
+      const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+      const promotionCycles = Math.floor(totalQuantity / promoCode.buy_x_quantity);
+      const freeItems = promotionCycles * promoCode.get_y_quantity;
+      
+      // Calculate average item price for discount calculation
+      const averageItemPrice = subtotal / totalQuantity;
+      discountAmount = freeItems * averageItemPrice * (promoCode.get_y_discount_percentage / 100);
+      
+      buyXGetYDetails = {
+        buyX: promoCode.buy_x_quantity,
+        getY: promoCode.get_y_quantity,
+        discountPercentage: promoCode.get_y_discount_percentage,
+        promotionCycles,
+        freeItems
+      };
+    } else {
+      // Basic percentage or fixed amount discount
+      if (promoCode.discount_type === 'percentage') {
+        discountAmount = (subtotal * promoCode.discount_value) / 100;
+        if (promoCode.maximum_discount) {
+          discountAmount = Math.min(discountAmount, promoCode.maximum_discount);
+        }
+      } else if (promoCode.discount_type === 'fixed_amount') {
+        discountAmount = promoCode.discount_value;
+      }
     }
 
     // On successful validation, do NOT increment usage here. Usage will be incremented on order placement.
@@ -138,7 +196,16 @@ export async function POST(request: NextRequest) {
         discount_value: promoCode.discount_value,
         discount_amount: discountAmount,
         combination_allowed: promoCode.combination_allowed,
-        stack_with_pricing_rules: promoCode.stack_with_pricing_rules
+        stack_with_pricing_rules: promoCode.stack_with_pricing_rules,
+        // Enhanced fields
+        free_delivery: freeDelivery,
+        eligible_items: eligibleItems,
+        buy_x_get_y_details: buyXGetYDetails,
+        category_restrictions: promoCode.category_restrictions,
+        buy_x_quantity: promoCode.buy_x_quantity,
+        get_y_quantity: promoCode.get_y_quantity,
+        get_y_discount_percentage: promoCode.get_y_discount_percentage,
+        minimum_order_amount: promoCode.minimum_order_amount
       },
       message: validationResult.message || 'Promo code applied successfully'
     });

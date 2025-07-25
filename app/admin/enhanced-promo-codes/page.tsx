@@ -102,12 +102,12 @@ export default function EnhancedPromoCodesPage() {
     first_time_only: false,
     minimum_quantity: 0,
     maximum_quantity: 0,
-    combination_allowed: true,
-    stack_with_pricing_rules: true,
+    combination_allowed: false,
+    stack_with_pricing_rules: false,
     buy_x_quantity: 0,
     get_y_quantity: 0,
-    get_y_discount_percentage: 0,
-    usage_per_customer: '', // always string
+    get_y_discount_percentage: 100,
+    usage_per_customer: 1, // always a number
     usage_per_order: 1
   });
 
@@ -150,7 +150,12 @@ export default function EnhancedPromoCodesPage() {
   const handleCreatePromoCode = async () => {
     const payload = {
       ...formData,
-      usage_per_customer: formData.usage_per_customer ? parseInt(formData.usage_per_customer) : null,
+      usage_per_customer: formData.usage_per_customer,
+      // For free delivery promos, don't send discount_type and discount_value
+      ...(formData.enhanced_type === 'free_delivery' && {
+        discount_type: undefined,
+        discount_value: undefined
+      })
     };
     try {
       const response = await fetch('/api/admin/enhanced-promo-codes', {
@@ -181,7 +186,12 @@ export default function EnhancedPromoCodesPage() {
     if (!editingPromoCode) return;
     const payload = {
       ...formData,
-      usage_per_customer: formData.usage_per_customer ? parseInt(formData.usage_per_customer) : null,
+      usage_per_customer: formData.usage_per_customer,
+      // For free delivery promos, don't send discount_type and discount_value
+      ...(formData.enhanced_type === 'free_delivery' && {
+        discount_type: undefined,
+        discount_value: undefined
+      })
     };
     try {
       const response = await fetch(`/api/admin/enhanced-promo-codes/${editingPromoCode.id}`, {
@@ -253,7 +263,7 @@ export default function EnhancedPromoCodesPage() {
       buy_x_quantity: 0,
       get_y_quantity: 0,
       get_y_discount_percentage: 0,
-      usage_per_customer: '',
+      usage_per_customer: 1, // always a number
       usage_per_order: 1
     });
   };
@@ -283,7 +293,7 @@ export default function EnhancedPromoCodesPage() {
       buy_x_quantity: promoCode.buy_x_quantity || 0,
       get_y_quantity: promoCode.get_y_quantity || 0,
       get_y_discount_percentage: promoCode.get_y_discount_percentage || 0,
-      usage_per_customer: promoCode.usage_per_customer ? promoCode.usage_per_customer.toString() : '',
+      usage_per_customer: typeof promoCode.usage_per_customer === 'number' ? promoCode.usage_per_customer : 1,
       usage_per_order: promoCode.usage_per_order || 1
     });
   };
@@ -643,32 +653,36 @@ function PromoCodeForm({
           </Select>
         </div>
         
-        <div>
-          <Label htmlFor="discount_type">Discount Type *</Label>
-          <Select 
-            value={formData.discount_type} 
-            onValueChange={(value) => setFormData({ ...formData, discount_type: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="percentage">Percentage</SelectItem>
-              <SelectItem value="fixed_amount">Fixed Amount</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div>
-          <Label htmlFor="discount_value">Discount Value *</Label>
-          <Input
-            id="discount_value"
-            type="number"
-            value={formData.discount_value}
-            onChange={(e) => setFormData({ ...formData, discount_value: parseFloat(e.target.value) || 0 })}
-            placeholder="10"
-          />
-        </div>
+        {formData.enhanced_type !== 'free_delivery' && (
+          <>
+            <div>
+              <Label htmlFor="discount_type">Discount Type *</Label>
+              <Select 
+                value={formData.discount_type} 
+                onValueChange={(value) => setFormData({ ...formData, discount_type: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percentage">Percentage</SelectItem>
+                  <SelectItem value="fixed_amount">Fixed Amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="discount_value">Discount Value *</Label>
+              <Input
+                id="discount_value"
+                type="number"
+                value={formData.discount_value}
+                onChange={(e) => setFormData({ ...formData, discount_value: parseFloat(e.target.value) || 0 })}
+                placeholder="10"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -752,6 +766,85 @@ function PromoCodeForm({
               onChange={(e) => setFormData({ ...formData, get_y_discount_percentage: parseFloat(e.target.value) || 0 })}
               placeholder="100"
             />
+          </div>
+        </div>
+      )}
+
+      {formData.enhanced_type === 'category_specific' && (
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="category_restrictions">Category Restrictions (JSON array)</Label>
+            <Textarea
+              id="category_restrictions"
+              value={formData.category_restrictions}
+              onChange={(e) => setFormData({ ...formData, category_restrictions: e.target.value })}
+              placeholder='["chocolate", "vanilla", "strawberry"]'
+              rows={3}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter category names as a JSON array. Leave empty to apply to all categories.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {formData.enhanced_type === 'free_delivery' && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center gap-2 text-green-800">
+            <span className="text-lg">🚚</span>
+            <span className="font-medium">Free Delivery Promotion</span>
+          </div>
+          <p className="text-sm text-green-600 mt-1">
+            This promo code will make delivery free for qualifying orders.
+            {formData.minimum_order_amount > 0 && (
+              <span> Minimum order amount: {formData.minimum_order_amount} EGP</span>
+            )}
+          </p>
+          <div className="mt-3 p-3 bg-green-100 rounded-lg">
+            <p className="text-xs text-green-800">
+              <strong>Note:</strong> Free delivery promotions do not apply discounts to the order subtotal. 
+              They only waive the delivery fee.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {formData.enhanced_type === 'first_time_customer' && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2 text-blue-800">
+            <span className="text-lg">🎉</span>
+            <span className="font-medium">First Time Customer Promotion</span>
+          </div>
+          <p className="text-sm text-blue-600 mt-1">
+            This promo code is only valid for customers who have never placed an order before.
+          </p>
+        </div>
+      )}
+
+      {formData.enhanced_type === 'loyalty_reward' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+            <div className="flex items-center gap-2 text-purple-800">
+              <span className="text-lg">👑</span>
+              <span className="font-medium">Loyalty Reward Promotion</span>
+            </div>
+            <p className="text-sm text-purple-600 mt-1">
+              This promo code is for loyal customers. Only logged-in users can use this promotion.
+            </p>
+          </div>
+          
+          <div>
+            <Label htmlFor="customer_group_restrictions">Customer Group Restrictions (JSON array)</Label>
+            <Textarea
+              id="customer_group_restrictions"
+              value={formData.customer_group_restrictions}
+              onChange={(e) => setFormData({ ...formData, customer_group_restrictions: e.target.value })}
+              placeholder='["vip", "premium"]'
+              rows={2}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter customer group names as a JSON array. Leave empty to apply to all logged-in customers.
+            </p>
           </div>
         </div>
       )}

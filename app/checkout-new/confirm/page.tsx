@@ -18,6 +18,8 @@ import {
   AlertTriangle 
 } from "lucide-react"
 import DeliveryDatePicker from "@/components/DeliveryDatePicker"
+import EnhancedPromoCodeDisplay from "@/components/EnhancedPromoCodeDisplay"
+import EnhancedCartItem from "@/components/EnhancedCartItem"
 
 export default function ConfirmPage() {
   const router = useRouter()
@@ -80,6 +82,59 @@ export default function ConfirmPage() {
     setAcknowledgeDeliveryRules(JSON.parse(localStorage.getItem('acknowledgeDeliveryRules') || 'false'))
     setDeliveryDateInitialized(JSON.parse(localStorage.getItem('deliveryDateInitialized') || 'false'))
   }, [])
+
+  // Helper function to check if an item is eligible for category-specific promo
+  const isItemEligibleForPromo = (item: any, promoCode: any) => {
+    if (!promoCode || promoCode.enhanced_type !== 'category_specific') return false;
+    
+    try {
+      const categoryRestrictions = promoCode.category_restrictions 
+        ? JSON.parse(promoCode.category_restrictions) 
+        : [];
+      
+      if (!categoryRestrictions.length) return true;
+      
+      // Check if item category matches
+      if (item.category && categoryRestrictions.includes(item.category)) {
+        return true;
+      }
+      
+      // Check if any flavor matches
+      if (item.flavors) {
+        return item.flavors.some((flavor: any) => 
+          categoryRestrictions.some((restriction: string) => 
+            flavor.name.toLowerCase().includes(restriction.toLowerCase())
+          )
+        );
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking item eligibility:', error);
+      return false;
+    }
+  };
+
+  // Helper function to get category restrictions
+  const getCategoryRestrictions = () => {
+    if (!appliedPromoCode || appliedPromoCode.enhanced_type !== 'category_specific') {
+      return [];
+    }
+    
+    try {
+      return appliedPromoCode.category_restrictions 
+        ? JSON.parse(appliedPromoCode.category_restrictions) 
+        : [];
+    } catch (error) {
+      console.error('Error parsing category restrictions:', error);
+      return [];
+    }
+  };
+
+  // Calculate effective delivery fee (considering free delivery promos)
+  const effectiveDeliveryFee = appliedPromoCode?.enhanced_type === 'free_delivery' 
+    ? 0 
+    : deliveryFee;
 
   // Fetch delivery rules if not present
   useEffect(() => {
@@ -223,7 +278,7 @@ export default function ConfirmPage() {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
-  const finalTotal = Math.max(0, Number(subtotal) + Number(deliveryFee) - Number(promoDiscount));
+  const finalTotal = Math.max(0, Number(subtotal) + Number(effectiveDeliveryFee) - Number(promoDiscount));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 p-4">
@@ -310,52 +365,15 @@ export default function ConfirmPage() {
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-medium text-gray-900 mb-2">Items</h4>
                     <div className="space-y-4">
-                      {checkoutData.cart?.items.map((item: any) => {
-                        return (
-                          <div key={item.id} className="rounded-2xl bg-pink-50 border-2 border-pink-100 p-4 flex gap-4 items-start shadow-sm">
-                            <div className="flex-shrink-0">
-                              <img
-                                src={item.imageUrl || '/images/default-cookie.jpg'}
-                                alt={item.name}
-                                className="w-16 h-16 object-cover rounded-xl border border-pink-200 bg-white"
-                                onError={e => { (e.target as HTMLImageElement).src = '/images/default-cookie.jpg'; }}
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-start mb-1">
-                                <div>
-                                  <span className="font-semibold text-pink-900 text-base">{item.name}</span>
-                                  {item.isPack && (
-                                    <span className="text-xs text-pink-700 ml-2">(Pack of {item.packSize})</span>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-bold text-pink-800 text-lg">{item.total.toFixed(2)} EGP</span>
-                                  <div className="text-xs text-pink-700">Qty: {item.quantity}</div>
-                                </div>
-                              </div>
-                              {item.flavors && item.flavors.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-xs text-pink-700 font-medium mb-1">Selected Flavors:</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {item.flavors.map((flavor: any) => (
-                                      <Badge key={flavor.id} variant="outline" className="text-xs bg-white border-pink-300 text-pink-800 font-medium px-2 py-1">
-                                        {flavor.name} ({flavor.quantity})
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {/* Debug info - remove this later */}
-                              {item.isPack && (!item.flavors || item.flavors.length === 0) && (
-                                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                                  ⚠️ No flavors found for this pack item. This might be a data issue.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {checkoutData.cart?.items.map((item: any) => (
+                        <EnhancedCartItem
+                          key={item.id}
+                          item={item}
+                          isEligibleForPromo={isItemEligibleForPromo(item, appliedPromoCode)}
+                          promoType={appliedPromoCode?.enhanced_type}
+                          categoryRestrictions={getCategoryRestrictions()}
+                        />
+                      ))}
                     </div>
                   </div>
                   {/* Totals */}
@@ -367,12 +385,19 @@ export default function ConfirmPage() {
                       </div>
                       <div className="flex justify-between">
                         <span>Delivery Fee</span>
-                        <span>{Number(deliveryFee).toFixed(2)} EGP</span>
+                        <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
+                          {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                        </span>
                       </div>
                       {appliedPromoCode && (
-                        <div className="flex justify-between text-green-700">
-                          <span>Promo Discount</span>
-                          <span>-{promoDiscount.toFixed(2)} EGP</span>
+                        <div className="mt-3">
+                          <EnhancedPromoCodeDisplay
+                            promoCode={appliedPromoCode}
+                            cartItems={checkoutData.cart?.items || []}
+                            deliveryFee={deliveryFee}
+                            subtotal={subtotal}
+                            isLoggedIn={false}
+                          />
                         </div>
                       )}
                       <div className="border-t pt-2">

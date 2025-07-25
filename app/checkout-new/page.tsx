@@ -32,6 +32,8 @@ import {
 } from "lucide-react"
 import DeliveryDatePicker from "@/components/DeliveryDatePicker"
 import { useDebugLogger } from "@/hooks/use-debug-mode"
+import EnhancedPromoCodeDisplay from "@/components/EnhancedPromoCodeDisplay"
+import EnhancedCartItem from "@/components/EnhancedCartItem"
 
 interface CheckoutData {
   userType: 'registered' | 'guest';
@@ -63,6 +65,7 @@ interface CheckoutData {
       count: number;
       flavorDetails: string;
       total: number;
+      category?: string;
       flavors: Array<{
         id: number;
         name: string;
@@ -174,7 +177,13 @@ export default function NewCheckoutPage() {
 
   // Move subtotal and total here, before any return or if block
   const subtotal = checkoutData?.cart?.total || 0
-  const total = Math.max(0, Number(subtotal) + Number(deliveryFee) - Number(promoDiscount));
+  
+  // Calculate effective delivery fee (considering free delivery promos)
+  const effectiveDeliveryFee = appliedPromoCode?.enhanced_type === 'free_delivery' 
+    ? 0 
+    : deliveryFee;
+  
+  const total = Math.max(0, Number(subtotal) + Number(effectiveDeliveryFee) - Number(promoDiscount));
 
   // Validation function for step 1
   const isStep1Valid = () => {
@@ -599,6 +608,55 @@ export default function NewCheckoutPage() {
     }
   }, [otpCountdown])
 
+  // Real-time promo code validation when cart changes
+  useEffect(() => {
+    if (appliedPromoCode && checkoutData?.cart?.items) {
+      const timer = setTimeout(() => {
+        // Re-validate existing promo code when cart changes
+        const validateExistingPromo = async () => {
+          try {
+            const response = await fetch("/api/validate-promo-code", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                code: appliedPromoCode.code,
+                customerId: checkoutData?.user?.id,
+                customerEmail: checkoutData?.user?.email,
+                cartItems: checkoutData.cart.items.map(item => ({
+                  product_id: item.id,
+                  quantity: item.quantity,
+                  price: item.total,
+                  category: item.category,
+                  flavors: item.flavors
+                })),
+                subtotal: subtotal
+              })
+            });
+            const result = await response.json();
+            if (!result.valid) {
+              setAppliedPromoCode(null);
+              setPromoDiscount(0);
+              setPromoError(result.error || "Promo code is no longer valid");
+              toast.error(result.error || "Promo code is no longer valid");
+            } else {
+              // Handle different promo types
+              if (result.promoCode.enhanced_type === 'free_delivery') {
+                setPromoDiscount(0);
+              } else {
+                setPromoDiscount(result.promoCode.discount_amount || 0);
+              }
+              setPromoError("");
+            }
+          } catch (error) {
+            console.error('Error re-validating promo code:', error);
+          }
+        };
+        validateExistingPromo();
+      }, 1000); // Debounce for 1 second
+      return () => clearTimeout(timer);
+    }
+  }, [checkoutData?.cart?.items, subtotal, appliedPromoCode, checkoutData?.user?.id, checkoutData?.user?.email]);
+
   const handleApplyPromo = async () => {
     setPromoLoading(true);
     setPromoError("");
@@ -613,7 +671,9 @@ export default function NewCheckoutPage() {
           cartItems: checkoutData?.cart?.items?.map(item => ({
             product_id: item.id,
             quantity: item.quantity,
-            price: item.total
+            price: item.total,
+            category: item.category,
+            flavors: item.flavors
           })) || [],
           subtotal: subtotal
         })
@@ -621,16 +681,27 @@ export default function NewCheckoutPage() {
       const result = await response.json();
       if (result.valid && result.promoCode) {
         setAppliedPromoCode(result.promoCode);
-        setPromoDiscount(result.promoCode.discount_amount || 0);
+        
+        // Handle different promo types
+        if (result.promoCode.enhanced_type === 'free_delivery') {
+          // Free delivery doesn't affect subtotal discount
+          setPromoDiscount(0);
+        } else {
+          setPromoDiscount(result.promoCode.discount_amount || 0);
+        }
+        
         setPromoInput("");
         setPromoError("");
+        toast.success(result.message || 'Promo code applied successfully!');
       } else {
         setPromoError(result.error || "Invalid promo code");
         setAppliedPromoCode(null);
         setPromoDiscount(0);
+        toast.error(result.error || "Invalid promo code");
       }
     } catch (e) {
       setPromoError("Failed to validate promo code");
+      toast.error("Failed to validate promo code");
     } finally {
       setPromoLoading(false);
     }
@@ -640,6 +711,55 @@ export default function NewCheckoutPage() {
     setPromoDiscount(0);
     setPromoInput("");
     setPromoError("");
+    toast.success("Promo code removed");
+  };
+
+  // Helper function to check if an item is eligible for category-specific promo
+  const isItemEligibleForPromo = (item: any, promoCode: any) => {
+    if (!promoCode || promoCode.enhanced_type !== 'category_specific') return false;
+    
+    try {
+      const categoryRestrictions = promoCode.category_restrictions 
+        ? JSON.parse(promoCode.category_restrictions) 
+        : [];
+      
+      if (!categoryRestrictions.length) return true;
+      
+      // Check if item category matches
+      if (item.category && categoryRestrictions.includes(item.category)) {
+        return true;
+      }
+      
+      // Check if any flavor matches
+      if (item.flavors) {
+        return item.flavors.some((flavor: any) => 
+          categoryRestrictions.some((restriction: string) => 
+            flavor.name.toLowerCase().includes(restriction.toLowerCase())
+          )
+        );
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error checking item eligibility:', error);
+      return false;
+    }
+  };
+
+  // Helper function to get category restrictions
+  const getCategoryRestrictions = () => {
+    if (!appliedPromoCode || appliedPromoCode.enhanced_type !== 'category_specific') {
+      return [];
+    }
+    
+    try {
+      return appliedPromoCode.category_restrictions 
+        ? JSON.parse(appliedPromoCode.category_restrictions) 
+        : [];
+    } catch (error) {
+      console.error('Error parsing category restrictions:', error);
+      return [];
+    }
   };
 
   // Stepper component
@@ -1157,9 +1277,6 @@ export default function NewCheckoutPage() {
                                   <li>Enter a valid Egyptian phone number</li>
                                 )}
                                 {guestData.phone.trim() !== '' && !otpVerified && (
-                                  <li>Verify your phone number</li>
-                                )}
-                                {guestData.phone.trim() !== '' && otpVerified && guestData.phone !== verifiedPhone && (
                                   <li>Phone number changed - please verify again</li>
                                 )}
                                 {guestData.address.trim() === '' && (
@@ -1211,29 +1328,13 @@ export default function NewCheckoutPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-4">
                     {checkoutData.cart?.items.map((item) => (
-                      <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="w-16 h-16 object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/images/default-cookie.jpg';
-                            }}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0 flex flex-col justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                            {item.isPack && (
-                              <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                            )}
-                          </div>
-                          <span className="font-semibold text-gray-900 mt-2 block sm:mt-0 sm:inline-block sm:text-right">{item.total.toFixed(2)} EGP</span>
-                        </div>
-                      </div>
+                      <EnhancedCartItem
+                        key={item.id}
+                        item={item}
+                        isEligibleForPromo={isItemEligibleForPromo(item, appliedPromoCode)}
+                        promoType={appliedPromoCode?.enhanced_type}
+                        categoryRestrictions={getCategoryRestrictions()}
+                      />
                     ))}
                   </div>
                 
@@ -1262,7 +1363,15 @@ export default function NewCheckoutPage() {
                   </div>
                   {promoError && <p className="text-red-500 text-sm mt-1">{promoError}</p>}
                   {appliedPromoCode && (
-                    <p className="text-green-600 text-sm mt-1">Promo code <b>{appliedPromoCode.code}</b> applied! Discount: {Number(promoDiscount).toFixed(2)} EGP</p>
+                    <div className="mt-3">
+                      <EnhancedPromoCodeDisplay
+                        promoCode={appliedPromoCode}
+                        cartItems={checkoutData.cart?.items || []}
+                        deliveryFee={deliveryFee}
+                        subtotal={subtotal}
+                        isLoggedIn={!!isLoggedIn}
+                      />
+                    </div>
                   )}
                 </div>
                   
@@ -1273,7 +1382,9 @@ export default function NewCheckoutPage() {
                     </div>
                     <div className="flex justify-between">
                       <span>Delivery Fee</span>
-                      <span>{Number(deliveryFee).toFixed(2)} EGP</span>
+                      <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
+                        {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                      </span>
                     </div>
                   {appliedPromoCode && (
                     <div className="flex justify-between text-green-700">
@@ -1308,29 +1419,13 @@ export default function NewCheckoutPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-4">
                     {checkoutData.cart?.items.map((item) => (
-                      <div key={item.id} className="flex gap-3 p-3 border rounded-lg">
-                        <div className="flex-shrink-0">
-                          <img
-                            src={item.imageUrl}
-                            alt={item.name}
-                            className="w-16 h-16 object-cover rounded-lg"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/images/default-cookie.jpg';
-                            }}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0 flex flex-col justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900 truncate">{item.name}</h4>
-                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
-                            {item.isPack && (
-                              <p className="text-sm text-gray-600">Pack Size: {item.packSize}</p>
-                            )}
-                          </div>
-                          <span className="font-semibold text-gray-900 mt-2 block sm:mt-0 sm:inline-block sm:text-right">{item.total.toFixed(2)} EGP</span>
-                        </div>
-                      </div>
+                      <EnhancedCartItem
+                        key={item.id}
+                        item={item}
+                        isEligibleForPromo={isItemEligibleForPromo(item, appliedPromoCode)}
+                        promoType={appliedPromoCode?.enhanced_type}
+                        categoryRestrictions={getCategoryRestrictions()}
+                      />
                     ))}
                   </div>
                   
@@ -1359,7 +1454,15 @@ export default function NewCheckoutPage() {
                   </div>
                   {promoError && <p className="text-red-500 text-sm mt-1">{promoError}</p>}
                   {appliedPromoCode && (
-                    <p className="text-green-600 text-sm mt-1">Promo code <b>{appliedPromoCode.code}</b> applied! Discount: {Number(promoDiscount).toFixed(2)} EGP</p>
+                    <div className="mt-3">
+                      <EnhancedPromoCodeDisplay
+                        promoCode={appliedPromoCode}
+                        cartItems={checkoutData.cart?.items || []}
+                        deliveryFee={deliveryFee}
+                        subtotal={subtotal}
+                        isLoggedIn={!!isLoggedIn}
+                      />
+                    </div>
                   )}
                   </div>
                   
@@ -1370,7 +1473,9 @@ export default function NewCheckoutPage() {
                     </div>
                     <div className="flex justify-between">
                       <span>Delivery Fee</span>
-                      <span>{Number(deliveryFee).toFixed(2)} EGP</span>
+                      <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
+                        {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                      </span>
                     </div>
                   {appliedPromoCode && (
                     <div className="flex justify-between text-green-700">
