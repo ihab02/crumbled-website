@@ -112,6 +112,8 @@ function AccountPageContent() {
       if (customerResponse.ok) {
         const customerData = await customerResponse.json()
         debugLog('Customer data received:', customerData)
+        debugLog('Customer addresses:', customerData.customer?.addresses)
+        debugLog('Addresses length:', customerData.customer?.addresses?.length)
         setCustomer(customerData.customer)
         setFormData({
           firstName: customerData.customer.firstName || '',
@@ -559,56 +561,66 @@ function AccountPageContent() {
                     <h3 className="font-bold text-pink-800 mb-4 flex items-center gap-2">
                       <MapPin className="h-4 w-4" /> Saved Addresses
                     </h3>
-                    {customer?.addresses && customer.addresses.length > 0 ? (
-                      <div className="space-y-4">
-                        {customer.addresses.map((address) => (
-                          <div key={address.id} className="border border-pink-200 rounded-xl p-4 bg-white">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h4 className="font-bold text-pink-800">{address.streetAddress}</h4>
-                                  {address.isDefault && (
-                                    <Badge className="bg-pink-100 text-pink-800 border-pink-200">Default</Badge>
-                                  )}
+                                        {(() => {
+                      debugLog('Rendering addresses section - customer:', customer)
+                      debugLog('Addresses array:', customer?.addresses)
+                      debugLog('Addresses length:', customer?.addresses?.length)
+                      
+                      if (customer?.addresses && customer.addresses.length > 0) {
+                        return (
+                          <div className="space-y-4">
+                            {customer.addresses.map((address) => (
+                              <div key={address.id} className="border border-pink-200 rounded-xl p-4 bg-white">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <h4 className="font-bold text-pink-800">{address.streetAddress}</h4>
+                                      {address.isDefault && (
+                                        <Badge className="bg-pink-100 text-pink-800 border-pink-200">Default</Badge>
+                                      )}
+                                    </div>
+                                    {address.additionalInfo && (
+                                      <p className="text-sm text-pink-600 mb-1">{address.additionalInfo}</p>
+                                    )}
+                                    <p className="text-sm text-pink-600">{address.zone}, {address.city}</p>
+                                    <p className="text-sm text-pink-600">Delivery Fee: ${address.deliveryFee.toFixed(2)}</p>
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAddressDelete(address.id)}
+                                    disabled={customer?.addresses && customer.addresses.length <= 1}
+                                    className={`ml-4 ${
+                                      customer?.addresses && customer.addresses.length <= 1
+                                        ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                                        : 'border-red-300 text-red-600 hover:bg-red-50'
+                                    }`}
+                                    title={
+                                      customer?.addresses && customer.addresses.length <= 1
+                                        ? 'Cannot delete the last address'
+                                        : 'Delete address'
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                                {address.additionalInfo && (
-                                  <p className="text-sm text-pink-600 mb-1">{address.additionalInfo}</p>
-                                )}
-                                <p className="text-sm text-pink-600">{address.zone}, {address.city}</p>
-                                <p className="text-sm text-pink-600">Delivery Fee: ${address.deliveryFee.toFixed(2)}</p>
                               </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleAddressDelete(address.id)}
-                                disabled={customer?.addresses && customer.addresses.length <= 1}
-                                className={`ml-4 ${
-                                  customer?.addresses && customer.addresses.length <= 1
-                                    ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                                    : 'border-red-300 text-red-600 hover:bg-red-50'
-                                }`}
-                                title={
-                                  customer?.addresses && customer.addresses.length <= 1
-                                    ? 'Cannot delete the last address'
-                                    : 'Delete address'
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <AlertCircle className="h-8 w-8 text-red-600" />
-                        </div>
-                        <p className="text-red-600 mb-2 font-semibold">No addresses found!</p>
-                        <p className="text-sm text-pink-500 mb-4">You must have at least one address to place orders.</p>
-                        <p className="text-sm text-pink-500">Add your first address above to get started.</p>
-                      </div>
-                    )}
+                        )
+                      } else {
+                        return (
+                          <div className="text-center py-8">
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <AlertCircle className="h-8 w-8 text-red-600" />
+                            </div>
+                            <p className="text-red-600 mb-2 font-semibold">No addresses found!</p>
+                            <p className="text-sm text-pink-500 mb-4">You must have at least one address to place orders.</p>
+                            <p className="text-sm text-pink-500">Add your first address above to get started.</p>
+                          </div>
+                        )
+                      }
+                    })()}
                   </div>
                 </div>
               </CardContent>
