@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { verifyJWT } from '@/lib/middleware/auth';
 import { databaseService } from '@/lib/services/databaseService';
 
 // Helper function to convert ISO datetime to MySQL format
@@ -25,12 +24,27 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const token = request.cookies.get('adminToken')?.value;
     
-    if (!session?.user?.email) {
+    if (!token) {
       return NextResponse.json({ 
         success: false, 
         error: "Unauthorized" 
+      }, { status: 401 });
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json({ 
+          success: false, 
+          error: "Unauthorized" 
+        }, { status: 401 });
+      }
+    } catch (error) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Invalid token" 
       }, { status: 401 });
     }
 
@@ -72,12 +86,27 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const token = request.cookies.get('adminToken')?.value;
     
-    if (!session?.user?.email) {
+    if (!token) {
       return NextResponse.json({ 
         success: false, 
         error: "Unauthorized" 
+      }, { status: 401 });
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json({ 
+          success: false, 
+          error: "Unauthorized" 
+        }, { status: 401 });
+      }
+    } catch (error) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Invalid token" 
       }, { status: 401 });
     }
 
@@ -156,12 +185,27 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const token = request.cookies.get('adminToken')?.value;
     
-    if (!session?.user?.email) {
+    if (!token) {
       return NextResponse.json({ 
         success: false, 
         error: "Unauthorized" 
+      }, { status: 401 });
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json({ 
+          success: false, 
+          error: "Unauthorized" 
+        }, { status: 401 });
+      }
+    } catch (error) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Invalid token" 
       }, { status: 401 });
     }
 

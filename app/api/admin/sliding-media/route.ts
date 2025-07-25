@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { verifyJWT } from '@/lib/middleware/auth';
 import { databaseService } from '@/lib/services/databaseService';
 
 // Helper function to convert ISO datetime to MySQL format
@@ -22,12 +21,27 @@ function formatDateTimeForMySQL(dateTimeString: string | null | undefined): stri
 // GET - Fetch all sliding media
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const token = request.cookies.get('adminToken')?.value;
     
-    if (!session?.user?.email) {
+    if (!token) {
       return NextResponse.json({ 
         success: false, 
         error: "Unauthorized" 
+      }, { status: 401 });
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json({ 
+          success: false, 
+          error: "Unauthorized" 
+        }, { status: 401 });
+      }
+    } catch (error) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Invalid token" 
       }, { status: 401 });
     }
 
@@ -55,12 +69,27 @@ export async function GET(request: NextRequest) {
 // POST - Create new sliding media
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const token = request.cookies.get('adminToken')?.value;
     
-    if (!session?.user?.email) {
+    if (!token) {
       return NextResponse.json({ 
         success: false, 
         error: "Unauthorized" 
+      }, { status: 401 });
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json({ 
+          success: false, 
+          error: "Unauthorized" 
+        }, { status: 401 });
+      }
+    } catch (error) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Invalid token" 
       }, { status: 401 });
     }
 
@@ -127,9 +156,19 @@ export async function POST(request: NextRequest) {
 // PUT - Update display order in bulk
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const token = request.cookies.get('adminToken')?.value;
+    
+    if (!token) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      }
+    } catch (error) {
+      return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 });
     }
     const body = await request.json();
     const { order } = body;

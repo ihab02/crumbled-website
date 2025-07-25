@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyJWT } from '@/lib/middleware/auth';
 import { databaseService } from '@/lib/services/databaseService';
 
 interface PaymentMethod {
@@ -15,13 +14,29 @@ interface PaymentMethods {
 }
 
 // GET /api/admin/settings/payment-methods
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const token = request.cookies.get('adminToken')?.value;
+    
+    if (!token) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid token' },
         { status: 401 }
       );
     }
@@ -59,13 +74,29 @@ export async function GET() {
 }
 
 // POST /api/admin/settings/payment-methods
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const token = request.cookies.get('adminToken')?.value;
+    
+    if (!token) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    try {
+      const decoded = verifyJWT(token, 'admin');
+      if (!decoded || decoded.type !== 'admin') {
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid token' },
         { status: 401 }
       );
     }

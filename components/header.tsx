@@ -177,7 +177,7 @@ export default function Header() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`text-sm font-medium ${
+                  className={`text-base font-medium ${
                     isActive(item.href) ? 'text-pink-600' : 'text-gray-500 hover:text-pink-600'
                   }`}
                 >
@@ -285,14 +285,14 @@ export default function Header() {
                 <>
                   <Link
                     href={`/auth/login?redirect=${encodeURIComponent(getCurrentUrl())}`}
-                    className="text-sm font-medium text-pink-600 hover:text-pink-800 transition-all duration-200 relative group px-3 py-2 rounded-lg hover:bg-pink-50"
+                    className="text-base font-medium text-pink-600 hover:text-pink-800 transition-all duration-200 relative group px-3 py-2 rounded-lg hover:bg-pink-50"
                   >
                     Log in
                     <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-pink-400 to-rose-400 rounded-full transition-all duration-200 group-hover:w-4/5"></span>
                   </Link>
                   <Link
                     href={`/auth/register?redirect=${encodeURIComponent(getCurrentUrl())}`}
-                    className="text-sm font-medium text-pink-600 hover:text-pink-800 transition-all duration-200 relative group px-3 py-2 rounded-lg hover:bg-pink-50"
+                    className="text-base font-medium text-pink-600 hover:text-pink-800 transition-all duration-200 relative group px-3 py-2 rounded-lg hover:bg-pink-50"
                   >
                     Sign up
                     <span className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-pink-400 to-rose-400 rounded-full transition-all duration-200 group-hover:w-4/5"></span>
