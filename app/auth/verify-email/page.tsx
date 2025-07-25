@@ -32,9 +32,16 @@ export default function VerifyEmailPage() {
       return
     }
 
+    // Add a small delay to prevent rapid successive calls
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     const verifyEmail = async () => {
       try {
         console.log('🔍 Starting email verification for token:', token)
+        
+        // Add a small delay to prevent rapid successive calls
+        await delay(500);
+        
         const response = await fetch(`/api/auth/verify-email?token=${token}`)
         const data = await response.json()
 
@@ -42,7 +49,10 @@ export default function VerifyEmailPage() {
 
         if (response.ok) {
           console.log('✅ Email verification successful')
-          setSuccess("Email verified successfully!")
+          const message = data.alreadyVerified 
+            ? "Email already verified successfully!" 
+            : "Email verified successfully!";
+          setSuccess(message)
           setVerificationStatus('success')
           setHasVerified(true)
           

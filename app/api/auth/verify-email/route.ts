@@ -70,8 +70,25 @@ export async function GET(request: Request) {
     
     // Check if already used
     if (record.is_used === 1 || record.is_used === true) {
-      console.log('❌ Token already used');
-      return NextResponse.json({ error: 'Verification link has already been used.' }, { status: 400 });
+      console.log('✅ Token already used - checking if email is verified');
+      
+      // Check if the customer's email is actually verified
+      const [customerRows] = await databaseService.query<any[]>(
+        'SELECT email_verified FROM customers WHERE id = ?',
+        [record.customer_id]
+      );
+      
+      if (customerRows.length > 0 && (customerRows[0].email_verified === 1 || customerRows[0].email_verified === true)) {
+        console.log('✅ Email is already verified - returning success');
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Email already verified successfully.',
+          alreadyVerified: true 
+        });
+      } else {
+        console.log('❌ Token used but email not verified - this is an error state');
+        return NextResponse.json({ error: 'Verification link has already been used.' }, { status: 400 });
+      }
     }
     
     // Check expiration
