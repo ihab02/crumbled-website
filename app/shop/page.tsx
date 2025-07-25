@@ -200,16 +200,19 @@ function ShopPageContent() {
             <div className="w-24 h-1 bg-gradient-to-r from-pink-400 to-rose-400 mx-auto rounded-full"></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl">
-            {type.products.map((product) => (
-              <Card
-                key={product.id}
-                className="overflow-hidden border-2 border-pink-200 transition-all hover:shadow-2xl rounded-3xl group bg-gradient-to-br from-white to-pink-50 hover:from-pink-50 hover:to-rose-50"
-                onClick={() => handleProductClick(product)}
-                style={{
-                  animation: `${product.id % 2 === 0 ? 'float' : 'bounce'} 3s ease-in-out infinite`,
-                  animationDelay: `${product.id * 0.2}s`
-                }}
-              >
+            {type.products
+              .slice() // copy to avoid mutating original
+              .sort((a, b) => a.display_order - b.display_order)
+              .map((product) => (
+                <Card
+                  key={product.id}
+                  className="overflow-hidden border-2 border-pink-200 transition-all hover:shadow-2xl rounded-3xl group bg-gradient-to-br from-white to-pink-50 hover:from-pink-50 hover:to-rose-50"
+                  onClick={() => handleProductClick(product)}
+                  style={{
+                    animation: `${product.id % 2 === 0 ? 'float' : 'bounce'} 3s ease-in-out infinite`,
+                    animationDelay: `${product.id * 0.2}s`
+                  }}
+                >
                 <div className="aspect-square overflow-hidden relative">
                   {product.image_url ? (
                     <Image

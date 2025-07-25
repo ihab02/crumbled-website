@@ -293,10 +293,12 @@ function RegisterPageContent() {
           router.push(`/auth/login?redirect=${encodeURIComponent(redirectUrl)}`)
         }, 3000)
       } else {
-        setError(data.error || "Failed to create account")
+        toast.error(data.error || "Failed to create account")
+        setError("")
       }
     } catch (error) {
-      setError("Network error. Please try again.")
+      toast.error("Network error. Please try again.")
+      setError("")
     } finally {
       setIsLoading(false)
     }
