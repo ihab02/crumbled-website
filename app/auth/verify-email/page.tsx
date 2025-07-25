@@ -17,6 +17,7 @@ export default function VerifyEmailPage() {
   const [verificationStatus, setVerificationStatus] = useState<'success' | 'error' | null>(null)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [hasVerified, setHasVerified] = useState(false)
 
   useEffect(() => {
     if (!token) {
@@ -26,28 +27,47 @@ export default function VerifyEmailPage() {
       return
     }
 
+    // Prevent multiple verification attempts
+    if (hasVerified) {
+      return
+    }
+
     const verifyEmail = async () => {
       try {
+        console.log('🔍 Starting email verification for token:', token)
         const response = await fetch(`/api/auth/verify-email?token=${token}`)
         const data = await response.json()
 
+        console.log('📋 Verification response:', { status: response.status, data })
+
         if (response.ok) {
+          console.log('✅ Email verification successful')
           setSuccess("Email verified successfully!")
           setVerificationStatus('success')
+          setHasVerified(true)
+          
+          // Auto-redirect after 3 seconds
+          setTimeout(() => {
+            router.push('/auth/login')
+          }, 3000)
         } else {
+          console.log('❌ Email verification failed:', data.error)
           setError(data.error || "Failed to verify email")
           setVerificationStatus('error')
+          setHasVerified(true)
         }
       } catch (error) {
+        console.log('❌ Email verification error:', error)
         setError("Network error. Please try again.")
         setVerificationStatus('error')
+        setHasVerified(true)
       } finally {
         setIsVerifying(false)
       }
     }
 
     verifyEmail()
-  }, [token])
+  }, [token, hasVerified])
 
   if (isVerifying) {
     return (
@@ -89,7 +109,12 @@ export default function VerifyEmailPage() {
                 </p>
                 
                 <Button
-                  onClick={() => router.push('/auth/login')}
+                  onClick={() => {
+                    // Small delay to ensure user sees success message
+                    setTimeout(() => {
+                      router.push('/auth/login')
+                    }, 1000)
+                  }}
                   className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700"
                 >
                   Continue to Login
