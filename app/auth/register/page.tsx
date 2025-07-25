@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, Suspense } from "react"
+import { useRef } from "react"
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -59,6 +60,9 @@ function RegisterPageContent() {
 
   const [showCoverageMessage, setShowCoverageMessage] = useState(false)
   const [inactiveCoverageText, setInactiveCoverageText] = useState('')
+  // 1. Add a new state for field-level errors
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({})
+  const firstErrorRef = useRef<HTMLInputElement | null>(null)
 
   // Fetch cities on component mount
   useEffect(() => {
@@ -112,6 +116,8 @@ function RegisterPageContent() {
       ...formData,
       [e.target.name]: e.target.value
     })
+    // Clear field-level error when typing
+    setFieldErrors(prev => ({ ...prev, [e.target.name]: '' }));
   }
 
   const handleCityChange = (value: string) => {
@@ -207,35 +213,40 @@ function RegisterPageContent() {
     }
   };
 
+  // 2. Update handleSubmit to validate fields and set field-level errors
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setSuccess("")
     setIsLoading(true)
     setShowCoverageMessage(false)
-    setInactiveCoverageText('')
+    setInactiveCoverageText("")
+    setFieldErrors({})
+    let errors: { [key: string]: string } = {}
 
     // Basic validation
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.password || !formData.cityId || !formData.zoneId) {
-      setError("All fields are required")
-      setIsLoading(false)
-      return
-    }
+    if (!formData.firstName) errors.firstName = "First name is required"
+    if (!formData.lastName) errors.lastName = "Last name is required"
+    if (!formData.email) errors.email = "Email is required"
+    if (!formData.phone) errors.phone = "Phone number is required"
+    if (!formData.password) errors.password = "Password is required"
+    if (!formData.confirmPassword) errors.confirmPassword = "Please confirm your password"
+    if (!formData.cityId) errors.cityId = "City is required"
+    if (!formData.zoneId) errors.zoneId = "Zone is required"
 
-    if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters long")
-      setIsLoading(false)
-      return
-    }
+    if (formData.password && formData.password.length < 8) errors.password = "Password must be at least 8 characters long"
+    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) errors.confirmPassword = "Passwords do not match"
+    if (!otpVerified) errors.phone = "Please verify your phone number first"
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match")
-      setIsLoading(false)
-      return
-    }
-
-    if (!otpVerified) {
-      setError("Please verify your phone number first")
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      // Auto-scroll to the first error field
+      setTimeout(() => {
+        if (firstErrorRef.current) {
+          firstErrorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          firstErrorRef.current.focus()
+        }
+      }, 100)
       setIsLoading(false)
       return
     }
@@ -335,12 +346,14 @@ function RegisterPageContent() {
                   type="text"
                   autoComplete="given-name"
                   required
-                  className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                  className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.firstName ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                   placeholder="Enter your first name"
                   value={formData.firstName}
                   onChange={handleChange}
                   disabled={isLoading}
+                  ref={fieldErrors.firstName ? firstErrorRef : null}
                 />
+                {fieldErrors.firstName && <p className="text-red-500 text-xs mt-1">{fieldErrors.firstName}</p>}
               </div>
               <div>
                 <Label htmlFor="lastName" className="text-pink-700">
@@ -352,12 +365,14 @@ function RegisterPageContent() {
                   type="text"
                   autoComplete="family-name"
                   required
-                  className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                  className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.lastName ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                   placeholder="Enter your last name"
                   value={formData.lastName}
                   onChange={handleChange}
                   disabled={isLoading}
+                  ref={fieldErrors.lastName ? firstErrorRef : null}
                 />
+                {fieldErrors.lastName && <p className="text-red-500 text-xs mt-1">{fieldErrors.lastName}</p>}
               </div>
             </div>
 
@@ -371,12 +386,14 @@ function RegisterPageContent() {
                 type="email"
                 autoComplete="email"
                 required
-                className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.email ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                 placeholder="Enter your email"
                 value={formData.email}
                 onChange={handleChange}
                 disabled={isLoading}
+                ref={fieldErrors.email ? firstErrorRef : null}
               />
+              {fieldErrors.email && <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>}
             </div>
 
             <div>
@@ -390,11 +407,12 @@ function RegisterPageContent() {
                   type="tel"
                   autoComplete="tel"
                   required
-                  className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 flex-1"
+                  className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 flex-1 ${fieldErrors.phone ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                   placeholder="Enter your phone number"
                   value={formData.phone}
                   onChange={handleChange}
                   disabled={isLoading || otpVerified}
+                  ref={fieldErrors.phone ? firstErrorRef : null}
                 />
                 {!otpVerified && (
                   <Button
@@ -410,6 +428,7 @@ function RegisterPageContent() {
               {otpVerified && (
                 <p className="text-green-500 text-sm mt-1">✓ Phone number verified</p>
               )}
+              {fieldErrors.phone && <p className="text-red-500 text-xs mt-1">{fieldErrors.phone}</p>}
             </div>
 
             {otpSent && !otpVerified && (
@@ -423,12 +442,13 @@ function RegisterPageContent() {
                     name="otp"
                     type="text"
                     required
-                    className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 flex-1"
+                    className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 flex-1 ${fieldErrors.otp ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                     placeholder="Enter 6-digit OTP"
                     value={formData.otp}
                     onChange={handleChange}
                     maxLength={6}
                     disabled={isLoading}
+                    ref={fieldErrors.otp ? firstErrorRef : null}
                   />
                   <Button
                     type="submit"
@@ -438,6 +458,7 @@ function RegisterPageContent() {
                     {isLoading ? 'Verifying...' : 'Verify OTP'}
                   </Button>
                 </div>
+                {fieldErrors.otp && <p className="text-red-500 text-xs mt-1">{fieldErrors.otp}</p>}
               </div>
             )}
 
@@ -454,11 +475,12 @@ function RegisterPageContent() {
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
                       required
-                      className="border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400 pr-10"
+                      className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 pr-10 ${fieldErrors.password ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                       placeholder="Create a password"
                       value={formData.password}
                       onChange={handleChange}
                       disabled={isLoading}
+                      ref={fieldErrors.password ? firstErrorRef : null}
                     />
                     <button
                       type="button"
@@ -470,6 +492,7 @@ function RegisterPageContent() {
                     </button>
                   </div>
                   <p className="mt-1 text-xs text-pink-600">Password must be at least 8 characters long</p>
+                  {fieldErrors.password && <p className="text-red-500 text-xs mt-1">{fieldErrors.password}</p>}
                 </div>
 
                 <div>
@@ -482,12 +505,14 @@ function RegisterPageContent() {
                     type={showPassword ? "text" : "password"}
                     autoComplete="new-password"
                     required
-                    className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                    className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.confirmPassword ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                     placeholder="Confirm your password"
                     value={formData.confirmPassword}
                     onChange={handleChange}
                     disabled={isLoading}
+                    ref={fieldErrors.confirmPassword ? firstErrorRef : null}
                   />
+                  {fieldErrors.confirmPassword && <p className="text-red-500 text-xs mt-1">{fieldErrors.confirmPassword}</p>}
                 </div>
 
                 <div>
@@ -499,7 +524,7 @@ function RegisterPageContent() {
                     onValueChange={handleCityChange}
                     disabled={isLoading}
                   >
-                    <SelectTrigger className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400">
+                    <SelectTrigger className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.cityId ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}>
                       <SelectValue placeholder="Select your city" />
                     </SelectTrigger>
                     <SelectContent>
@@ -515,6 +540,7 @@ function RegisterPageContent() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {fieldErrors.cityId && <p className="text-red-500 text-xs mt-1">{fieldErrors.cityId}</p>}
                 </div>
 
                 <div>
@@ -526,7 +552,7 @@ function RegisterPageContent() {
                     onValueChange={handleZoneChange}
                     disabled={isLoading || !formData.cityId}
                   >
-                    <SelectTrigger className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400">
+                    <SelectTrigger className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.zoneId ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}>
                       <SelectValue placeholder="Select your zone" />
                     </SelectTrigger>
                     <SelectContent>
@@ -542,6 +568,7 @@ function RegisterPageContent() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {fieldErrors.zoneId && <p className="text-red-500 text-xs mt-1">{fieldErrors.zoneId}</p>}
                 </div>
 
                 <div>
@@ -553,12 +580,14 @@ function RegisterPageContent() {
                     name="address"
                     type="text"
                     required
-                    className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                    className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.address ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                     placeholder="Enter your address"
                     value={formData.address}
                     onChange={handleChange}
                     disabled={isLoading}
+                    ref={fieldErrors.address ? firstErrorRef : null}
                   />
+                  {fieldErrors.address && <p className="text-red-500 text-xs mt-1">{fieldErrors.address}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -571,7 +600,7 @@ function RegisterPageContent() {
                       onValueChange={(value) => setFormData({ ...formData, ageGroup: value })}
                       disabled={isLoading}
                     >
-                      <SelectTrigger className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400">
+                      <SelectTrigger className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.ageGroup ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}>
                         <SelectValue placeholder="Select your age group" />
                       </SelectTrigger>
                       <SelectContent>
@@ -584,6 +613,7 @@ function RegisterPageContent() {
                         <SelectItem value="65+">65+ years</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldErrors.ageGroup && <p className="text-red-500 text-xs mt-1">{fieldErrors.ageGroup}</p>}
                   </div>
 
                   <div>
@@ -594,12 +624,14 @@ function RegisterPageContent() {
                       id="birthDate"
                       name="birthDate"
                       type="date"
-                      className="mt-1 border-2 border-pink-200 rounded-xl focus:border-pink-400 focus:ring-pink-400"
+                      className={`mt-1 border-2 rounded-xl focus:border-pink-400 focus:ring-pink-400 ${fieldErrors.birthDate ? 'border-red-400 bg-red-50' : 'border-pink-200'}`}
                       placeholder="Select your birth date"
                       value={formData.birthDate}
                       onChange={handleChange}
                       disabled={isLoading}
+                      ref={fieldErrors.birthDate ? firstErrorRef : null}
                     />
+                    {fieldErrors.birthDate && <p className="text-red-500 text-xs mt-1">{fieldErrors.birthDate}</p>}
                   </div>
                 </div>
 

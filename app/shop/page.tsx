@@ -57,9 +57,9 @@ function ShopPageContent() {
       const productTypesData = await productTypesResponse.json();
       
       if (productsData.success && productTypesData.success) {
-        // Get products and filter for pack products only
+        // Get products and filter for active products only
         const productsArr: Product[] = productsData.data || [];
-        const packProducts = productsArr.filter(product => product.is_pack && product.is_active);
+        const activeProducts = productsArr.filter(product => product.is_active);
         
         // Get product types and create a map for easy lookup
         const productTypesMap = new Map(
@@ -67,7 +67,7 @@ function ShopPageContent() {
         );
         
         // Group products by product type
-        const groupedProducts: { [key: string]: ProductType } = packProducts.reduce((acc: { [key: string]: ProductType }, product: Product) => {
+        const groupedProducts: { [key: string]: ProductType } = activeProducts.reduce((acc: { [key: string]: ProductType }, product: Product) => {
           if (!acc[product.product_type_id]) {
             const productType = productTypesMap.get(product.product_type_id) as { id: number; display_order: number } | undefined;
             acc[product.product_type_id] = {
@@ -205,6 +205,10 @@ function ShopPageContent() {
                 key={product.id}
                 className="overflow-hidden border-2 border-pink-200 transition-all hover:shadow-2xl rounded-3xl group bg-gradient-to-br from-white to-pink-50 hover:from-pink-50 hover:to-rose-50"
                 onClick={() => handleProductClick(product)}
+                style={{
+                  animation: `${product.id % 2 === 0 ? 'float' : 'bounce'} 3s ease-in-out infinite`,
+                  animationDelay: `${product.id * 0.2}s`
+                }}
               >
                 <div className="aspect-square overflow-hidden relative">
                   {product.image_url ? (
@@ -235,15 +239,15 @@ function ShopPageContent() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
-                        {product.base_price.toFixed(2)} EGP
-                      </span>
-                      {product.is_pack && (
-                        <span className="text-sm font-semibold text-pink-700 bg-gradient-to-r from-pink-100 to-rose-100 px-3 py-1.5 rounded-full border border-pink-200 shadow-sm">
-                          {product.count} pcs
-                        </span>
-                      )}
-                    </div>
+  <span className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-rose-600">
+    {product.base_price.toFixed(2)} EGP
+  </span>
+  {product.is_pack && Number.isFinite(product.count) && product.count > 0 && (
+    <span className="text-sm font-semibold text-pink-700 bg-gradient-to-r from-pink-100 to-rose-100 px-3 py-1.5 rounded-full border border-pink-200 shadow-sm">
+      {product.count} pcs
+    </span>
+  )}
+</div>
                   </div>
                 </CardContent>
                 <CardFooter className="p-6 pt-0">
