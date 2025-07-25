@@ -72,7 +72,7 @@ async function checkDatabaseStructure() {
       SELECT TABLE_NAME 
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = DATABASE() 
-      AND TABLE_NAME IN ('zones', 'zone')
+      AND TABLE_NAME = 'zones'
     `);
 
     console.log('\nFound zone tables:', zonesTables.map(t => t.TABLE_NAME));
@@ -99,26 +99,19 @@ async function checkDatabaseStructure() {
       });
     }
 
-    // Check zone table structure (old)
-    if (zonesTables.some(t => t.TABLE_NAME === 'zone')) {
-      console.log('\n=== zone table structure (old) ===');
-      const [zoneColumns] = await connection.query(`
-        SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT
-        FROM information_schema.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE() 
-        AND TABLE_NAME = 'zone'
-        ORDER BY ORDINAL_POSITION
-      `);
-      zoneColumns.forEach(col => {
-        console.log(`${col.COLUMN_NAME}: ${col.DATA_TYPE} (${col.IS_NULLABLE === 'YES' ? 'NULL' : 'NOT NULL'}) ${col.COLUMN_DEFAULT ? `DEFAULT ${col.COLUMN_DEFAULT}` : ''}`);
-      });
+    // Check if old zone table still exists (should be dropped)
+    const [oldZoneTables] = await connection.query(`
+      SELECT TABLE_NAME 
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'zone'
+    `);
 
-      // Check zone data
-      const [zoneData] = await connection.query('SELECT id, name, city_id, delivery_fee, status FROM zone LIMIT 5');
-      console.log('\nSample zone data:');
-      zoneData.forEach(zone => {
-        console.log(`ID: ${zone.id}, Name: ${zone.name}, City ID: ${zone.city_id}, Delivery Fee: ${zone.delivery_fee}, Status: ${zone.status}`);
-      });
+    if (oldZoneTables.length > 0) {
+      console.log('\n⚠️  WARNING: Old zone table still exists and should be dropped!');
+      console.log('Run the migration: safe_drop_old_zone_table.sql');
+    } else {
+      console.log('\n✅ Old zone table has been successfully dropped');
     }
 
   } catch (error) {
