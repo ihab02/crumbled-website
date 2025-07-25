@@ -64,28 +64,33 @@ export default function LoginPage() {
         
         // Handle CredentialsSignin error (NextAuth's default when authorize returns null)
         if (result.error === 'CredentialsSignin') {
-          console.log('🔍 CREDENTIALS SIGNIN ERROR DETECTED - checking user status...');
-          // Check if user exists but login failed (likely email verification issue)
+          console.log('🔍 CREDENTIALS SIGNIN ERROR DETECTED - checking credentials first...');
+          
+          // First, check if the credentials are correct by attempting to verify them
           try {
-            console.log('📞 Calling check-user-exists API for email:', email);
-            const checkUserRes = await fetch('/api/auth/check-user-exists', {
+            console.log('🔐 Checking credentials for email:', email);
+            const credentialsCheckRes = await fetch('/api/auth/check-credentials', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email }),
+              body: JSON.stringify({ email, password }),
             });
-            const userData = await checkUserRes.json();
-            console.log('📋 User data response:', userData);
+            const credentialsData = await credentialsCheckRes.json();
+            console.log('🔐 Credentials check response:', credentialsData);
             
-            if (userData.exists && !userData.emailVerified) {
-              console.log('✅ User exists but email not verified - SHOWING RESEND OPTION');
+            if (credentialsData.credentialsValid && !credentialsData.emailVerified) {
+              console.log('✅ Credentials correct but email not verified - SHOWING RESEND OPTION');
               setShowResend(true);
               toast.error('Please verify your email before logging in. Check your inbox for the verification link.');
               return;
+            } else if (!credentialsData.credentialsValid) {
+              console.log('❌ Invalid credentials - showing generic error');
+              toast.error('Invalid email or password. Please check your credentials.');
+              return;
             } else {
-              console.log('❌ User either does not exist or email is verified - showing generic error');
+              console.log('❌ Other error - showing generic error');
             }
           } catch (checkError) {
-            console.log('❌ Could not check user status:', checkError);
+            console.log('❌ Could not check credentials:', checkError);
           }
         }
         

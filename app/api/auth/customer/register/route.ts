@@ -123,13 +123,13 @@ export async function POST(req: NextRequest) {
 
       const customerId = result.insertId;
 
-      // Add address if provided
-      if (cityId && zoneId && address) {
-        await connection.query(
-          'INSERT INTO addresses (customer_id, city_id, zone_id, street_address, additional_info, is_default) VALUES (?, ?, ?, ?, ?, TRUE)',
-          [customerId, cityId, zoneId, address, additionalInfo || null]
-        );
-      }
+                        // Add address if provided
+                  if (cityId && zoneId && address) {
+                    await connection.query(
+                      'INSERT INTO customer_addresses (customer_id, city_id, zone_id, street_address, additional_info, is_default) VALUES (?, ?, ?, ?, ?, TRUE)',
+                      [customerId, cityId, zoneId, address, additionalInfo || null]
+                    );
+                  }
 
       // Generate email verification token
       const verificationToken = randomBytes(32).toString('hex');

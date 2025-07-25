@@ -80,10 +80,10 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          // Check if email is verified
+          // Only check email verification if password is correct
           if (user.email_verified === 0 || user.email_verified === false) {
-            console.log('Email not verified for user:', credentials.email);
-            // Return null instead of throwing error, but we'll handle this in the frontend
+            console.log('Password correct but email not verified for user:', credentials.email);
+            // Return null to indicate valid credentials but unverified email
             return null;
           }
 

@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
       // Add address
       await pool.query(
-        'INSERT INTO addresses (customer_id, city_id, zone_id, street_address, is_default) VALUES (?, ?, ?, ?, true)',
+        'INSERT INTO customer_addresses (customer_id, city_id, zone_id, street_address, is_default) VALUES (?, ?, ?, ?, true)',
         [customerId, cityId, zoneId, address]
       );
 
