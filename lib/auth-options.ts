@@ -102,6 +102,55 @@ export const authOptions: NextAuthOptions = {
           throw error;
         }
       }
+    }),
+    CredentialsProvider({
+      name: 'AutoLogin',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        autoLogin: { label: 'Auto Login', type: 'text' }
+      },
+      async authorize(credentials) {
+        console.log('NextAuth auto-login called with email:', credentials?.email);
+        
+        if (!credentials?.email || credentials?.autoLogin !== 'verified') {
+          console.log('Invalid auto-login credentials');
+          return null;
+        }
+
+        try {
+          const [rows] = await db.query(
+            'SELECT * FROM customers WHERE email = ?',
+            [credentials.email]
+          );
+
+          const user = (rows as any[])[0];
+          console.log('Auto-login user found:', !!user);
+
+          if (!user) {
+            console.log('No user found for auto-login:', credentials.email);
+            return null;
+          }
+
+          // Check if email is verified
+          if (user.email_verified === 0 || user.email_verified === false) {
+            console.log('Email not verified for auto-login:', credentials.email);
+            return null;
+          }
+
+          console.log('Auto-login successful for user:', credentials.email);
+          return {
+            id: user.id.toString(),
+            email: user.email,
+            name: `${user.first_name} ${user.last_name}`,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            phone: user.phone
+          };
+        } catch (error) {
+          console.error('NextAuth auto-login error:', error);
+          throw error;
+        }
+      }
     })
   ],
   callbacks: {

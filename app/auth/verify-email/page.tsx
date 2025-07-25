@@ -66,9 +66,35 @@ export default function VerifyEmailPage() {
             console.log('📧 User email for auto-login:', data.email)
           }
           
-          // Redirect to login page with verification success parameter
-          setTimeout(() => {
-            router.push(`/auth/login?verified=true&email=${encodeURIComponent(data.email || '')}`)
+          // Auto-login the user after successful verification
+          setTimeout(async () => {
+            if (data.email) {
+              setIsLoggingIn(true)
+              try {
+                console.log('🔐 Attempting automatic login for:', data.email)
+                
+                // Use NextAuth auto-login provider
+                const result = await signIn('AutoLogin', {
+                  email: data.email,
+                  autoLogin: 'verified',
+                  redirect: false,
+                })
+                
+                if (result?.ok) {
+                  console.log('✅ Auto-login successful, redirecting to flavors')
+                  toast.success('Welcome! Redirecting to our delicious flavors...')
+                  router.push('/flavors')
+                } else {
+                  console.log('❌ Auto-login failed, redirecting to login page')
+                  router.push(`/auth/login?verified=true&email=${encodeURIComponent(data.email)}`)
+                }
+              } catch (loginError) {
+                console.log('❌ Auto-login error:', loginError)
+                router.push(`/auth/login?verified=true&email=${encodeURIComponent(data.email)}`)
+              }
+            } else {
+              router.push('/auth/login')
+            }
           }, 2000)
         } else {
           console.log('❌ Email verification failed:', data.error)
@@ -135,12 +161,32 @@ export default function VerifyEmailPage() {
                   </div>
                 ) : (
                   <Button
-                    onClick={() => {
-                      router.push(`/auth/login?verified=true&email=${encodeURIComponent(userEmail || '')}`)
+                    onClick={async () => {
+                      if (userEmail) {
+                        setIsLoggingIn(true)
+                        try {
+                          const result = await signIn('AutoLogin', {
+                            email: userEmail,
+                            autoLogin: 'verified',
+                            redirect: false,
+                          })
+                          
+                          if (result?.ok) {
+                            toast.success('Welcome! Redirecting to our delicious flavors...')
+                            router.push('/flavors')
+                          } else {
+                            router.push(`/auth/login?verified=true&email=${encodeURIComponent(userEmail)}`)
+                          }
+                        } catch (loginError) {
+                          router.push(`/auth/login?verified=true&email=${encodeURIComponent(userEmail)}`)
+                        }
+                      } else {
+                        router.push('/auth/login')
+                      }
                     }}
                     className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700"
                   >
-                    Continue to Login
+                    Continue to Flavors
                   </Button>
                 )}
               </div>
