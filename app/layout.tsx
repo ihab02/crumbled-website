@@ -8,6 +8,7 @@ import { Inter } from 'next/font/google'
 import { Providers } from './providers'
 import Header from "@/components/header"
 import { Footer } from "@/components/footer"
+import PopupAdsWrapper from "@/components/PopupAdsWrapper"
 
 const quicksand = Quicksand({
   subsets: ["latin"],
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Header />
             <main className="flex-1">{children}</main>
             <Footer />
+            <PopupAdsWrapper />
           </div>
           <Toaster />
           <SonnerToaster />

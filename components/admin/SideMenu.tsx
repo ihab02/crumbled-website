@@ -114,6 +114,11 @@ const menuItems = [
         title: 'Sliding Media',
         href: '/admin/sliding-media',
         icon: Image
+      },
+      {
+        title: 'Popup Ads',
+        href: '/admin/popup-ads',
+        icon: Target
       }
     ]
   },

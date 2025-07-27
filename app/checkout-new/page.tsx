@@ -1578,7 +1578,7 @@ export default function NewCheckoutPage() {
                         disabled={!paymentMethod}
                         className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto max-w-full"
                       >
-                        Continue to Confirmation
+                        Continue
                       </Button>
                     </div>
                   </div>

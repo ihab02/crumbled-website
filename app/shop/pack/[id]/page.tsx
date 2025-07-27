@@ -856,7 +856,7 @@ export default function PackProductPage() {
                 setShowConfirmation(false);
                 router.push('/cart');
               }}
-              className="flex-1 bg-pink-600 hover:bg-pink-700 text-sm sm:text-base"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-sm sm:text-base"
             >
               Go to My Bag
             </Button>
