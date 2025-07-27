@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getJwtSecret, validateAuthConfig } from '@/lib/auth-config';
 import { sessionManager } from '@/lib/session-manager';
+import { debugLog } from '@/lib/debug-utils';
 
 // Paths that require authentication
 const protectedPaths = [
@@ -136,27 +137,27 @@ export async function middleware(request: NextRequest) {
 
   // Handle admin routes
   if (isAdminPath) {
-    console.log('Admin path detected:', path);
+    await debugLog('Admin path detected:', path);
     
     // Skip middleware for admin login page and its API
     if (path === '/admin/login' || path === '/api/auth/admin/login') {
-      console.log('Skipping middleware for login page/API');
+      await debugLog('Skipping middleware for login page/API');
       return NextResponse.next();
     }
 
     // Check for admin token in cookies
     const adminToken = request.cookies.get('adminToken');
-    console.log('Middleware - All cookies:', request.cookies.getAll());
-    console.log('Middleware - Admin token from cookie:', adminToken?.value);
+          await debugLog('Middleware - All cookies:', request.cookies.getAll());
+      await debugLog('Middleware - Admin token from cookie:', adminToken?.value);
 
     let isAdmin = false;
 
     if (adminToken?.value) {
       try {
         const decoded = await verifyJWT(adminToken.value, 'admin');
-        console.log('Middleware - Decoded token:', decoded);
+        await debugLog('Middleware - Decoded token:', decoded);
         isAdmin = decoded.type === 'admin';
-        console.log('Is admin:', isAdmin);
+        await debugLog('Is admin:', isAdmin);
       } catch (error) {
         console.error('Token verification error:', error);
         isAdmin = false;
@@ -164,33 +165,33 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!isAdmin) {
-      console.log('Not admin, redirecting to login');
+      await debugLog('Not admin, redirecting to login');
       const response = NextResponse.redirect(new URL('/admin/login', request.url));
       // Clear any existing admin token
       response.cookies.delete('adminToken');
       return response;
     }
 
-    console.log('Admin verified, proceeding');
+    await debugLog('Admin verified, proceeding');
     return NextResponse.next();
   }
 
   // Handle protected customer routes
   if (isProtectedPath) {
-    console.log('Protected path detected:', path);
+    await debugLog('Protected path detected:', path);
     
     // Check for customer token in cookies
     const customerToken = request.cookies.get('token');
-    console.log('Middleware - Customer token from cookie:', customerToken?.value);
+    await debugLog('Middleware - Customer token from cookie:', customerToken?.value);
 
     let isAuthenticated = false;
 
     if (customerToken?.value) {
       try {
         const decoded = await verifyJWT(customerToken.value, 'customer');
-        console.log('Middleware - Decoded customer token:', decoded);
+        await debugLog('Middleware - Decoded customer token:', decoded);
         isAuthenticated = decoded.type === 'customer';
-        console.log('Is authenticated customer:', isAuthenticated);
+        await debugLog('Is authenticated customer:', isAuthenticated);
       } catch (error) {
         console.error('Customer token verification error:', error);
         isAuthenticated = false;
@@ -198,7 +199,7 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!isAuthenticated) {
-      console.log('Not authenticated, redirecting to login');
+      await debugLog('Not authenticated, redirecting to login');
       const loginUrl = new URL('/auth/login', request.url);
       loginUrl.searchParams.set('redirect', request.nextUrl.pathname + request.nextUrl.search);
       const response = NextResponse.redirect(loginUrl);
@@ -207,7 +208,7 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    console.log('Customer verified, proceeding');
+    await debugLog('Customer verified, proceeding');
     return NextResponse.next();
   }
 

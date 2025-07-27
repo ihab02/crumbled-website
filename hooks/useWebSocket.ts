@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 
 export interface WebSocketMessage {
   type: string;
@@ -38,6 +39,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     onDisconnect,
     onError
   } = options;
+  const { debugLog } = useDebugLogger();
 
   const [state, setState] = useState<WebSocketState>({
     isConnected: false,
@@ -88,7 +90,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[WebSocket] Connected');
+        debugLog('[WebSocket] Connected');
         setState(prev => ({
           ...prev,
           isConnected: true,
@@ -113,7 +115,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       };
 
       ws.onclose = (event) => {
-        console.log('[WebSocket] Disconnected:', event.code, event.reason);
+        debugLog('[WebSocket] Disconnected:', event.code, event.reason);
         setState(prev => ({
           ...prev,
           isConnected: false,
@@ -124,7 +126,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         // Attempt to reconnect if not a clean close
         if (event.code !== 1000 && reconnectAttemptsRef.current < maxReconnectAttempts) {
           reconnectAttemptsRef.current++;
-          console.log(`[WebSocket] Reconnecting... Attempt ${reconnectAttemptsRef.current}`);
+          debugLog(`[WebSocket] Reconnecting... Attempt ${reconnectAttemptsRef.current}`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();

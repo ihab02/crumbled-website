@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
     // Fetch active popup ads
     const popups = await databaseService.query(`
       SELECT 
-        id, title, content_type, content, image_url, video_url,
-        background_color, text_color, button_text, button_color,
+        id, title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
+        image_url, video_url, background_color, text_color, button_text, button_color,
         button_url, show_button, auto_close_seconds,
         width, height, position, animation, delay_seconds,
         show_frequency, target_pages, exclude_pages,

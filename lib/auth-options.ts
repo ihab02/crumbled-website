@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 import db from './db';
 import { JWT } from 'next-auth/jwt';
+import { debugLog } from '@/lib/debug-utils';
 
 interface User {
   id: string;
@@ -43,18 +44,18 @@ export const authOptions: NextAuthOptions = {
         autoLogin: { label: 'Auto Login', type: 'text' }
       },
       async authorize(credentials) {
-        console.log('NextAuth authorize called with email:', credentials?.email);
+        await debugLog('NextAuth authorize called with email:', credentials?.email);
         
         // Check if this is an auto-login attempt (no password required)
         const isAutoLogin = credentials?.autoLogin === 'verified';
         
         if (!credentials?.email) {
-          console.log('Missing email');
+          await debugLog('Missing email');
           return null;
         }
         
         if (!isAutoLogin && !credentials?.password) {
-          console.log('Missing password for regular login');
+          await debugLog('Missing password for regular login');
           return null;
         }
 
@@ -65,14 +66,14 @@ export const authOptions: NextAuthOptions = {
           );
 
           const user = (rows as any[])[0];
-          console.log('User found:', !!user);
+          await debugLog('User found:', !!user);
 
           if (!user) {
-            console.log('No user found with email:', credentials.email);
+            await debugLog('No user found with email:', credentials.email);
             return null;
           }
 
-          console.log('User data:', {
+          await debugLog('User data:', {
             id: user.id,
             email: user.email,
             firstName: user.first_name,
@@ -84,22 +85,22 @@ export const authOptions: NextAuthOptions = {
           if (!isAutoLogin) {
             // Compare password with bcrypt
             const isPasswordValid = await compare(credentials.password, user.password);
-            console.log('Password valid:', isPasswordValid);
+            await debugLog('Password valid:', isPasswordValid);
             
             if (!isPasswordValid) {
-              console.log('Invalid password for user:', credentials.email);
+              await debugLog('Invalid password for user:', credentials.email);
               return null;
             }
           }
 
           // Only check email verification if password is correct
           if (user.email_verified === 0 || user.email_verified === false) {
-            console.log('Password correct but email not verified for user:', credentials.email);
+            await debugLog('Password correct but email not verified for user:', credentials.email);
             // Return null to indicate valid credentials but unverified email
             return null;
           }
 
-          console.log('Authentication successful for user:', credentials.email);
+          await debugLog('Authentication successful for user:', credentials.email);
           return {
             id: user.id.toString(),
             email: user.email,
@@ -138,10 +139,10 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async signIn({ user, account, profile, isNewUser }) {
-      console.log('Sign in event:', { user: user?.email, isNewUser });
+      await debugLog('Sign in event:', { user: user?.email, isNewUser });
     },
     async signOut({ session, token }) {
-      console.log('Sign out event');
+      await debugLog('Sign out event');
     },
   },
   pages: {

@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
+import { useDebugLogger } from '@/hooks/use-debug-mode'
 
 interface BundleItem {
   id?: string
@@ -46,6 +47,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cartCount, setCartCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const { debugLog } = useDebugLogger()
   
   // Refs for caching and debouncing
   const cacheTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -65,17 +67,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       (now.getTime() - lastFetchRef.current.getTime()) < CART_CACHE_DURATION
 
     if (!forceRefresh && cacheValid) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Using cached cart data')
-      }
+      debugLog('🔄 Using cached cart data')
       return
     }
 
     try {
       setIsLoading(true)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Fetching cart from API...')
-      }
+      debugLog('🔄 Fetching cart from API...')
       
       const response = await fetch('/api/cart')
       const data = await response.json()
@@ -86,9 +84,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setCartCount(count)
         setLastUpdated(now)
         lastFetchRef.current = now
-        if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Cart updated successfully')
-        }
+        debugLog('✅ Cart updated successfully')
       }
     } catch (error) {
       console.error('❌ Error fetching cart:', error)

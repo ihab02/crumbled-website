@@ -25,6 +25,61 @@ This document tracks all console logging statements in the codebase and their st
 - **Changes**: Added debug logging for API operations
 - **Impact**: Medium - Enhanced existing error logging
 
+### 5. **Middleware** (`middleware.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()`
+- **Impact**: High - Critical authentication and routing logic
+
+### 6. **Auth Options** (`lib/auth-options.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()`
+- **Impact**: High - Authentication flow logging
+
+### 7. **Admin Auth Hook** (`hooks/use-admin-auth.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log and console.error statements converted to `debugLog()`
+- **Impact**: Medium - Admin authentication logging
+
+### 8. **Popup Ads Component** (`components/PopupAds.tsx`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()` using `useDebugLogger()`
+- **Impact**: High - Extensive popup filtering and display logic
+
+### 9. **Cart Provider** (`components/cart-provider.tsx`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()` using `useDebugLogger()`
+- **Impact**: Medium - Cart state management logging
+
+### 10. **Header Component** (`components/header.tsx`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()` using `useDebugLogger()`
+- **Impact**: Low - Share functionality logging
+
+### 11. **Upload API** (`app/api/upload/route.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()`
+- **Impact**: Medium - File upload authentication and processing
+
+### 12. **Popup Ads API** (`app/api/admin/popup-ads/route.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log and console.error statements converted to `debugLog()`
+- **Impact**: High - Popup CRUD operations
+
+### 13. **Popup Ads Individual API** (`app/api/admin/popup-ads/[id]/route.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()`
+- **Impact**: Medium - Individual popup operations
+
+### 14. **Email Service** (`lib/email-service.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()`
+- **Impact**: High - Email sending operations and debugging
+
+### 15. **WebSocket Hook** (`hooks/useWebSocket.ts`)
+- **Status**: ✅ **COMPLETED**
+- **Changes**: All console.log statements converted to `debugLog()` using `useDebugLogger()`
+- **Impact**: Medium - WebSocket connection management
+
 ## 🔄 **PENDING - Needs Debug Mode Conditioning**
 
 ### **High Priority Files**
@@ -53,33 +108,38 @@ This document tracks all console logging statements in the codebase and their st
 - **Status**: 🔄 **PENDING**
 - **Action**: These should only be visible when debug mode is enabled
 
+#### 5. **Admin Popup Ads Page** (`app/admin/popup-ads/page.tsx`)
+- **Console Statements**: 50+ statements for preview and debugging
+- **Status**: 🔄 **PENDING**
+- **Action**: Convert to `debugLog()` using `useDebugLogger()`
+
 ### **Medium Priority Files**
 
-#### 5. **Shop Pages** (`app/shop/page.tsx`, `app/shop/product/[id]/page.tsx`)
+#### 6. **Shop Pages** (`app/shop/page.tsx`, `app/shop/product/[id]/page.tsx`)
 - **Console Statements**: Error logging
 - **Status**: 🔄 **PENDING**
 - **Action**: Keep console.error, but enhance with debug context
 
-#### 6. **Flavor Pages** (`app/flavors/page.tsx`, `app/flavors/[id]/page.tsx`)
+#### 7. **Flavor Pages** (`app/flavors/page.tsx`, `app/flavors/[id]/page.tsx`)
 - **Console Statements**: Error logging
 - **Status**: 🔄 **PENDING**
 - **Action**: Keep console.error, but enhance with debug context
 
-#### 7. **Order Pages** (`app/orders/page.tsx`, `app/orders/[id]/page.tsx`)
+#### 8. **Order Pages** (`app/orders/page.tsx`, `app/orders/[id]/page.tsx`)
 - **Console Statements**: Error logging
 - **Status**: 🔄 **PENDING**
 - **Action**: Keep console.error, but enhance with debug context
 
 ### **Low Priority Files**
 
-#### 8. **Test Scripts** (Root directory)
+#### 9. **Test Scripts** (Root directory)
 - `test-otp-flow.js`
 - `test-checkout-flow.js`
 - `test-cart.js`
 - **Status**: ✅ **KEEP AS-IS**
 - **Action**: These are standalone test scripts, no changes needed
 
-#### 9. **Migration Scripts** (`scripts/` directory)
+#### 10. **Migration Scripts** (`scripts/` directory)
 - Multiple migration scripts with console logging
 - **Status**: ✅ **KEEP AS-IS**
 - **Action**: These are standalone scripts, no changes needed
@@ -91,8 +151,19 @@ This document tracks all console logging statements in the codebase and their st
 2. ✅ Order Mode Service  
 3. ✅ Cart Page
 4. ✅ User Orders API
+5. ✅ Middleware
+6. ✅ Auth Options
+7. ✅ Admin Auth Hook
+8. ✅ Popup Ads Component
+9. ✅ Cart Provider
+10. ✅ Header Component
+11. ✅ Upload API
+12. ✅ Popup Ads API
+13. ✅ Popup Ads Individual API
+14. ✅ Email Service
+15. ✅ WebSocket Hook
 
-### **Phase 2: API Routes** (NEXT)
+### **Phase 2: Remaining API Routes** (NEXT)
 1. Review API
 2. SMS API routes
 3. Other API routes with debug logging
@@ -101,6 +172,7 @@ This document tracks all console logging statements in the codebase and their st
 1. Checkout pages
 2. Debug/diagnostic pages
 3. Shop and product pages
+4. Admin popup ads page
 
 ### **Phase 4: Error Logging Enhancement** (FUTURE)
 1. Enhance console.error statements with debug context
@@ -108,10 +180,11 @@ This document tracks all console logging statements in the codebase and their st
 
 ## 📊 **Statistics**
 
-- **Total Console Statements Found**: ~200+
-- **High Priority (Debug Mode)**: ~100 statements
+- **Total Console Statements Found**: ~300+
+- **High Priority (Debug Mode)**: ~200 statements
 - **Medium Priority (Error Logging)**: ~50 statements
 - **Low Priority (Scripts)**: ~50 statements
+- **Completed Conversions**: ~150 statements (50% complete)
 
 ## 🔧 **Debug Mode Implementation**
 
@@ -152,6 +225,28 @@ function MyComponent() {
 ## 📝 **Next Steps**
 
 1. **Complete Phase 2**: Update remaining API routes
-2. **Test Debug Mode**: Verify all debug logs work correctly
-3. **Documentation**: Update developer documentation
-4. **Monitoring**: Add debug mode usage analytics 
+2. **Complete Phase 3**: Update frontend pages
+3. **Test Debug Mode**: Verify all debug logs work correctly
+4. **Documentation**: Update developer documentation
+5. **Monitoring**: Add debug mode usage analytics
+
+## 🚨 **Critical Rules for Developers**
+
+### **Frontend Components**
+- **Always use `useDebugLogger()`** for frontend debug logging
+- **Never use direct `console.log()`** in components
+- **Import the hook**: `import { useDebugLogger } from '@/hooks/use-debug-mode'`
+
+### **Backend API Routes**
+- **Always use `debugLog()`** for backend debug logging
+- **Import the utility**: `import { debugLog } from '@/lib/debug-utils'`
+- **Use `await`** since it's an async function
+
+### **Error Logging**
+- **Keep `console.error()`** for actual errors that should always be logged
+- **Use `debugLog()`** for debug information and troubleshooting
+
+### **Security Considerations**
+- **Never log sensitive data** (passwords, tokens, personal info)
+- **Debug mode should be disabled in production**
+- **Debug logs may contain sensitive information** - use with caution 

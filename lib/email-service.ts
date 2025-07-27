@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import pool from '@/lib/db';
+import { debugLog } from '@/lib/debug-utils';
 
 export interface EmailSettings {
   smtp_host: string;
@@ -123,7 +124,7 @@ export class EmailService {
       };
 
       const result = await transporter.sendMail(mailOptions);
-      console.log('Email verification sent successfully:', result.messageId);
+      await debugLog('Email verification sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('Error sending email verification:', error);
@@ -233,7 +234,7 @@ export class EmailService {
       };
 
       const result = await transporter.sendMail(mailOptions);
-      console.log('Password reset email sent successfully:', result.messageId);
+      await debugLog('Password reset email sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('Error sending password reset email:', error);
@@ -294,7 +295,7 @@ export class EmailService {
       };
 
       const result = await transporter.sendMail(mailOptions);
-      console.log('Password changed notification sent successfully:', result.messageId);
+      await debugLog('Password changed notification sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('Error sending password changed notification:', error);
@@ -316,7 +317,7 @@ export class EmailService {
     const promoCodeDetails = order.promo_code_details;
     const total = subtotal + deliveryFee - discount;
     
-    console.log('🔍 [DEBUG] Email Service - Raw order data:', {
+    await debugLog('🔍 [DEBUG] Email Service - Raw order data:', {
       id: order.id,
       subtotal: order.subtotal,
       delivery_fee: order.delivery_fee,
@@ -332,7 +333,7 @@ export class EmailService {
     const formattedTime = createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
     
-    console.log('🔍 [DEBUG] Email Service - Order data:', {
+    await debugLog('🔍 [DEBUG] Email Service - Order data:', {
       id: order.id,
       subtotal,
       deliveryFee,
@@ -361,20 +362,23 @@ export class EmailService {
         flavors = item.flavors;
       }
       
-      console.log('🔍 [DEBUG] Email Service - Processed item:', {
-        name: item.product_name || item.name,
-        product_type: item.product_type,
-        flavors: flavors,
-        flavorsLength: flavors.length
-      });
-      
       return {
         ...item,
         flavors: flavors
       };
     });
 
-    console.log('🔍 [DEBUG] Email Service - Final processed items:', processedItems.map(item => ({
+    // Debug processed items after mapping
+    for (const item of processedItems) {
+      await debugLog('🔍 [DEBUG] Email Service - Processed item:', {
+        name: item.product_name || item.name,
+        product_type: item.product_type,
+        flavors: item.flavors,
+        flavorsLength: item.flavors.length
+      });
+    }
+
+    await debugLog('🔍 [DEBUG] Email Service - Final processed items:', processedItems.map(item => ({
       name: item.product_name || item.name,
       product_type: item.product_type,
       flavors: item.flavors,
@@ -382,7 +386,7 @@ export class EmailService {
     })));
 
     // Debug delivery information
-    console.log('🔍 [DEBUG] Email Service - Delivery information:', {
+    await debugLog('🔍 [DEBUG] Email Service - Delivery information:', {
       delivery_time: order.delivery_time,
       delivery_slot: order.delivery_slot,
       expected_delivery_date: order.expected_delivery_date,
@@ -577,7 +581,7 @@ export class EmailService {
     };
 
     const result = await transporter.sendMail(mailOptions);
-    console.log('Order confirmation email sent successfully:', result.messageId);
+          await debugLog('Order confirmation email sent successfully:', result.messageId);
     return { success: true, messageId: result.messageId };
   }
 
@@ -674,7 +678,7 @@ export class EmailService {
       };
 
       const result = await transporter.sendMail(mailOptions);
-      console.log('Order status update email sent successfully:', result.messageId);
+      await debugLog('Order status update email sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
   } catch (error) {
       console.error('❌ Failed to send order status update email:', error);

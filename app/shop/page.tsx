@@ -215,21 +215,24 @@ function ShopPageContent() {
                 >
                 <div className="aspect-square overflow-hidden relative">
                   {product.image_url ? (
-                    <Image
+                    <img
                       src={product.image_url}
                       alt={product.name}
-                      fill
                       className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                      onError={(e) => {
+                        console.error('Image failed to load:', product.image_url);
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
                     />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
-                      {product.is_pack ? (
-                        <Package className="h-12 w-12 text-pink-400" />
-                      ) : (
-                        <Cookie className="h-12 w-12 text-pink-400" />
-                      )}
-                    </div>
-                  )}
+                  ) : null}
+                  <div className={`w-full h-full bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center ${product.image_url ? 'hidden' : ''}`}>
+                    {product.is_pack ? (
+                      <Package className="h-12 w-12 text-pink-400" />
+                    ) : (
+                      <Cookie className="h-12 w-12 text-pink-400" />
+                    )}
+                  </div>
                 </div>
                 <CardContent className="p-6 space-y-4">
                   <div>

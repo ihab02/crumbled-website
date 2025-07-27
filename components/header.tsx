@@ -120,7 +120,7 @@ export default function Header() {
           url
         })
       } catch (error) {
-        console.log('Share cancelled or failed')
+        debugLog('Share cancelled or failed')
       }
     } else {
       // Fallback to copy to clipboard

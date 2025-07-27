@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { debugLog } from '@/lib/debug-utils-client';
 
 interface AdminUser {
   id: number;
@@ -36,7 +37,7 @@ export function useAdminAuth() {
         }
       }
     } catch (error) {
-      console.error('Auth check error:', error);
+      await debugLog('Auth check error:', error);
       setUser(null);
     } finally {
       setLoading(false);
@@ -44,14 +45,14 @@ export function useAdminAuth() {
   };
 
   const logout = async () => {
-    console.log('Logout function called');
+    await debugLog('Logout function called');
     try {
       const response = await fetch('/api/auth/admin/logout', {
         method: 'POST',
         credentials: 'include'
       });
 
-      console.log('Logout response:', response.status, response.ok);
+      await debugLog('Logout response:', response.status, response.ok);
 
       if (response.ok) {
         setUser(null);
@@ -61,7 +62,7 @@ export function useAdminAuth() {
         toast.error('Failed to logout');
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      await debugLog('Logout error:', error);
       toast.error('Failed to logout');
     }
   };

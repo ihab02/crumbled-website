@@ -5,12 +5,19 @@ import { useSession } from 'next-auth/react';
 import { Play, Pause, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useDebugLogger } from '@/hooks/use-debug-mode';
 
 interface PopupAd {
   id: number;
   title: string;
   content_type: 'image' | 'text' | 'html' | 'video';
   content: string;
+  content_overlay?: boolean;
+  overlay_position?: 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  overlay_effect?: 'none' | 'fade' | 'slide' | 'bounce' | 'glow' | 'shadow';
+  overlay_background?: string;
+  overlay_padding?: number;
+  overlay_border_radius?: number;
   image_url?: string;
   video_url?: string;
   background_color: string;
@@ -42,12 +49,39 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
   const [popups, setPopups] = useState<PopupAd[]>([]);
   const [currentPopup, setCurrentPopup] = useState<PopupAd | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [responsiveDimensions, setResponsiveDimensions] = useState({ width: 400, height: 300 });
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15));
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [shownPopups, setShownPopups] = useState<Set<number>>(() => {
+    // Initialize from sessionStorage
+    const stored = sessionStorage.getItem('shown_popups');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        return new Set(parsed);
+      } catch (e) {
+        console.error('Error parsing shown popups:', e);
+      }
+    }
+    return new Set();
+  });
+  
+  // Use a stable session ID that persists across re-renders
+  const [sessionId] = useState(() => {
+    // Try to get existing session ID from sessionStorage
+    const existingSessionId = sessionStorage.getItem('popup_session_id');
+    if (existingSessionId) {
+      return existingSessionId;
+    }
+    // Generate new session ID if none exists
+    const newSessionId = Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('popup_session_id', newSessionId);
+    return newSessionId;
+  });
   const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const { data: session } = useSession();
+  const { debugLog } = useDebugLogger();
 
   // Helper functions for YouTube URL handling
   const isYouTubeUrl = (url: string): boolean => {
@@ -78,11 +112,49 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
     fetchActivePopups();
   }, [currentPath]);
 
+  // Calculate responsive dimensions when popup changes or window resizes
+  useEffect(() => {
+    const updateResponsiveDimensions = () => {
+      if (currentPopup) {
+        const maxWidth = Math.min(currentPopup.width || 400, window.innerWidth - 40);
+        const maxHeight = Math.min(currentPopup.height || 300, window.innerHeight - 40);
+        setResponsiveDimensions({
+          width: Math.max(Math.min(maxWidth, window.innerWidth * 0.95), 200),
+          height: Math.max(Math.min(maxHeight, window.innerHeight * 0.95), 150)
+        });
+      }
+    };
+
+    updateResponsiveDimensions();
+    
+    // Add resize listener
+    window.addEventListener('resize', updateResponsiveDimensions);
+    
+    return () => {
+      window.removeEventListener('resize', updateResponsiveDimensions);
+    };
+  }, [currentPopup]);
+
   useEffect(() => {
     if (currentPopup) {
+      // Check if this popup has already been shown in this session
+      if (shownPopups.has(currentPopup.id)) {
+        debugLog('🔍 Popup already shown in this session:', currentPopup.id);
+        setCurrentPopup(null);
+        return;
+      }
+
       const timer = setTimeout(() => {
         setIsVisible(true);
         trackPopupAction(currentPopup.id, 'shown');
+        
+        // Mark this popup as shown in this session
+        setShownPopups(prev => {
+          const newSet = new Set([...prev, currentPopup.id]);
+          // Save to sessionStorage
+          sessionStorage.setItem('shown_popups', JSON.stringify(Array.from(newSet)));
+          return newSet;
+        });
         
         // Set up auto-close timer if specified
         if (currentPopup.auto_close_seconds && currentPopup.auto_close_seconds > 0) {
@@ -99,73 +171,90 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
         }
       };
     }
-  }, [currentPopup]);
+  }, [currentPopup]); // Remove shownPopups from dependency array to prevent re-triggering
 
   const fetchActivePopups = async () => {
     try {
-      console.log('🔍 Fetching active popups...');
-      const response = await fetch('/api/popup-ads/active');
+      debugLog('🔍 Fetching active popups for path:', currentPath);
+      const response = await fetch(`/api/popup-ads/active?path=${encodeURIComponent(currentPath || '/')}`);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('🔍 Raw popup data from API:', data);
-        const filteredPopups = filterPopupsForCurrentPage(data.popups || []);
-        console.log('🔍 Filtered popups:', filteredPopups);
+        debugLog('🔍 Raw popup data from API:', data);
         
-        if (filteredPopups.length > 0) {
+        if (data.popups && data.popups.length > 0) {
           // Sort by priority and select the highest priority popup
-          const sortedPopups = filteredPopups.sort((a, b) => b.priority - a.priority);
-          console.log('🔍 Selected popup:', sortedPopups[0]);
-          setCurrentPopup(sortedPopups[0]);
+          const sortedPopups = data.popups.sort((a: PopupAd, b: PopupAd) => b.priority - a.priority);
+          const selectedPopup = sortedPopups[0];
+          debugLog('🔍 Selected popup:', selectedPopup);
+          debugLog('🔍 Selected popup content_overlay details:', {
+            content_overlay: selectedPopup.content_overlay,
+            content_overlay_type: typeof selectedPopup.content_overlay,
+            content_overlay_boolean: Boolean(selectedPopup.content_overlay),
+            content_type: selectedPopup.content_type,
+            has_content: !!selectedPopup.content
+          });
+          setCurrentPopup(selectedPopup);
+          
+          // Immediately set responsive dimensions for the new popup
+          const maxWidth = Math.min(selectedPopup.width || 400, window.innerWidth - 40);
+          const maxHeight = Math.min(selectedPopup.height || 300, window.innerHeight - 40);
+          setResponsiveDimensions({
+            width: Math.max(Math.min(maxWidth, window.innerWidth * 0.95), 200),
+            height: Math.max(Math.min(maxHeight, window.innerHeight * 0.95), 150)
+          });
         } else {
-          console.log('🔍 No popups after filtering');
+          debugLog('🔍 No popups returned from API');
+          setCurrentPopup(null);
         }
       } else {
         console.error('🔍 API response not ok:', response.status);
+        setCurrentPopup(null);
       }
     } catch (error) {
       console.error('Error fetching popup ads:', error);
+      setCurrentPopup(null);
     }
   };
 
   const filterPopupsForCurrentPage = (popups: PopupAd[]): PopupAd[] => {
-    console.log('🔍 Filtering popups for path:', currentPath);
-    console.log('🔍 Current path type:', typeof currentPath);
-    console.log('🔍 Current path length:', currentPath?.length);
-    console.log('🔍 Total popups to filter:', popups.length);
+    debugLog('🔍 Filtering popups for path:', currentPath);
+    debugLog('🔍 Current path type:', typeof currentPath);
+    debugLog('🔍 Current path length:', currentPath?.length);
+    debugLog('🔍 Total popups to filter:', popups.length);
     
     if (!currentPath) return popups;
 
     return popups.filter(popup => {
-      console.log('🔍 Checking popup:', popup.id, popup.title);
+      debugLog('🔍 Checking popup:', popup.id, popup.title);
       
       // Check if popup is active
       if (!popup.is_active) {
-        console.log('🔍 Popup not active:', popup.id);
+        debugLog('🔍 Popup not active:', popup.id);
         return false;
       }
 
       // Check date range
       const now = new Date();
       if (popup.start_date && new Date(popup.start_date) > now) {
-        console.log('🔍 Popup start date not reached:', popup.id);
+        debugLog('🔍 Popup start date not reached:', popup.id);
         return false;
       }
       if (popup.end_date && new Date(popup.end_date) < now) {
-        console.log('🔍 Popup end date passed:', popup.id);
+        debugLog('🔍 Popup end date passed:', popup.id);
         return false;
       }
 
       // Check target pages
-      console.log('🔍 Popup target_pages:', popup.target_pages, 'Type:', typeof popup.target_pages);
+      debugLog('🔍 Popup target_pages:', popup.target_pages, 'Type:', typeof popup.target_pages);
       if (popup.target_pages && popup.target_pages.length > 0) {
         const matchesTarget = popup.target_pages.some(page => {
           const match = currentPath.startsWith(page) || currentPath === page;
-          console.log('🔍 Checking page:', page, 'against currentPath:', currentPath, 'Match:', match);
+          debugLog('🔍 Checking page:', page, 'against currentPath:', currentPath, 'Match:', match);
           return match;
         });
         if (!matchesTarget) {
-          console.log('🔍 Popup target pages mismatch:', popup.id);
+          debugLog('🔍 Popup target pages mismatch:', popup.id);
           return false;
         }
       }
@@ -176,30 +265,38 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
           currentPath.startsWith(page) || currentPath === page
         );
         if (matchesExclude) {
-          console.log('🔍 Popup excluded for current page:', popup.id);
+          debugLog('🔍 Popup excluded for current page:', popup.id);
           return false;
         }
       }
 
       // Check frequency
       if (!shouldShowBasedOnFrequency(popup)) {
-        console.log('🔍 Popup frequency check failed:', popup.id);
+        debugLog('🔍 Popup frequency check failed:', popup.id);
         return false;
       }
 
-      console.log('🔍 Popup passed all filters:', popup.id);
+      debugLog('🔍 Popup passed all filters:', popup.id);
       return true;
     });
   };
 
   const shouldShowBasedOnFrequency = (popup: PopupAd): boolean => {
-    const storageKey = `popup_${popup.id}_shown`;
+    // Check if popup has been shown in this session
+    if (shownPopups.has(popup.id)) {
+      return false;
+    }
+
+    // For session-based tracking, we'll implement frequency logic using sessionStorage
+    // This allows for different frequency behaviors while maintaining session isolation
+    const storageKey = `popup_${popup.id}_session_${sessionId}`;
     
     switch (popup.show_frequency) {
       case 'once':
-        return !localStorage.getItem(storageKey);
+        // Already handled by shownPopups state - if it's in the set, don't show
+        return true;
       case 'daily':
-        const lastShown = localStorage.getItem(storageKey);
+        const lastShown = sessionStorage.getItem(storageKey);
         if (!lastShown) return true;
         const lastShownDate = new Date(lastShown);
         const today = new Date();
@@ -207,7 +304,7 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                lastShownDate.getMonth() !== today.getMonth() || 
                lastShownDate.getFullYear() !== today.getFullYear();
       case 'weekly':
-        const lastShownWeekly = localStorage.getItem(storageKey);
+        const lastShownWeekly = sessionStorage.getItem(storageKey);
         if (!lastShownWeekly) return true;
         const lastShownWeek = new Date(lastShownWeekly);
         const thisWeek = new Date();
@@ -288,8 +385,12 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
   };
 
   const markPopupAsShown = (popup: PopupAd) => {
-    const storageKey = `popup_${popup.id}_shown`;
-    localStorage.setItem(storageKey, new Date().toISOString());
+    // Mark this popup as shown in the current session
+    setShownPopups(prev => new Set([...prev, popup.id]));
+    
+    // Store timestamp for frequency-based tracking
+    const storageKey = `popup_${popup.id}_session_${sessionId}`;
+    sessionStorage.setItem(storageKey, new Date().toISOString());
   };
 
   const getPositionClasses = (position: string) => {
@@ -318,6 +419,32 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
     }
   };
 
+  const getOverlayPositionClasses = (position: string) => {
+    switch (position) {
+      case 'top-left': return 'top-4 left-4';
+      case 'top-center': return 'top-4 left-1/2 transform -translate-x-1/2';
+      case 'top-right': return 'top-4 right-4';
+      case 'center-left': return 'top-1/2 left-4 transform -translate-y-1/2';
+      case 'center': return 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2';
+      case 'center-right': return 'top-1/2 right-4 transform -translate-y-1/2';
+      case 'bottom-left': return 'bottom-4 left-4';
+      case 'bottom-center': return 'bottom-4 left-1/2 transform -translate-x-1/2';
+      case 'bottom-right': return 'bottom-4 right-4';
+      default: return 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2';
+    }
+  };
+
+  const getOverlayEffectClasses = (effect: string) => {
+    switch (effect) {
+      case 'fade': return 'animate-fade-in';
+      case 'slide': return 'animate-slide-in';
+      case 'bounce': return 'animate-bounce-in';
+      case 'glow': return 'animate-glow shadow-lg shadow-blue-500/50';
+      case 'shadow': return 'shadow-2xl';
+      default: return '';
+    }
+  };
+
   if (!currentPopup) return null;
 
   return (
@@ -332,12 +459,13 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
       
       {/* Popup */}
       <div 
-        className={`fixed z-50 ${getPositionClasses(currentPopup.position)}`}
+        className={`fixed z-50 transition-opacity duration-300 ${getPositionClasses(currentPopup.position)} ${
+          isVisible ? 'opacity-100' : 'opacity-0'
+        }`}
         style={{
-          width: currentPopup.width,
-          height: currentPopup.height,
-          backgroundColor: currentPopup.background_color,
-          color: currentPopup.text_color
+          width: responsiveDimensions.width,
+          height: responsiveDimensions.height,
+          backgroundColor: currentPopup.background_color
         }}
       >
         <Card className={`h-full ${getAnimationClasses(currentPopup.animation)}`}>
@@ -365,33 +493,62 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
               {/* Main Content */}
               <div className="flex-1 p-4 pt-0">
                 {currentPopup.content_type === 'image' && (
-                  <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+                  <div className="w-full h-full relative">
                     {currentPopup.image_url ? (
                       <img 
                         src={currentPopup.image_url} 
                         alt={currentPopup.title}
-                        className="max-w-full max-h-2/3 object-contain"
+                        className="w-full h-full object-cover"
                         onError={(e) => {
                           console.error('Image failed to load:', currentPopup.image_url);
                           e.currentTarget.style.display = 'none';
                         }}
                       />
                     ) : (
-                      <div className="text-center text-gray-500">
-                        <p>No image URL provided</p>
-                        <p className="text-sm">Please add an image URL in the admin panel</p>
+                      <div className="text-center text-gray-500 flex items-center justify-center h-full">
+                        <div>
+                          <p>No image URL provided</p>
+                          <p className="text-sm">Please add an image URL in the admin panel</p>
+                        </div>
                       </div>
                     )}
-                    {currentPopup.content && (
-                      <div className="text-center">
-                        <p 
-                          className="text-lg leading-relaxed"
-                          style={{ color: currentPopup.text_color }}
-                        >
-                          {currentPopup.content}
-                        </p>
+                    
+
+                    
+                    {/* Overlay Content */}
+                    {currentPopup.content && currentPopup.content_overlay && (
+                      <div 
+                        className={`absolute ${getOverlayPositionClasses(currentPopup.overlay_position || 'center')} ${getOverlayEffectClasses(currentPopup.overlay_effect || 'none')}`}
+                        style={{
+                          backgroundColor: currentPopup.overlay_background || 'rgba(0,0,0,0.7)',
+                          padding: `${currentPopup.overlay_padding || 20}px`,
+                          borderRadius: `${currentPopup.overlay_border_radius || 10}px`,
+                          maxWidth: '80%',
+                          maxHeight: '80%',
+                          overflow: 'auto',
+                          zIndex: 10
+                        }}
+                      >
+                        <div 
+                          className="text-center"
+                          dangerouslySetInnerHTML={{ __html: currentPopup.content }}
+                        />
                       </div>
                     )}
+                    
+                    {/* Regular Content (when not overlay) */}
+                    {currentPopup.content && !currentPopup.content_overlay && (
+                      <div className="mt-4 p-4">
+                        <div className="text-center">
+                          <div 
+                            className="text-lg leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: currentPopup.content }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+
                   </div>
                 )}
 
@@ -440,25 +597,72 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                             </div>
                           </>
                         )}
+                        
+                        {/* Overlay Content */}
+                        {currentPopup.content && currentPopup.content_overlay && (
+                          <div 
+                            className={`absolute ${getOverlayPositionClasses(currentPopup.overlay_position || 'center')} ${getOverlayEffectClasses(currentPopup.overlay_effect || 'none')}`}
+                            style={{
+                              backgroundColor: currentPopup.overlay_background || 'rgba(0,0,0,0.7)',
+                              padding: `${currentPopup.overlay_padding || 20}px`,
+                              borderRadius: `${currentPopup.overlay_border_radius || 10}px`,
+                              maxWidth: '80%',
+                              maxHeight: '80%',
+                              overflow: 'auto',
+                              zIndex: 10
+                            }}
+                          >
+                            <div 
+                              className="text-center"
+                              dangerouslySetInnerHTML={{ __html: currentPopup.content }}
+                            />
+                          </div>
+                        )}
                       </>
                     ) : (
-                      <div className="text-center text-gray-500">
-                        <p>No video URL provided</p>
-                        <p className="text-sm">Please add a video URL in the admin panel</p>
+                      <div className="text-center text-gray-500 flex items-center justify-center h-full">
+                        <div>
+                          <p>No video URL provided</p>
+                          <p className="text-sm">Please add a video URL in the admin panel</p>
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
 
                 {currentPopup.content_type === 'text' && (
-                  <div className="w-full h-full flex items-center justify-center text-center">
+                  <div className="w-full h-full flex items-center justify-center text-center relative">
                     {currentPopup.content ? (
-                      <p 
-                        className="text-lg leading-relaxed"
-                        style={{ color: currentPopup.text_color }}
-                      >
-                        {currentPopup.content}
-                      </p>
+                      <>
+                        {/* Regular Content (when not overlay) */}
+                        {!currentPopup.content_overlay && (
+                          <div 
+                            className="text-lg leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: currentPopup.content }}
+                          />
+                        )}
+                        
+                        {/* Overlay Content */}
+                        {currentPopup.content_overlay && (
+                          <div 
+                            className={`absolute ${getOverlayPositionClasses(currentPopup.overlay_position || 'center')} ${getOverlayEffectClasses(currentPopup.overlay_effect || 'none')}`}
+                            style={{
+                              backgroundColor: currentPopup.overlay_background || 'rgba(0,0,0,0.7)',
+                              padding: `${currentPopup.overlay_padding || 20}px`,
+                              borderRadius: `${currentPopup.overlay_border_radius || 10}px`,
+                              maxWidth: '80%',
+                              maxHeight: '80%',
+                              overflow: 'auto',
+                              zIndex: 10
+                            }}
+                          >
+                            <div 
+                              className="text-center"
+                              dangerouslySetInnerHTML={{ __html: currentPopup.content }}
+                            />
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="text-center text-gray-500">
                         <p>No text content provided</p>

@@ -1,28 +1,15 @@
 /**
- * Server-side debug utilities
- * These functions use direct database access and should only be used in server-side code
+ * Client-safe debug utilities
+ * These functions work on both client and server side without importing server-only modules
  */
 
-import mysql from 'mysql2/promise';
-
-// Create a connection pool for debug mode checks
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'Goodmorning@1',
-  database: 'crumbled_nextDB',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
-
-// Cache for debug mode to avoid frequent database queries
+// Cache for debug mode to avoid frequent API calls
 let debugModeCache: boolean | null = null;
 let cacheTimestamp: number = 0;
 const CACHE_DURATION = 30000; // 30 seconds
 
 /**
- * Get debug mode status from database
+ * Get debug mode status from API (client-safe)
  */
 export async function getDebugMode(): Promise<boolean> {
   const now = Date.now();
@@ -33,13 +20,16 @@ export async function getDebugMode(): Promise<boolean> {
   }
 
   try {
-    const [rows] = await pool.query('SELECT debug_mode FROM cart_settings LIMIT 1');
-    const settings = rows[0] as any;
+    const response = await fetch('/api/debug-mode');
+    const data = await response.json();
     
-    debugModeCache = settings?.debug_mode === 1 || settings?.debug_mode === true;
-    cacheTimestamp = now;
+    if (data.success) {
+      debugModeCache = data.debugMode;
+      cacheTimestamp = now;
+      return debugModeCache;
+    }
     
-    return debugModeCache;
+    return false;
   } catch (error) {
     console.error('Error fetching debug mode:', error);
     // Return false as fallback

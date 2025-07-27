@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJWT } from '@/lib/middleware/auth';
 import { databaseService } from '@/lib/services/databaseService';
+import { debugLog } from '@/lib/debug-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,8 +19,8 @@ export async function GET(request: NextRequest) {
     // Fetch all popup ads
     const popups = await databaseService.query(`
       SELECT 
-        id, title, content_type, content, image_url, video_url,
-        background_color, text_color, button_text, button_color,
+        id, title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
+        image_url, video_url, background_color, text_color, button_text, button_color,
         button_url, show_button, auto_close_seconds,
         width, height, position, animation, delay_seconds,
         show_frequency, target_pages, exclude_pages,
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error fetching popup ads:', error);
+    await debugLog('Error fetching popup ads:', error);
     return NextResponse.json({ 
       error: 'Failed to fetch popup ads' 
     }, { status: 500 });
@@ -56,12 +57,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log('🔍 POST /api/admin/popup-ads - Received data:', body);
+    await debugLog('🔍 POST /api/admin/popup-ads - Received data:', body);
     
     const {
       title,
       content_type,
       content,
+      content_overlay,
+      overlay_position,
+      overlay_effect,
+      overlay_background,
+      overlay_padding,
+      overlay_border_radius,
       image_url,
       video_url,
       background_color,
@@ -92,6 +99,19 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Validate content-specific requirements
+    if (content_type === 'image' && !image_url) {
+      return NextResponse.json({ 
+        error: 'Image URL is required when content type is image' 
+      }, { status: 400 });
+    }
+
+    if (content_type === 'video' && !video_url) {
+      return NextResponse.json({ 
+        error: 'Video URL is required when content type is video' 
+      }, { status: 400 });
+    }
+
     // Validate content type
     const validContentTypes = ['image', 'text', 'html', 'video'];
     if (!validContentTypes.includes(content_type)) {
@@ -101,27 +121,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert new popup ad
+    await debugLog('🔍 About to execute INSERT query with parameters:', {
+      title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
+      image_url, video_url, background_color, text_color, button_text, button_color, button_url, show_button, auto_close_seconds,
+      width, height, position, animation, delay_seconds, show_frequency, target_pages, exclude_pages, start_date, end_date, is_active, priority
+    });
+    
     const result = await databaseService.query(`
       INSERT INTO popup_ads (
-        title, content_type, content, image_url, video_url,
-        background_color, text_color, button_text, button_color, button_url, show_button, auto_close_seconds,
+        title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
+        image_url, video_url, background_color, text_color, button_text, button_color, button_url, show_button, auto_close_seconds,
         width, height, position, animation, delay_seconds,
         show_frequency, target_pages, exclude_pages,
         start_date, end_date, is_active, priority
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      title, content_type, content, image_url || null, video_url || null,
+      title, content_type, content, content_overlay || false, overlay_position || 'center', overlay_effect || 'none', overlay_background || 'rgba(0,0,0,0.7)', overlay_padding || 20, overlay_border_radius || 10,
+      image_url || null, video_url || null,
       background_color || '#ffffff', text_color || '#000000',
       button_text || 'Close', button_color || '#007bff', button_url || null, show_button !== undefined ? show_button : true, auto_close_seconds || 0,
       width || 400, height || 300, position || 'center',
       animation || 'fade', delay_seconds || 3,
       show_frequency || 'once',
-      target_pages ? JSON.stringify(target_pages) : null,
-      exclude_pages ? JSON.stringify(exclude_pages) : null,
+      target_pages && target_pages !== '[]' ? JSON.stringify(target_pages) : null,
+      exclude_pages && exclude_pages !== '[]' ? JSON.stringify(exclude_pages) : null,
       start_date || null, end_date || null,
       is_active !== undefined ? is_active : true,
       priority || 0
     ]);
+    
+    await debugLog('🔍 Database query result:', result);
 
     if (result && 'insertId' in result) {
       return NextResponse.json({ 
@@ -134,9 +163,14 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error creating popup ad:', error);
+    await debugLog('Error creating popup ad:', error);
+    await debugLog('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.json({ 
-      error: 'Failed to create popup ad' 
+      error: 'Failed to create popup ad',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 } 

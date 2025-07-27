@@ -11,6 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import dynamic from 'next/dynamic';
+
+// Dynamically import React Quill to avoid SSR issues
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
+import 'react-quill/dist/quill.snow.css';
 import { 
   Plus, 
   Edit, 
@@ -40,6 +45,12 @@ interface PopupAd {
   title: string;
   content_type: 'image' | 'text' | 'html' | 'video';
   content: string;
+  content_overlay?: boolean;
+  overlay_position?: 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  overlay_effect?: 'none' | 'fade' | 'slide' | 'bounce' | 'glow' | 'shadow';
+  overlay_background?: string;
+  overlay_padding?: number;
+  overlay_border_radius?: number;
   image_url?: string;
   video_url?: string;
   background_color: string;
@@ -83,6 +94,8 @@ export default function PopupAdsPage() {
   const [editingPopup, setEditingPopup] = useState<PopupAd | null>(null);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [previewData, setPreviewData] = useState<PopupAd | null>(null);
+  const [showEditPreviewDialog, setShowEditPreviewDialog] = useState(false);
+  const [editPreviewData, setEditPreviewData] = useState<PopupAd | null>(null);
   const [previewDimensions, setPreviewDimensions] = useState({ width: 400, height: 300 });
   const [isResizing, setIsResizing] = useState(false);
   const startResizeRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
@@ -91,6 +104,12 @@ export default function PopupAdsPage() {
     title: '',
     content_type: 'image' as 'image' | 'text' | 'html' | 'video',
     content: '',
+    content_overlay: false,
+    overlay_position: 'center' as 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right',
+    overlay_effect: 'none' as 'none' | 'fade' | 'slide' | 'bounce' | 'glow' | 'shadow',
+    overlay_background: 'rgba(0,0,0,0.7)',
+    overlay_padding: 20,
+    overlay_border_radius: 10,
     image_url: '',
     video_url: '',
     background_color: '#ffffff',
@@ -119,6 +138,10 @@ export default function PopupAdsPage() {
   const [imagePreview, setImagePreview] = useState<string>('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Loading states
+  const [savingPopup, setSavingPopup] = useState(false);
+  const [updatingPopup, setUpdatingPopup] = useState(false);
 
   useEffect(() => {
     console.log('🔍 Component mounted - testing console');
@@ -161,6 +184,34 @@ export default function PopupAdsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Client-side validation
+    if (!formData.title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    
+    if (!formData.content.trim()) {
+      toast.error('Content is required');
+      return;
+    }
+    
+    if (formData.content_type === 'image' && !formData.image_url && !imagePreview) {
+      toast.error('Please upload an image or change content type to text/HTML');
+      return;
+    }
+    
+    if (formData.content_type === 'video' && !formData.video_url) {
+      toast.error('Video URL is required for video content type');
+      return;
+    }
+    
+    // Set loading state
+    if (editingPopup) {
+      setUpdatingPopup(true);
+    } else {
+      setSavingPopup(true);
+    }
+    
     try {
       const url = editingPopup 
         ? `/api/admin/popup-ads/${editingPopup.id}`
@@ -168,14 +219,20 @@ export default function PopupAdsPage() {
       
       const method = editingPopup ? 'PUT' : 'POST';
       
+      // Use imagePreview if image_url is empty
+      const submitData = {
+        ...formData,
+        image_url: formData.image_url || imagePreview || ''
+      };
+      
       // Debug: Log the form data being sent
-      console.log('🔍 Submitting popup form data:', formData);
-      console.log('🔍 Image URL in form data:', formData.image_url);
+      console.log('🔍 Submitting popup form data:', submitData);
+      console.log('🔍 Image URL in form data:', submitData.image_url);
       
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitData)
       });
 
       if (response.ok) {
@@ -194,6 +251,10 @@ export default function PopupAdsPage() {
     } catch (error) {
       console.error('🔍 Form submission error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save popup');
+    } finally {
+      // Reset loading state
+      setSavingPopup(false);
+      setUpdatingPopup(false);
     }
   };
 
@@ -240,6 +301,12 @@ export default function PopupAdsPage() {
       title: '',
       content_type: 'image',
       content: '',
+      content_overlay: false,
+      overlay_position: 'center',
+      overlay_effect: 'none',
+      overlay_background: 'rgba(0,0,0,0.7)',
+      overlay_padding: 20,
+      overlay_border_radius: 10,
       image_url: '',
       video_url: '',
       background_color: '#ffffff',
@@ -269,48 +336,153 @@ export default function PopupAdsPage() {
     }
   };
 
-  const openEditDialog = (popup: PopupAd) => {
+  const openEditDialog = async (popup: PopupAd) => {
     setEditingPopup(popup);
     
-    // Always load fresh data from the popup to ensure we have the latest saved data
-    console.log('🔍 Loading fresh data for popup ID:', popup.id);
-    console.log('🔍 Popup data from database:', {
-      button_url: popup.button_url,
-      show_button: popup.show_button,
-      button_text: popup.button_text
-    });
-    setFormData({
-      title: popup.title,
-      content_type: popup.content_type,
-      content: popup.content,
-      image_url: popup.image_url || '',
-      video_url: popup.video_url || '',
-      background_color: popup.background_color,
-      text_color: popup.text_color,
-      button_text: popup.button_text,
-      button_color: popup.button_color,
-      button_url: popup.button_url || '',
-      show_button: popup.show_button,
-      auto_close_seconds: popup.auto_close_seconds || 0,
-      width: popup.width,
-      height: popup.height,
-      position: popup.position,
-      animation: popup.animation,
-      delay_seconds: popup.delay_seconds,
-      show_frequency: popup.show_frequency,
-      target_pages: popup.target_pages || '[]',
-      exclude_pages: popup.exclude_pages || '[]',
-      start_date: popup.start_date || '',
-      end_date: popup.end_date || '',
-      is_active: popup.is_active,
-      priority: popup.priority
-    });
-    // Set image preview if editing an existing image popup
-    if (popup.content_type === 'image' && popup.image_url) {
-      setImagePreview(popup.image_url);
-    } else {
-      setImagePreview('');
+    try {
+      // Fetch fresh data from the database to ensure we have the latest saved data
+      console.log('🔍 Fetching fresh data for popup ID:', popup.id);
+      const response = await fetch(`/api/admin/popup-ads/${popup.id}`);
+      
+      if (response.ok) {
+        const result = await response.json();
+        const freshPopup = result.popup;
+        
+        console.log('🔍 Fresh popup data from database:', {
+          button_url: freshPopup.button_url,
+          show_button: freshPopup.show_button,
+          button_text: freshPopup.button_text,
+          content_overlay: freshPopup.content_overlay,
+          content_type: freshPopup.content_type,
+          content: freshPopup.content,
+          width: freshPopup.width,
+          height: freshPopup.height
+        });
+        
+        setFormData({
+          title: freshPopup.title,
+          content_type: freshPopup.content_type,
+          content: freshPopup.content,
+          content_overlay: freshPopup.content_overlay || false,
+          overlay_position: freshPopup.overlay_position || 'center',
+          overlay_effect: freshPopup.overlay_effect || 'none',
+          overlay_background: freshPopup.overlay_background || 'rgba(0,0,0,0.7)',
+          overlay_padding: freshPopup.overlay_padding || 20,
+          overlay_border_radius: freshPopup.overlay_border_radius || 10,
+          image_url: freshPopup.image_url || '',
+          video_url: freshPopup.video_url || '',
+          background_color: freshPopup.background_color,
+          text_color: freshPopup.text_color,
+          button_text: freshPopup.button_text,
+          button_color: freshPopup.button_color,
+          button_url: freshPopup.button_url || '',
+          show_button: freshPopup.show_button,
+          auto_close_seconds: freshPopup.auto_close_seconds || 0,
+          width: freshPopup.width,
+          height: freshPopup.height,
+          position: freshPopup.position,
+          animation: freshPopup.animation,
+          delay_seconds: freshPopup.delay_seconds,
+          show_frequency: freshPopup.show_frequency,
+          target_pages: freshPopup.target_pages || '[]',
+          exclude_pages: freshPopup.exclude_pages || '[]',
+          start_date: freshPopup.start_date ? freshPopup.start_date.slice(0, 16) : '',
+          end_date: freshPopup.end_date ? freshPopup.end_date.slice(0, 16) : '',
+          is_active: freshPopup.is_active,
+          priority: freshPopup.priority
+        });
+        
+        // Set image preview if editing an existing image popup
+        if (freshPopup.content_type === 'image' && freshPopup.image_url) {
+          setImagePreview(freshPopup.image_url);
+        } else {
+          setImagePreview('');
+        }
+      } else {
+        console.error('🔍 Failed to fetch fresh popup data');
+        // Fallback to using the passed popup data
+        setFormData({
+          title: popup.title,
+          content_type: popup.content_type,
+          content: popup.content,
+          content_overlay: popup.content_overlay || false,
+          overlay_position: popup.overlay_position || 'center',
+          overlay_effect: popup.overlay_effect || 'none',
+          overlay_background: popup.overlay_background || 'rgba(0,0,0,0.7)',
+          overlay_padding: popup.overlay_padding || 20,
+          overlay_border_radius: popup.overlay_border_radius || 10,
+          image_url: popup.image_url || '',
+          video_url: popup.video_url || '',
+          background_color: popup.background_color,
+          text_color: popup.text_color,
+          button_text: popup.button_text,
+          button_color: popup.button_color,
+          button_url: popup.button_url || '',
+          show_button: popup.show_button,
+          auto_close_seconds: popup.auto_close_seconds || 0,
+          width: popup.width,
+          height: popup.height,
+          position: popup.position,
+          animation: popup.animation,
+          delay_seconds: popup.delay_seconds,
+          show_frequency: popup.show_frequency,
+          target_pages: popup.target_pages || '[]',
+          exclude_pages: popup.exclude_pages || '[]',
+          start_date: popup.start_date ? popup.start_date.slice(0, 16) : '',
+          end_date: popup.end_date ? popup.end_date.slice(0, 16) : '',
+          is_active: popup.is_active,
+          priority: popup.priority
+        });
+        
+        if (popup.content_type === 'image' && popup.image_url) {
+          setImagePreview(popup.image_url);
+        } else {
+          setImagePreview('');
+        }
+      }
+    } catch (error) {
+      console.error('🔍 Error fetching fresh popup data:', error);
+      // Fallback to using the passed popup data
+      setFormData({
+        title: popup.title,
+        content_type: popup.content_type,
+        content: popup.content,
+        content_overlay: popup.content_overlay || false,
+        overlay_position: popup.overlay_position || 'center',
+        overlay_effect: popup.overlay_effect || 'none',
+        overlay_background: popup.overlay_background || 'rgba(0,0,0,0.7)',
+        overlay_padding: popup.overlay_padding || 20,
+        overlay_border_radius: popup.overlay_border_radius || 10,
+        image_url: popup.image_url || '',
+        video_url: popup.video_url || '',
+        background_color: popup.background_color,
+        text_color: popup.text_color,
+        button_text: popup.button_text,
+        button_color: popup.button_color,
+        button_url: popup.button_url || '',
+        show_button: popup.show_button,
+        auto_close_seconds: popup.auto_close_seconds || 0,
+        width: popup.width,
+        height: popup.height,
+        position: popup.position,
+        animation: popup.animation,
+        delay_seconds: popup.delay_seconds,
+        show_frequency: popup.show_frequency,
+        target_pages: popup.target_pages || '[]',
+        exclude_pages: popup.exclude_pages || '[]',
+        start_date: popup.start_date ? popup.start_date.slice(0, 16) : '',
+        end_date: popup.end_date ? popup.end_date.slice(0, 16) : '',
+        is_active: popup.is_active,
+        priority: popup.priority
+      });
+      
+      if (popup.content_type === 'image' && popup.image_url) {
+        setImagePreview(popup.image_url);
+      } else {
+        setImagePreview('');
+      }
     }
+    
     setSelectedImage(null);
     setShowCreateDialog(true);
   };
@@ -417,6 +589,12 @@ export default function PopupAdsPage() {
       title: formData.title || 'Preview Popup',
       content_type: formData.content_type,
       content: formData.content,
+      content_overlay: formData.content_overlay,
+      overlay_position: formData.overlay_position,
+      overlay_effect: formData.overlay_effect,
+      overlay_background: formData.overlay_background,
+      overlay_padding: formData.overlay_padding,
+      overlay_border_radius: formData.overlay_border_radius,
       image_url: formData.image_url || imagePreview,
       video_url: formData.video_url,
       background_color: formData.background_color,
@@ -444,14 +622,14 @@ export default function PopupAdsPage() {
     console.log('🔍 Preview - Form data dimensions:', formData.width, formData.height);
     console.log('🔍 Preview - Setting preview dimensions:', formData.width, formData.height);
     console.log('🔍 Preview - Current previewDimensions state:', previewDimensions);
-    setPreviewData(previewPopup);
+    setEditPreviewData(previewPopup);
     setPreviewDimensions({ width: formData.width, height: formData.height });
-    setShowPreviewDialog(true);
+    setShowEditPreviewDialog(true);
   };
 
   const savePreviewDimensions = async () => {
     if (previewData) {
-      console.log('💾 Save Preview Dimensions - Current previewDimensions:', previewDimensions);
+      console.log('💾 Save Preview Dimensions (List) - Current previewDimensions:', previewDimensions);
       
       // Update the preview data
       setPreviewData(prev => prev ? {
@@ -465,10 +643,9 @@ export default function PopupAdsPage() {
         try {
           console.log('💾 Updating database for popup ID:', previewData.id);
           const response = await fetch(`/api/admin/popup-ads/${previewData.id}`, {
-            method: 'PUT',
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              ...previewData,
               width: previewDimensions.width,
               height: previewDimensions.height
             })
@@ -478,6 +655,55 @@ export default function PopupAdsPage() {
             toast.success(`Dimensions updated to: ${previewDimensions.width}×${previewDimensions.height} and saved to database!`);
             // Refresh the popups list to show updated data
             fetchPopups();
+            // Close the preview
+            setShowPreviewDialog(false);
+          } else {
+            toast.error('Failed to save dimensions to database');
+          }
+        } catch (error) {
+          console.error('Error saving dimensions:', error);
+          toast.error('Failed to save dimensions to database');
+        }
+      }
+    }
+  };
+
+  const saveEditPreviewDimensions = async () => {
+    if (editPreviewData) {
+      console.log('💾 Save Edit Preview Dimensions - Current previewDimensions:', previewDimensions);
+      
+      // Update the edit preview data
+      setEditPreviewData(prev => prev ? {
+        ...prev,
+        width: previewDimensions.width,
+        height: previewDimensions.height
+      } : null);
+      
+      // If we're editing a popup (has an ID), update the database
+      if (editPreviewData.id > 0) {
+        try {
+          console.log('💾 Updating database for popup ID:', editPreviewData.id);
+          const response = await fetch(`/api/admin/popup-ads/${editPreviewData.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              width: previewDimensions.width,
+              height: previewDimensions.height
+            })
+          });
+          
+          if (response.ok) {
+            toast.success(`Dimensions updated to: ${previewDimensions.width}×${previewDimensions.height} and saved to database!`);
+            // Update the form data to reflect the new dimensions
+            setFormData(prev => ({
+              ...prev,
+              width: previewDimensions.width,
+              height: previewDimensions.height
+            }));
+            // Refresh the popups list to show updated data
+            fetchPopups();
+            // Close the edit preview
+            setShowEditPreviewDialog(false);
           } else {
             toast.error('Failed to save dimensions to database');
           }
@@ -494,15 +720,20 @@ export default function PopupAdsPage() {
           height: previewDimensions.height
         }));
         toast.success(`Dimensions updated to: ${previewDimensions.width}×${previewDimensions.height}`);
+        // Close the edit preview
+        setShowEditPreviewDialog(false);
       }
     }
   };
 
   // Resize handlers for preview
   const handlePreviewMouseDown = (e: React.MouseEvent) => {
+    console.log('🖱️ handlePreviewMouseDown called');
     e.preventDefault();
     e.stopPropagation();
     console.log('🖱️ Mouse down on resize handle - from edit page');
+    console.log('🖱️ Event target:', e.target);
+    console.log('🖱️ Event currentTarget:', e.currentTarget);
     
     setIsResizing(true);
     isResizingRef.current = true;
@@ -589,11 +820,24 @@ export default function PopupAdsPage() {
   };
 
   // Preview Component
-  const PopupPreview = ({ popup, onClose }: { popup: PopupAd; onClose: () => void }) => {
+  const PopupPreview = ({ popup, onClose, onSave }: { popup: PopupAd; onClose: () => void; onSave: () => void }) => {
+    const handlePreviewClose = (e: React.MouseEvent) => {
+      console.log('🔴 handlePreviewClose called');
+      console.log('🔴 Event target:', e.target);
+      console.log('🔴 Event currentTarget:', e.currentTarget);
+      e.stopPropagation();
+      onClose();
+    };
     const [isVideoPlaying, setIsVideoPlaying] = useState(false);
     const [isVideoMuted, setIsVideoMuted] = useState(true);
     const videoRef = useRef<HTMLVideoElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
+
+    // Debug: Log when preview component mounts
+    useEffect(() => {
+      console.log('🔍 PopupPreview component mounted');
+      console.log('🔍 Preview dimensions:', previewDimensions);
+    }, []);
 
     // Helper functions for YouTube URL handling
     const isYouTubeUrl = (url: string): boolean => {
@@ -660,6 +904,32 @@ export default function PopupAdsPage() {
       }
     };
 
+    const getOverlayPositionClasses = (position: string) => {
+      switch (position) {
+        case 'top-left': return 'top-4 left-4';
+        case 'top-center': return 'top-4 left-1/2 transform -translate-x-1/2';
+        case 'top-right': return 'top-4 right-4';
+        case 'center-left': return 'top-1/2 left-4 transform -translate-y-1/2';
+        case 'center': return 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2';
+        case 'center-right': return 'top-1/2 right-4 transform -translate-y-1/2';
+        case 'bottom-left': return 'bottom-4 left-4';
+        case 'bottom-center': return 'bottom-4 left-1/2 transform -translate-x-1/2';
+        case 'bottom-right': return 'bottom-4 right-4';
+        default: return 'top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2';
+      }
+    };
+
+    const getOverlayEffectClasses = (effect: string) => {
+      switch (effect) {
+        case 'fade': return 'animate-fade-in';
+        case 'slide': return 'animate-slide-in';
+        case 'bounce': return 'animate-bounce-in';
+        case 'glow': return 'animate-glow shadow-lg shadow-blue-500/50';
+        case 'shadow': return 'shadow-2xl';
+        default: return '';
+      }
+    };
+
     return (
       <div 
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[99999]"
@@ -683,7 +953,6 @@ export default function PopupAdsPage() {
             width: `${previewDimensions.width}px`,
             height: `${previewDimensions.height}px`,
             backgroundColor: popup.background_color,
-            color: popup.text_color,
             pointerEvents: 'auto'
           }}
           onClick={(e) => {
@@ -698,10 +967,14 @@ export default function PopupAdsPage() {
             console.log('🖱️ Preview dialog mouse up!');
             e.stopPropagation();
           }}
+          onMouseMove={(e) => {
+            // Allow mouse move events to pass through for resizing
+            e.stopPropagation();
+          }}
         >
           {/* Close Button */}
           <button
-            onClick={onClose}
+            onClick={handlePreviewClose}
             className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black bg-opacity-20 text-white hover:bg-opacity-40 transition-colors"
           >
             <X className="h-4 w-4" />
@@ -709,7 +982,7 @@ export default function PopupAdsPage() {
 
           {/* Save Dimensions Button */}
           <button
-            onClick={savePreviewDimensions}
+            onClick={onSave}
             className="absolute top-2 left-2 z-10 px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700 transition-colors"
           >
             Save Size
@@ -722,20 +995,35 @@ export default function PopupAdsPage() {
 
           {/* Resize Handle */}
           <div
-            className="absolute bottom-0 right-0 w-8 h-8 cursor-se-resize z-20 bg-blue-500 bg-opacity-20 hover:bg-opacity-40 rounded-tl border-2 border-blue-500"
+            className="absolute bottom-0 right-0 w-10 h-10 cursor-se-resize z-50 bg-blue-500 bg-opacity-60 hover:bg-opacity-80 rounded-tl border-2 border-blue-600"
             onMouseDown={(e) => {
-              console.log('🖱️ Resize handle clicked!');
+              console.log('🖱️ Resize handle clicked from preview!');
+              e.preventDefault();
+              e.stopPropagation();
               handlePreviewMouseDown(e);
+            }}
+            onMouseEnter={(e) => {
+              console.log('🖱️ Resize handle mouse enter');
             }}
             onClick={(e) => {
               console.log('🖱️ Resize handle clicked (onClick)!');
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onMouseUp={(e) => {
+              console.log('🖱️ Resize handle mouse up');
+              e.preventDefault();
               e.stopPropagation();
             }}
             style={{
               background: 'linear-gradient(-45deg, transparent 30%, #3b82f6 30%, #3b82f6 40%, transparent 40%, transparent 60%, #3b82f6 60%, #3b82f6 70%, transparent 70%)'
             }}
             title="Drag to resize"
-          />
+          >
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="w-4 h-4 border-r-2 border-b-2 border-white transform rotate-45"></div>
+            </div>
+          </div>
 
           {/* Header */}
           <div className="p-4 pb-2 border-b border-gray-200">
@@ -745,21 +1033,51 @@ export default function PopupAdsPage() {
           {/* Content */}
           <div className="flex-1 p-4 pt-2">
             {popup.content_type === 'image' && (
-              <div className="w-full h-full flex flex-col items-center justify-center space-y-4">
+              <div className="w-full h-full relative">
                 {popup.image_url ? (
                   <img 
                     src={popup.image_url} 
                     alt={popup.title}
-                    className="max-w-full max-h-2/3 object-contain"
+                    className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="text-center text-gray-500">
-                    <p>No image URL provided</p>
+                  <div className="text-center text-gray-500 flex items-center justify-center h-full">
+                    <div>
+                      <p>No image URL provided</p>
+                      <p className="text-sm">Please add an image URL in the admin panel</p>
+                    </div>
                   </div>
                 )}
-                {popup.content && (
-                  <div className="text-center">
-                    <p className="text-lg leading-relaxed">{popup.content}</p>
+                
+                {/* Overlay Content */}
+                {popup.content && popup.content_overlay && (
+                  <div 
+                    className={`absolute ${getOverlayPositionClasses(popup.overlay_position || 'center')} ${getOverlayEffectClasses(popup.overlay_effect || 'none')}`}
+                    style={{
+                      backgroundColor: popup.overlay_background || 'rgba(0,0,0,0.7)',
+                      padding: `${popup.overlay_padding || 20}px`,
+                      borderRadius: `${popup.overlay_border_radius || 10}px`,
+                      maxWidth: '80%',
+                      maxHeight: '80%',
+                      overflow: 'auto'
+                    }}
+                  >
+                    <div 
+                      className="text-center"
+                      dangerouslySetInnerHTML={{ __html: popup.content }}
+                    />
+                  </div>
+                )}
+                
+                {/* Regular Content (when not overlay) */}
+                {popup.content && !popup.content_overlay && (
+                  <div className="mt-4 p-4">
+                    <div className="text-center">
+                      <div 
+                        className="text-lg leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: popup.content }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -806,6 +1124,26 @@ export default function PopupAdsPage() {
                         </div>
                       </>
                     )}
+                    
+                    {/* Overlay Content for Video */}
+                    {popup.content && popup.content_overlay && (
+                      <div 
+                        className={`absolute ${getOverlayPositionClasses(popup.overlay_position || 'center')} ${getOverlayEffectClasses(popup.overlay_effect || 'none')}`}
+                        style={{
+                          backgroundColor: popup.overlay_background || 'rgba(0,0,0,0.7)',
+                          padding: `${popup.overlay_padding || 20}px`,
+                          borderRadius: `${popup.overlay_border_radius || 10}px`,
+                          maxWidth: '80%',
+                          maxHeight: '80%',
+                          overflow: 'auto'
+                        }}
+                      >
+                        <div 
+                          className="text-center"
+                          dangerouslySetInnerHTML={{ __html: popup.content }}
+                        />
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="text-center text-gray-500">
@@ -816,9 +1154,37 @@ export default function PopupAdsPage() {
             )}
 
             {popup.content_type === 'text' && (
-              <div className="w-full h-full flex items-center justify-center text-center">
+              <div className="w-full h-full flex items-center justify-center text-center relative">
                 {popup.content ? (
-                  <p className="text-lg leading-relaxed">{popup.content}</p>
+                  <>
+                    {/* Regular Content (when not overlay) */}
+                    {!popup.content_overlay && (
+                      <div 
+                        className="text-lg leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: popup.content }}
+                      />
+                    )}
+                    
+                    {/* Overlay Content */}
+                    {popup.content_overlay && (
+                      <div 
+                        className={`absolute ${getOverlayPositionClasses(popup.overlay_position || 'center')} ${getOverlayEffectClasses(popup.overlay_effect || 'none')}`}
+                        style={{
+                          backgroundColor: popup.overlay_background || 'rgba(0,0,0,0.7)',
+                          padding: `${popup.overlay_padding || 20}px`,
+                          borderRadius: `${popup.overlay_border_radius || 10}px`,
+                          maxWidth: '80%',
+                          maxHeight: '80%',
+                          overflow: 'auto'
+                        }}
+                      >
+                        <div 
+                          className="text-center"
+                          dangerouslySetInnerHTML={{ __html: popup.content }}
+                        />
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="text-center text-gray-500">
                     <p>No text content provided</p>
@@ -876,7 +1242,15 @@ export default function PopupAdsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Popup Ads Management</h1>
           <p className="text-gray-600 mt-2">Manage popup advertisements with video support</p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <Dialog open={showCreateDialog} onOpenChange={(open) => {
+          console.log('🔴 Edit dialog onOpenChange called with:', open);
+          // Only close if it's not from a preview interaction
+          if (open === false && showEditPreviewDialog) {
+            console.log('🔴 Preventing edit dialog close because preview is open');
+            return;
+          }
+          setShowCreateDialog(open);
+        }}>
           <DialogTrigger asChild>
             <Button onClick={() => { setEditingPopup(null); resetForm(); }}>
               <Plus className="h-4 w-4 mr-2" />
@@ -922,36 +1296,208 @@ export default function PopupAdsPage() {
               </div>
 
               {/* Content */}
-              <div>
+              <div className="space-y-4">
                 <Label htmlFor="content">Content</Label>
-                <Textarea
-                  id="content"
-                  value={formData.content}
-                  onChange={(e) => setFormData({...formData, content: e.target.value})}
-                  placeholder="Enter popup content"
-                  rows={3}
-                  required
-                />
-              </div>
+                
+                {/* Rich Text Editor */}
+                <div className="border rounded-lg mb-8">
+                  <ReactQuill
+                    key={`quill-${editingPopup?.id || 'new'}-${formData.content_type}`}
+                    value={formData.content}
+                    onChange={(value) => setFormData({...formData, content: value})}
+                    placeholder="Enter popup content..."
+                    modules={{
+                      toolbar: [
+                        [{ 'header': [1, 2, 3, false] }],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ 'color': [] }, { 'background': [] }],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        [{ 'align': [] }],
+                        ['link', 'image'],
+                        ['clean']
+                      ]
+                    }}
+                    style={{ height: '200px' }}
+                  />
+                </div>
 
-              {/* Media URLs */}
-              {formData.content_type === 'image' && (
-                <div className="space-y-4">
-                  <Label>Image Upload</Label>
-                  
-                  {/* Image Preview */}
-                  {(imagePreview || formData.image_url) && (
-                    <div className="relative inline-block">
-                      <img 
-                        src={imagePreview || formData.image_url} 
-                        alt="Preview" 
-                        className="max-w-full h-32 object-cover rounded-lg border"
+                {/* Overlay Controls - Show for image, video, and text content types */}
+                {(formData.content_type === 'image' || formData.content_type === 'video' || formData.content_type === 'text') && (
+                  <div className="space-y-4 p-4 bg-gray-50 rounded-lg mt-12">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="content_overlay"
+                        checked={formData.content_overlay}
+                        onCheckedChange={(checked) => setFormData({...formData, content_overlay: checked})}
                       />
+                      <Label htmlFor="content_overlay" className="font-medium">
+                        {formData.content_type === 'text' 
+                          ? 'Show content as overlay on background' 
+                          : 'Show content as overlay on image/video'
+                        }
+                      </Label>
                     </div>
-                  )}
+                    
+                    {formData.content_overlay && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="overlay_position">Overlay Position</Label>
+                          <Select
+                            value={formData.overlay_position}
+                            onValueChange={(value: any) => setFormData({...formData, overlay_position: value})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="top-left">Top Left</SelectItem>
+                              <SelectItem value="top-center">Top Center</SelectItem>
+                              <SelectItem value="top-right">Top Right</SelectItem>
+                              <SelectItem value="center-left">Center Left</SelectItem>
+                              <SelectItem value="center">Center</SelectItem>
+                              <SelectItem value="center-right">Center Right</SelectItem>
+                              <SelectItem value="bottom-left">Bottom Left</SelectItem>
+                              <SelectItem value="bottom-center">Bottom Center</SelectItem>
+                              <SelectItem value="bottom-right">Bottom Right</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="overlay_effect">Overlay Effect</Label>
+                          <Select
+                            value={formData.overlay_effect}
+                            onValueChange={(value: any) => setFormData({...formData, overlay_effect: value})}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              <SelectItem value="fade">Fade</SelectItem>
+                              <SelectItem value="slide">Slide</SelectItem>
+                              <SelectItem value="bounce">Bounce</SelectItem>
+                              <SelectItem value="glow">Glow</SelectItem>
+                              <SelectItem value="shadow">Shadow</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="overlay_background">Overlay Background</Label>
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Input
+                                id="overlay_background"
+                                type="text"
+                                value={formData.overlay_background}
+                                onChange={(e) => setFormData({...formData, overlay_background: e.target.value})}
+                                placeholder="rgba(0,0,0,0.7)"
+                                className="flex-1"
+                              />
+                              <Input
+                                type="color"
+                                value={formData.overlay_background?.startsWith('rgba') ? '#000000' : formData.overlay_background || '#000000'}
+                                onChange={(e) => {
+                                  const color = e.target.value;
+                                  // Get current opacity from existing rgba value
+                                  let opacity = 0.7;
+                                  if (formData.overlay_background?.startsWith('rgba')) {
+                                    const match = formData.overlay_background.match(/rgba\([^)]+,\s*([^)]+)\)/);
+                                    if (match) opacity = parseFloat(match[1]);
+                                  }
+                                  // Convert hex to rgba with current opacity
+                                  const r = parseInt(color.slice(1, 3), 16);
+                                  const g = parseInt(color.slice(3, 5), 16);
+                                  const b = parseInt(color.slice(5, 7), 16);
+                                  const rgba = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                                  setFormData({...formData, overlay_background: rgba});
+                                }}
+                                className="w-12 h-10 rounded border"
+                              />
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Label htmlFor="overlay_opacity" className="text-sm">Opacity:</Label>
+                              <Input
+                                id="overlay_opacity"
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.1"
+                                value={(() => {
+                                  if (formData.overlay_background?.startsWith('rgba')) {
+                                    const match = formData.overlay_background.match(/rgba\([^)]+,\s*([^)]+)\)/);
+                                    return match ? parseFloat(match[1]) : 0.7;
+                                  }
+                                  return 0.7;
+                                })()}
+                                onChange={(e) => {
+                                  const opacity = parseFloat(e.target.value);
+                                  let currentColor = '#000000';
+                                  if (formData.overlay_background?.startsWith('rgba')) {
+                                    const match = formData.overlay_background.match(/rgba\((\d+),\s*(\d+),\s*(\d+)/);
+                                    if (match) {
+                                      const r = parseInt(match[1]);
+                                      const g = parseInt(match[2]);
+                                      const b = parseInt(match[3]);
+                                      currentColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+                                    }
+                                  }
+                                  const r = parseInt(currentColor.slice(1, 3), 16);
+                                  const g = parseInt(currentColor.slice(3, 5), 16);
+                                  const b = parseInt(currentColor.slice(5, 7), 16);
+                                  const rgba = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                                  setFormData({...formData, overlay_background: rgba});
+                                }}
+                                className="flex-1"
+                              />
+                              <span className="text-sm text-gray-600 min-w-[3rem]">
+                                {(() => {
+                                  if (formData.overlay_background?.startsWith('rgba')) {
+                                    const match = formData.overlay_background.match(/rgba\([^)]+,\s*([^)]+)\)/);
+                                    return match ? Math.round(parseFloat(match[1]) * 100) : 70;
+                                  }
+                                  return 70;
+                                })()}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="overlay_padding">Overlay Padding (px)</Label>
+                          <Input
+                            id="overlay_padding"
+                            type="number"
+                            value={formData.overlay_padding}
+                            onChange={(e) => setFormData({...formData, overlay_padding: parseInt(e.target.value) || 20})}
+                            min="0"
+                            max="100"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="overlay_border_radius">Overlay Border Radius (px)</Label>
+                          <Input
+                            id="overlay_border_radius"
+                            type="number"
+                            value={formData.overlay_border_radius}
+                            onChange={(e) => setFormData({...formData, overlay_border_radius: parseInt(e.target.value) || 10})}
+                            min="0"
+                            max="50"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                  {/* File Input */}
-                  <div className="space-y-2">
+                {/* Image Upload Section */}
+                {formData.content_type === 'image' && (
+                  <div className="space-y-4">
+                    <Label htmlFor="image">Image</Label>
+                    
+                    {/* File Input */}
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -960,75 +1506,109 @@ export default function PopupAdsPage() {
                       className="hidden"
                     />
                     
-                    {!selectedImage && !imagePreview && !formData.image_url && (
-                      <div 
-                        className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors"
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                      >
-                        <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600 mb-2">
-                          Click to upload an image or drag and drop
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          Choose Image
-                        </Button>
-                      </div>
-                    )}
-
-                    {selectedImage && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center space-x-2">
-                            <ImageIcon className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">{selectedImage.name}</span>
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {(selectedImage.size / 1024 / 1024).toFixed(2)} MB
-                          </span>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            type="button"
-                            onClick={handleImageUpload}
-                            disabled={uploadingImage}
-                            className="flex-1"
-                          >
-                            {uploadingImage ? (
-                              <>
-                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                Uploading...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                Upload Image
-                              </>
-                            )}
-                          </Button>
+                    {/* Current Image Display */}
+                    {(imagePreview || formData.image_url) && (
+                      <div className="space-y-3">
+                        <div className="relative">
+                          <img
+                            src={imagePreview || formData.image_url}
+                            alt="Current Image"
+                            className="w-full h-48 object-cover rounded-lg border"
+                          />
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => {
-                              setSelectedImage(null);
-                              if (fileInputRef.current) {
-                                fileInputRef.current.value = '';
-                              }
-                            }}
+                            size="sm"
+                            onClick={removeImage}
+                            className="absolute top-2 right-2 bg-white hover:bg-red-50 text-red-600 border-red-200 hover:border-red-300"
                           >
-                            Cancel
+                            <X className="h-4 w-4" />
                           </Button>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                          <span>Current image</span>
+                          <span className="truncate max-w-xs">
+                            {imagePreview ? 'Uploaded image' : formData.image_url}
+                          </span>
                         </div>
                       </div>
                     )}
 
-                    {/* URL Input as fallback */}
-                    <div className="pt-2 border-t">
+                    {/* Upload New Image Section */}
+                    {!imagePreview && !formData.image_url && (
+                      <div className="space-y-3">
+                        {/* Drag & Drop Area */}
+                        <div 
+                          className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-sm text-gray-600 mb-2">
+                            Click to upload an image or drag and drop
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                          >
+                            Choose Image
+                          </Button>
+                        </div>
+
+                        {/* Selected File Preview */}
+                        {selectedImage && (
+                          <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <ImageIcon className="h-4 w-4 text-gray-500" />
+                                <span className="text-sm font-medium text-gray-700">{selectedImage.name}</span>
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {(selectedImage.size / 1024 / 1024).toFixed(2)} MB
+                              </span>
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                type="button"
+                                onClick={handleImageUpload}
+                                disabled={uploadingImage}
+                                className="flex-1"
+                              >
+                                {uploadingImage ? (
+                                  <>
+                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                    Uploading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-4 w-4 mr-2" />
+                                    Upload Image
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedImage(null);
+                                  if (fileInputRef.current) {
+                                    fileInputRef.current.value = '';
+                                  }
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* URL Input */}
+                    <div className="pt-3 border-t">
                       <Label htmlFor="image_url" className="text-sm text-gray-600">
                         Or enter image URL directly:
                       </Label>
@@ -1041,9 +1621,10 @@ export default function PopupAdsPage() {
                       />
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
+              {/* Media URLs */}
               {formData.content_type === 'video' && (
                 <div>
                   <Label htmlFor="video_url">Video URL</Label>
@@ -1138,7 +1719,6 @@ export default function PopupAdsPage() {
                     value={formData.width}
                     onChange={(e) => setFormData({...formData, width: parseInt(e.target.value)})}
                     min="200"
-                    max="800"
                   />
                 </div>
                 <div>
@@ -1149,7 +1729,6 @@ export default function PopupAdsPage() {
                     value={formData.height}
                     onChange={(e) => setFormData({...formData, height: parseInt(e.target.value)})}
                     min="200"
-                    max="600"
                   />
                 </div>
               </div>
@@ -1270,6 +1849,58 @@ export default function PopupAdsPage() {
                 </div>
               </div>
 
+              {/* Page Targeting */}
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="target_pages">Target Pages (One per line)</Label>
+                  <Textarea
+                    id="target_pages"
+                    value={(() => {
+                      try {
+                        const pages = JSON.parse(formData.target_pages || '[]');
+                        return pages.join('\n');
+                      } catch {
+                        return '';
+                      }
+                    })()}
+                    onChange={(e) => {
+                      const lines = e.target.value.split('\n').filter(line => line.trim() !== '');
+                      const pagesArray = lines.length > 0 ? lines : [];
+                      setFormData({...formData, target_pages: JSON.stringify(pagesArray)});
+                    }}
+                    placeholder="/flavors&#10;/shop&#10;/cart"
+                    className="min-h-[80px]"
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    Enter page paths where this popup should appear. Leave empty to show on all pages.
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="exclude_pages">Exclude Pages (One per line)</Label>
+                  <Textarea
+                    id="exclude_pages"
+                    value={(() => {
+                      try {
+                        const pages = JSON.parse(formData.exclude_pages || '[]');
+                        return pages.join('\n');
+                      } catch {
+                        return '';
+                      }
+                    })()}
+                    onChange={(e) => {
+                      const lines = e.target.value.split('\n').filter(line => line.trim() !== '');
+                      const pagesArray = lines.length > 0 ? lines : [];
+                      setFormData({...formData, exclude_pages: JSON.stringify(pagesArray)});
+                    }}
+                    placeholder="/admin&#10;/checkout"
+                    className="min-h-[80px]"
+                  />
+                  <p className="text-sm text-gray-600 mt-1">
+                    Enter page paths where this popup should NOT appear. Leave empty for no exclusions.
+                  </p>
+                </div>
+              </div>
+
               {/* Status */}
               <div className="flex items-center space-x-2">
                 <Switch
@@ -1304,8 +1935,15 @@ export default function PopupAdsPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit">
-                  {editingPopup ? 'Update Popup' : 'Create Popup'}
+                <Button type="submit" disabled={savingPopup || updatingPopup}>
+                  {savingPopup || updatingPopup ? (
+                    <div className="flex items-center space-x-2">
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>{editingPopup ? 'Updating...' : 'Creating...'}</span>
+                    </div>
+                  ) : (
+                    <span>{editingPopup ? 'Update Popup' : 'Create Popup'}</span>
+                  )}
                 </Button>
               </div>
             </form>
@@ -1482,6 +2120,19 @@ export default function PopupAdsPage() {
         <PopupPreview 
           popup={previewData} 
           onClose={() => setShowPreviewDialog(false)} 
+          onSave={savePreviewDimensions}
+        />
+      )}
+
+      {/* Edit Preview Dialog */}
+      {showEditPreviewDialog && editPreviewData && (
+        <PopupPreview 
+          popup={editPreviewData} 
+          onClose={() => {
+            console.log('🔴 Edit preview onClose called');
+            setShowEditPreviewDialog(false);
+          }} 
+          onSave={saveEditPreviewDimensions}
         />
       )}
     </div>
