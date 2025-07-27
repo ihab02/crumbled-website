@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { Play, Pause, Volume2, VolumeX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { useDebugLogger } from '@/hooks/use-debug-mode';
 
 interface PopupAd {
@@ -116,11 +115,13 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
   useEffect(() => {
     const updateResponsiveDimensions = () => {
       if (currentPopup) {
-        const maxWidth = Math.min(currentPopup.width || 400, window.innerWidth - 40);
-        const maxHeight = Math.min(currentPopup.height || 300, window.innerHeight - 40);
+        // Use exact dimensions like preview (no responsive constraints)
+        const exactWidth = currentPopup.width || 400;
+        const exactHeight = currentPopup.height || 300;
+        
         setResponsiveDimensions({
-          width: Math.max(Math.min(maxWidth, window.innerWidth * 0.95), 200),
-          height: Math.max(Math.min(maxHeight, window.innerHeight * 0.95), 150)
+          width: exactWidth,
+          height: exactHeight
         });
       }
     };
@@ -147,14 +148,6 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
       const timer = setTimeout(() => {
         setIsVisible(true);
         trackPopupAction(currentPopup.id, 'shown');
-        
-        // Mark this popup as shown in this session
-        setShownPopups(prev => {
-          const newSet = new Set([...prev, currentPopup.id]);
-          // Save to sessionStorage
-          sessionStorage.setItem('shown_popups', JSON.stringify(Array.from(newSet)));
-          return newSet;
-        });
         
         // Set up auto-close timer if specified
         if (currentPopup.auto_close_seconds && currentPopup.auto_close_seconds > 0) {
@@ -183,6 +176,8 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
         debugLog('🔍 Raw popup data from API:', data);
         
         if (data.popups && data.popups.length > 0) {
+
+          
           // Sort by priority and select the highest priority popup
           const sortedPopups = data.popups.sort((a: PopupAd, b: PopupAd) => b.priority - a.priority);
           const selectedPopup = sortedPopups[0];
@@ -196,12 +191,17 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
           });
           setCurrentPopup(selectedPopup);
           
+
+          
           // Immediately set responsive dimensions for the new popup
-          const maxWidth = Math.min(selectedPopup.width || 400, window.innerWidth - 40);
-          const maxHeight = Math.min(selectedPopup.height || 300, window.innerHeight - 40);
+          const exactWidth = selectedPopup.width || 400;
+          const exactHeight = selectedPopup.height || 300;
+          
+
+          
           setResponsiveDimensions({
-            width: Math.max(Math.min(maxWidth, window.innerWidth * 0.95), 200),
-            height: Math.max(Math.min(maxHeight, window.innerHeight * 0.95), 150)
+            width: exactWidth,
+            height: exactHeight
           });
         } else {
           debugLog('🔍 No popups returned from API');
@@ -447,6 +447,8 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
 
   if (!currentPopup) return null;
 
+
+
   return (
     <>
       {/* Backdrop */}
@@ -468,12 +470,12 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
           backgroundColor: currentPopup.background_color
         }}
       >
-        <Card className={`h-full ${getAnimationClasses(currentPopup.animation)}`}>
-          <CardContent className="p-0 h-full relative">
+        <div className={`h-full bg-white rounded-lg shadow-2xl overflow-hidden ${getAnimationClasses(currentPopup.animation)}`}>
+          <div className="p-0 h-full relative">
             {/* Close Button */}
             <button
               onClick={handleClose}
-              className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black bg-opacity-50 text-white hover:bg-opacity-75 transition-colors"
+              className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black bg-opacity-20 text-white hover:bg-opacity-40 transition-colors"
             >
               <X className="h-4 w-4" />
             </button>
@@ -481,7 +483,7 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
             {/* Content */}
             <div className="h-full flex flex-col">
               {/* Header */}
-              <div className="p-4 pb-2">
+              <div className="p-4 pb-2 border-b border-gray-200">
                 <h3 
                   className="font-semibold text-lg"
                   style={{ color: currentPopup.text_color }}
@@ -491,19 +493,22 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
               </div>
 
               {/* Main Content */}
-              <div className="flex-1 p-4 pt-0">
+              <div className="flex-1 p-4 pt-2">
                 {currentPopup.content_type === 'image' && (
-                  <div className="w-full h-full relative">
+                  <div className="w-full flex flex-col">
                     {currentPopup.image_url ? (
-                      <img 
-                        src={currentPopup.image_url} 
-                        alt={currentPopup.title}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.error('Image failed to load:', currentPopup.image_url);
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
+                      <div className="w-full flex-shrink-0">
+                        <img 
+                          src={currentPopup.image_url} 
+                          alt={currentPopup.title}
+                          className="w-full object-contain"
+                          style={{ maxHeight: currentPopup.content_overlay ? '100%' : '60%' }}
+                          onError={(e) => {
+                            console.error('Image failed to load:', currentPopup.image_url);
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
                     ) : (
                       <div className="text-center text-gray-500 flex items-center justify-center h-full">
                         <div>
@@ -513,9 +518,7 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                       </div>
                     )}
                     
-
-                    
-                    {/* Overlay Content */}
+                    {/* Overlay Content for Image */}
                     {currentPopup.content && currentPopup.content_overlay && (
                       <div 
                         className={`absolute ${getOverlayPositionClasses(currentPopup.overlay_position || 'center')} ${getOverlayEffectClasses(currentPopup.overlay_effect || 'none')}`}
@@ -531,14 +534,16 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                       >
                         <div 
                           className="text-center"
+                          style={{ color: currentPopup.text_color }}
                           dangerouslySetInnerHTML={{ __html: currentPopup.content }}
                         />
+
                       </div>
                     )}
                     
-                    {/* Regular Content (when not overlay) */}
+                    {/* Regular Content for Image (when not overlay) */}
                     {currentPopup.content && !currentPopup.content_overlay && (
-                      <div className="mt-4 p-4">
+                      <div className="mt-4 p-4 flex-1">
                         <div className="text-center">
                           <div 
                             className="text-lg leading-relaxed"
@@ -547,8 +552,6 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                         </div>
                       </div>
                     )}
-                    
-
                   </div>
                 )}
 
@@ -641,6 +644,7 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                             dangerouslySetInnerHTML={{ __html: currentPopup.content }}
                           />
                         )}
+
                         
                         {/* Overlay Content */}
                         {currentPopup.content_overlay && (
@@ -660,6 +664,7 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                               className="text-center"
                               dangerouslySetInnerHTML={{ __html: currentPopup.content }}
                             />
+
                           </div>
                         )}
                       </>
@@ -689,6 +694,20 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                 )}
 
 
+
+                {/* Fallback content rendering for any content type */}
+                {currentPopup.content && !currentPopup.content_type && (
+                  <div className="w-full h-full flex items-center justify-center text-center">
+                    <div 
+                      className="text-lg leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: currentPopup.content }}
+                    />
+                  </div>
+                )}
+
+
+
+
               </div>
 
               {/* Button - Only show if show_button is true */}
@@ -698,8 +717,7 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                     onClick={handleButtonClick}
                     className="w-full"
                     style={{
-                      backgroundColor: currentPopup.button_color,
-                      color: '#ffffff'
+                      backgroundColor: currentPopup.button_color
                     }}
                   >
                     {currentPopup.button_text}
@@ -707,8 +725,8 @@ export default function PopupAds({ currentPath }: PopupAdsProps) {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </>
   );

@@ -30,9 +30,17 @@ export async function GET(request: NextRequest) {
       ORDER BY priority DESC, created_at DESC
     `);
 
+    // Convert integer boolean fields to actual booleans
+    const processedPopups = (popups || []).map((popup: any) => ({
+      ...popup,
+      content_overlay: Boolean(popup.content_overlay),
+      show_button: Boolean(popup.show_button),
+      is_active: Boolean(popup.is_active)
+    }));
+
     return NextResponse.json({ 
       success: true, 
-      popups: popups || [] 
+      popups: processedPopups 
     });
 
   } catch (error) {

@@ -1,12 +1,11 @@
 #!/bin/bash
 
-# Server Deployment Script
-# This script safely pulls changes from git and rebuilds the application
-# ensuring node_modules are always available
+# Cached Deployment Script
+# Uses npm ci with caching for maximum speed
 
 set -e  # Exit on any error
 
-echo "🚀 Starting server deployment..."
+echo "🚀 Starting cached deployment..."
 
 # Navigate to project directory
 cd /var/www/crumbled-website
@@ -19,21 +18,15 @@ git stash push -m "Auto-stash before deployment $(date)" || true
 echo "⬇️  Pulling latest changes from git..."
 git pull origin production-v1.0
 
-# Check if node_modules directory exists and has content
-if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
-    echo "📦 node_modules missing or empty, installing dependencies..."
-    npm install --production
-elif git diff --name-only HEAD~1 HEAD | grep -E "(package\.json|package-lock\.json)" > /dev/null; then
-    echo "📦 Dependencies changed, updating node_modules..."
-    
-    # Remove node_modules and package-lock.json
-    rm -rf node_modules
-    rm -f package-lock.json
-    
-    # Install dependencies
-    npm install --production
+# Check if we need to install dependencies
+if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
+    echo "📦 Missing node_modules or package-lock.json, running npm ci..."
+    npm ci --production
+elif git diff --name-only HEAD~1 HEAD | grep -E "package-lock\.json" > /dev/null; then
+    echo "📦 package-lock.json changed, running npm ci..."
+    npm ci --production
 else
-    echo "✅ No dependency changes detected, skipping npm install"
+    echo "✅ Dependencies are up to date, skipping npm install"
 fi
 
 # Build the application

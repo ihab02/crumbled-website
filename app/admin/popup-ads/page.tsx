@@ -761,46 +761,31 @@ export default function PopupAdsPage() {
     
     if (isResizing) return;
     
+    console.log('🖱️ Resize started - Mouse position:', e.clientX, e.clientY);
+    console.log('🖱️ Current dimensions:', previewDimensions.width, previewDimensions.height);
+    
     setIsResizing(true);
-    setResizeStartRef.current = {
+    isResizingRef.current = true;
+    startResizeRef.current = {
       x: e.clientX,
       y: e.clientY,
       width: previewDimensions.width,
       height: previewDimensions.height
     };
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !startResizeRef.current) return;
-      
-      const deltaX = e.clientX - startResizeRef.current.x;
-      const deltaY = e.clientY - startResizeRef.current.y;
-      
-      const newWidth = Math.max(200, previewDimensions.width + deltaX);
-      const newHeight = Math.max(150, previewDimensions.height + deltaY);
-      
-      setPreviewDimensions({ width: newWidth, height: newHeight });
-    };
-    
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Add event listeners for resize
+  // Global event listeners for resize
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingRef.current) return;
+      if (!isResizingRef.current || !startResizeRef.current) return;
+      
       console.log('🖱️ Mouse move:', e.clientX, e.clientY);
+      
       const deltaX = e.clientX - startResizeRef.current.x;
       const deltaY = e.clientY - startResizeRef.current.y;
       
-      const newWidth = startResizeRef.current.width + deltaX;
-      const newHeight = startResizeRef.current.height + deltaY;
+      const newWidth = Math.max(200, startResizeRef.current.width + deltaX);
+      const newHeight = Math.max(150, startResizeRef.current.height + deltaY);
       
       console.log('🖱️ New dimensions:', newWidth, newHeight);
       setPreviewDimensions({ width: newWidth, height: newHeight });
@@ -813,12 +798,12 @@ export default function PopupAdsPage() {
     };
 
     if (isResizing) {
-      console.log('🖱️ Adding event listeners for resize');
+      console.log('🖱️ Adding global event listeners for resize');
       document.addEventListener('mousemove', handleMouseMove, { passive: false });
       document.addEventListener('mouseup', handleMouseUp, { passive: false });
       
       return () => {
-        console.log('🖱️ Removing event listeners for resize');
+        console.log('🖱️ Removing global event listeners for resize');
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
       };
@@ -1034,31 +1019,19 @@ export default function PopupAdsPage() {
           </button>
 
           {/* Dimensions Display */}
-          <div className="absolute top-2 left-20 z-10 px-2 py-1 rounded bg-gray-800 text-white text-xs">
+          <div className={`absolute top-2 left-20 z-10 px-2 py-1 rounded text-white text-xs transition-all duration-200 ${isResizing ? 'bg-blue-600' : 'bg-gray-800'}`}>
             {previewDimensions.width} × {previewDimensions.height}
+            {isResizing && <span className="ml-2 animate-pulse">●</span>}
           </div>
 
           {/* Resize Handle */}
           <div
-            className="absolute bottom-0 right-0 w-10 h-10 cursor-se-resize z-50 bg-blue-500 bg-opacity-60 hover:bg-opacity-80 rounded-tl border-2 border-blue-600"
+            className="absolute bottom-0 right-0 w-10 h-10 cursor-se-resize z-50 bg-blue-500 bg-opacity-80 hover:bg-opacity-100 rounded-tl border-2 border-blue-600 transition-all duration-200 shadow-lg"
             onMouseDown={(e) => {
-              console.log('🖱️ Resize handle clicked from preview!');
+              console.log('🖱️ Resize handle clicked!');
               e.preventDefault();
               e.stopPropagation();
               handlePreviewMouseDown(e);
-            }}
-            onMouseEnter={(e) => {
-              console.log('🖱️ Resize handle mouse enter');
-            }}
-            onClick={(e) => {
-              console.log('🖱️ Resize handle clicked (onClick)!');
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onMouseUp={(e) => {
-              console.log('🖱️ Resize handle mouse up');
-              e.preventDefault();
-              e.stopPropagation();
             }}
             style={{
               background: 'linear-gradient(-45deg, transparent 30%, #3b82f6 30%, #3b82f6 40%, transparent 40%, transparent 60%, #3b82f6 60%, #3b82f6 70%, transparent 70%)'
@@ -1072,7 +1045,12 @@ export default function PopupAdsPage() {
 
           {/* Header */}
           <div className="p-4 pb-2 border-b border-gray-200">
-            <h3 className="font-semibold text-lg">{popup.title}</h3>
+            <h3 
+              className="font-semibold text-lg"
+              style={{ color: popup.text_color }}
+            >
+              {popup.title}
+            </h3>
           </div>
 
           {/* Content */}

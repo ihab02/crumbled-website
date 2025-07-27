@@ -42,9 +42,17 @@ export async function GET(
       return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
     }
 
+    // Convert integer boolean fields to actual booleans
+    const popup = {
+      ...popups[0],
+      content_overlay: Boolean(popups[0].content_overlay),
+      show_button: Boolean(popups[0].show_button),
+      is_active: Boolean(popups[0].is_active)
+    };
+
     return NextResponse.json({ 
       success: true, 
-      popup: popups[0] 
+      popup: popup 
     });
 
   } catch (error) {
