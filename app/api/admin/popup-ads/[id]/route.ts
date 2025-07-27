@@ -127,6 +127,41 @@ export async function PUT(
       }, { status: 400 });
     }
 
+    // Handle JSON fields properly
+    let targetPagesJson = null;
+    let excludePagesJson = null;
+
+    try {
+      if (target_pages) {
+        // If it's already a string, parse it to validate, then stringify
+        if (typeof target_pages === 'string') {
+          JSON.parse(target_pages); // Validate JSON
+          targetPagesJson = target_pages;
+        } else if (Array.isArray(target_pages)) {
+          targetPagesJson = JSON.stringify(target_pages);
+        } else {
+          targetPagesJson = JSON.stringify([target_pages]);
+        }
+      }
+
+      if (exclude_pages) {
+        // If it's already a string, parse it to validate, then stringify
+        if (typeof exclude_pages === 'string') {
+          JSON.parse(exclude_pages); // Validate JSON
+          excludePagesJson = exclude_pages;
+        } else if (Array.isArray(exclude_pages)) {
+          excludePagesJson = JSON.stringify(exclude_pages);
+        } else {
+          excludePagesJson = JSON.stringify([exclude_pages]);
+        }
+      }
+    } catch (jsonError) {
+      await debugLog('🔍 JSON parsing error:', jsonError);
+      return NextResponse.json({ 
+        error: 'Invalid JSON format for target_pages or exclude_pages' 
+      }, { status: 400 });
+    }
+
     // Update popup ad
     const result = await databaseService.query(`
       UPDATE popup_ads SET
@@ -145,8 +180,8 @@ export async function PUT(
       width || 400, height || 300, position || 'center',
       animation || 'fade', delay_seconds || 3,
       show_frequency || 'once',
-      target_pages ? JSON.stringify(target_pages) : null,
-      exclude_pages ? JSON.stringify(exclude_pages) : null,
+      targetPagesJson,
+      excludePagesJson,
       start_date || null, end_date || null,
       is_active !== undefined ? is_active : true,
       priority || 0,
@@ -165,6 +200,7 @@ export async function PUT(
     }
 
   } catch (error) {
+    await debugLog('🔍 Error updating popup ad:', error);
     console.error('Error updating popup ad:', error);
     return NextResponse.json({ 
       error: 'Failed to update popup ad' 

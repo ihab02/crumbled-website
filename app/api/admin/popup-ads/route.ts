@@ -120,14 +120,43 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Insert new popup ad
-    await debugLog('🔍 About to execute INSERT query with parameters:', {
-      title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
-      image_url, video_url, background_color, text_color, button_text, button_color, button_url, show_button, auto_close_seconds,
-      width, height, position, animation, delay_seconds, show_frequency, target_pages, exclude_pages, start_date, end_date, is_active, priority
-    });
-    
-    const result = await databaseService.query(`
+    // Handle JSON fields properly
+    let targetPagesJson = null;
+    let excludePagesJson = null;
+
+    try {
+      if (target_pages) {
+        // If it's already a string, parse it to validate, then stringify
+        if (typeof target_pages === 'string') {
+          JSON.parse(target_pages); // Validate JSON
+          targetPagesJson = target_pages;
+        } else if (Array.isArray(target_pages)) {
+          targetPagesJson = JSON.stringify(target_pages);
+        } else {
+          targetPagesJson = JSON.stringify([target_pages]);
+        }
+      }
+
+      if (exclude_pages) {
+        // If it's already a string, parse it to validate, then stringify
+        if (typeof exclude_pages === 'string') {
+          JSON.parse(exclude_pages); // Validate JSON
+          excludePagesJson = exclude_pages;
+        } else if (Array.isArray(exclude_pages)) {
+          excludePagesJson = JSON.stringify(exclude_pages);
+        } else {
+          excludePagesJson = JSON.stringify([exclude_pages]);
+        }
+      }
+    } catch (jsonError) {
+      await debugLog('🔍 JSON parsing error:', jsonError);
+      return NextResponse.json({ 
+        error: 'Invalid JSON format for target_pages or exclude_pages' 
+      }, { status: 400 });
+    }
+
+    // Insert new popup ad (using the full table structure with overlay columns)
+    const insertQuery = `
       INSERT INTO popup_ads (
         title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
         image_url, video_url, background_color, text_color, button_text, button_color, button_url, show_button, auto_close_seconds,
@@ -135,7 +164,9 @@ export async function POST(request: NextRequest) {
         show_frequency, target_pages, exclude_pages,
         start_date, end_date, is_active, priority
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
+    `;
+    
+    const insertValues = [
       title, content_type, content, content_overlay || false, overlay_position || 'center', overlay_effect || 'none', overlay_background || 'rgba(0,0,0,0.7)', overlay_padding || 20, overlay_border_radius || 10,
       image_url || null, video_url || null,
       background_color || '#ffffff', text_color || '#000000',
@@ -143,12 +174,18 @@ export async function POST(request: NextRequest) {
       width || 400, height || 300, position || 'center',
       animation || 'fade', delay_seconds || 3,
       show_frequency || 'once',
-      target_pages && target_pages !== '[]' ? JSON.stringify(target_pages) : null,
-      exclude_pages && exclude_pages !== '[]' ? JSON.stringify(exclude_pages) : null,
+      targetPagesJson,
+      excludePagesJson,
       start_date || null, end_date || null,
       is_active !== undefined ? is_active : true,
       priority || 0
-    ]);
+    ];
+    
+    await debugLog('🔍 INSERT Query:', insertQuery);
+    await debugLog('🔍 INSERT Values count:', insertValues.length);
+    await debugLog('🔍 INSERT Values:', insertValues);
+    
+    const result = await databaseService.query(insertQuery, insertValues);
     
     await debugLog('🔍 Database query result:', result);
 

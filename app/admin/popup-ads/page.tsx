@@ -154,6 +154,15 @@ export default function PopupAdsPage() {
     console.log('🔍 FormData changed - width:', formData.width, 'height:', formData.height);
   }, [formData.width, formData.height]);
 
+  useEffect(() => {
+    if (showEditPreviewDialog && editPreviewData) {
+      setPreviewDimensions({
+        width: editPreviewData.width || 400,
+        height: editPreviewData.height || 300
+      });
+    }
+  }, [showEditPreviewDialog, editPreviewData]);
+
   const fetchPopups = async () => {
     try {
       const response = await fetch('/api/admin/popup-ads');
@@ -182,6 +191,7 @@ export default function PopupAdsPage() {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
+    console.log('🔍 handleSubmit called!');
     e.preventDefault();
     
     // Client-side validation
@@ -196,13 +206,49 @@ export default function PopupAdsPage() {
     }
     
     if (formData.content_type === 'image' && !formData.image_url && !imagePreview) {
-      toast.error('Please upload an image or change content type to text/HTML');
+      if (selectedImage) {
+        toast.error('Please click "Upload Image" first, or change content type to text/HTML');
+      } else {
+        toast.error('Please upload an image or change content type to text/HTML');
+      }
       return;
     }
     
     if (formData.content_type === 'video' && !formData.video_url) {
       toast.error('Video URL is required for video content type');
       return;
+    }
+    
+    // Use the image URL from formData (which gets set when user clicks "Upload Image")
+    let finalImageUrl = formData.image_url;
+    
+    console.log('🔍 Debug - selectedImage:', selectedImage);
+    console.log('🔍 Debug - formData.image_url:', formData.image_url);
+    console.log('🔍 Debug - finalImageUrl:', finalImageUrl);
+    
+    // If we have a selected image but no image URL, we need to upload it first
+    if (selectedImage && !formData.image_url) {
+      toast.info('Uploading image first...');
+      try {
+        const imageUrl = await uploadImage(selectedImage);
+        console.log('🔍 Uploaded image URL:', imageUrl);
+        
+        // Update form data with the new image URL
+        setFormData(prev => ({ ...prev, image_url: imageUrl }));
+        setImagePreview(imageUrl);
+        
+        // Use the uploaded URL for submission
+        finalImageUrl = imageUrl;
+        console.log('🔍 Debug - finalImageUrl set to:', finalImageUrl);
+        
+        toast.success('Image uploaded successfully!');
+        
+        // Clear the selected image since it's now uploaded
+        setSelectedImage(null);
+      } catch (error) {
+        toast.error('Failed to upload image. Please try again.');
+        return;
+      }
     }
     
     // Set loading state
@@ -219,11 +265,16 @@ export default function PopupAdsPage() {
       
       const method = editingPopup ? 'PUT' : 'POST';
       
-      // Use imagePreview if image_url is empty
+      // Only use image_url, never send base64 data
       const submitData = {
         ...formData,
-        image_url: formData.image_url || imagePreview || ''
+        image_url: finalImageUrl || ''
       };
+      
+      // Debug: Log the final form data
+      console.log('🔍 Final form data before submission:', formData);
+      console.log('🔍 Final image URL for submission:', finalImageUrl);
+      console.log('🔍 Submit data image_url:', submitData.image_url);
       
       // Debug: Log the form data being sent
       console.log('🔍 Submitting popup form data:', submitData);
@@ -502,7 +553,7 @@ export default function PopupAdsPage() {
   };
 
   // Image upload functions
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       // Validate file type
@@ -516,15 +567,20 @@ export default function PopupAdsPage() {
         toast.error('Image size must be less than 5MB');
         return;
       }
-
+      
       setSelectedImage(file);
       
-      // Create preview
+      // Create preview for display only (not for submission)
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target?.result as string);
       };
       reader.readAsDataURL(file);
+      
+      // Clear any existing image_url since we have a new file to upload
+      setFormData(prev => ({ ...prev, image_url: '' }));
+      
+      toast.info('Image selected. Click "Upload Image" or submit the form to upload.');
     }
   };
 
@@ -561,6 +617,7 @@ export default function PopupAdsPage() {
       console.log('🔍 Uploaded image URL:', imageUrl);
       setFormData(prev => ({ ...prev, image_url: imageUrl }));
       setImagePreview(imageUrl); // Keep the preview with the uploaded URL
+      console.log('🔍 handleImageUpload - formData updated with image_url:', imageUrl);
       toast.success('Image uploaded successfully!');
       setSelectedImage(null);
     } catch (error) {
@@ -669,81 +726,69 @@ export default function PopupAdsPage() {
   };
 
   const saveEditPreviewDimensions = async () => {
-    if (editPreviewData) {
-      console.log('💾 Save Edit Preview Dimensions - Current previewDimensions:', previewDimensions);
-      
-      // Update the edit preview data
-      setEditPreviewData(prev => prev ? {
+    try {
+      const response = await fetch(`/api/admin/popup-ads/${editPreviewData?.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          width: previewDimensions.width,
+          height: previewDimensions.height
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update popup dimensions');
+      }
+
+      // Update form data with new dimensions
+      setFormData(prev => ({
         ...prev,
         width: previewDimensions.width,
         height: previewDimensions.height
-      } : null);
-      
-      // If we're editing a popup (has an ID), update the database
-      if (editPreviewData.id > 0) {
-        try {
-          console.log('💾 Updating database for popup ID:', editPreviewData.id);
-          const response = await fetch(`/api/admin/popup-ads/${editPreviewData.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              width: previewDimensions.width,
-              height: previewDimensions.height
-            })
-          });
-          
-          if (response.ok) {
-            toast.success(`Dimensions updated to: ${previewDimensions.width}×${previewDimensions.height} and saved to database!`);
-            // Update the form data to reflect the new dimensions
-            setFormData(prev => ({
-              ...prev,
-              width: previewDimensions.width,
-              height: previewDimensions.height
-            }));
-            // Refresh the popups list to show updated data
-            fetchPopups();
-            // Close the edit preview
-            setShowEditPreviewDialog(false);
-          } else {
-            toast.error('Failed to save dimensions to database');
-          }
-        } catch (error) {
-          console.error('Error saving dimensions:', error);
-          toast.error('Failed to save dimensions to database');
-        }
-      } else {
-        // If it's a new popup (no ID), just update form data
-        console.log('💾 Updating form data for new popup');
-        setFormData(prev => ({
-          ...prev,
-          width: previewDimensions.width,
-          height: previewDimensions.height
-        }));
-        toast.success(`Dimensions updated to: ${previewDimensions.width}×${previewDimensions.height}`);
-        // Close the edit preview
-        setShowEditPreviewDialog(false);
-      }
+      }));
+
+      toast.success('Dimensions saved successfully!');
+      setShowEditPreviewDialog(false);
+    } catch (error) {
+      toast.error('Failed to save dimensions');
     }
   };
 
   // Resize handlers for preview
   const handlePreviewMouseDown = (e: React.MouseEvent) => {
-    console.log('🖱️ handlePreviewMouseDown called');
     e.preventDefault();
     e.stopPropagation();
-    console.log('🖱️ Mouse down on resize handle - from edit page');
-    console.log('🖱️ Event target:', e.target);
-    console.log('🖱️ Event currentTarget:', e.currentTarget);
+    
+    if (isResizing) return;
     
     setIsResizing(true);
-    isResizingRef.current = true;
-    startResizeRef.current = {
+    setResizeStartRef.current = {
       x: e.clientX,
       y: e.clientY,
       width: previewDimensions.width,
       height: previewDimensions.height
     };
-    console.log('🖱️ Start resize from edit page:', startResizeRef.current);
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !startResizeRef.current) return;
+      
+      const deltaX = e.clientX - startResizeRef.current.x;
+      const deltaY = e.clientY - startResizeRef.current.y;
+      
+      const newWidth = Math.max(200, previewDimensions.width + deltaX);
+      const newHeight = Math.max(150, previewDimensions.height + deltaY);
+      
+      setPreviewDimensions({ width: newWidth, height: newHeight });
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
   // Add event listeners for resize
@@ -1531,6 +1576,13 @@ export default function PopupAdsPage() {
                             {imagePreview ? 'Uploaded image' : formData.image_url}
                           </span>
                         </div>
+                        
+                        {/* Success indicator for uploaded images */}
+                        {formData.image_url && (
+                          <div className="p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                            ✅ Image uploaded successfully: {formData.image_url}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1601,6 +1653,11 @@ export default function PopupAdsPage() {
                               >
                                 Cancel
                               </Button>
+                            </div>
+                            
+                            {/* Status indicator */}
+                            <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700">
+                              ⚠️ Image selected but not uploaded. Click "Upload Image" or submit the form to upload.
                             </div>
                           </div>
                         )}
