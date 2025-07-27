@@ -24,42 +24,28 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid popup ID' }, { status: 400 });
     }
 
-    // Fetch specific popup ad
-    const popups = await databaseService.query(`
-      SELECT 
-        id, title, content_type, content, content_overlay, overlay_position, overlay_effect, overlay_background, overlay_padding, overlay_border_radius,
-        image_url, video_url, background_color, text_color, button_text, button_color,
-        button_url, show_button, auto_close_seconds,
-        width, height, position, animation, delay_seconds,
-        show_frequency, target_pages, exclude_pages,
-        start_date, end_date, is_active, priority,
-        created_at, updated_at
-      FROM popup_ads 
-      WHERE id = ?
-    `, [popupId]);
+    // Fetch popup ad
+    const [popup] = await databaseService.query(
+      'SELECT * FROM popup_ads WHERE id = ?',
+      [popupId]
+    );
 
-    if (!popups || popups.length === 0) {
+    if (!popup) {
       return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
     }
 
-    // Convert integer boolean fields to actual booleans
-    const popup = {
-      ...popups[0],
-      content_overlay: Boolean(popups[0].content_overlay),
-      show_button: Boolean(popups[0].show_button),
-      is_active: Boolean(popups[0].is_active)
+    // Convert boolean fields from integers to booleans
+    const popupWithBooleans = {
+      ...popup,
+      content_overlay: Boolean(popup.content_overlay),
+      show_button: Boolean(popup.show_button),
+      is_active: Boolean(popup.is_active)
     };
 
-    return NextResponse.json({ 
-      success: true, 
-      popup: popup 
-    });
-
+    return NextResponse.json({ popup: popupWithBooleans });
   } catch (error) {
-    console.error('Error fetching popup ad:', error);
-    return NextResponse.json({ 
-      error: 'Failed to fetch popup ad' 
-    }, { status: 500 });
+    console.error('Error fetching popup:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -85,39 +71,12 @@ export async function PUT(
     }
 
     const body = await request.json();
-    await debugLog('🔍 PUT /api/admin/popup-ads/[id] - Received data:', body);
-    
     const {
-      title,
-      content_type,
-      content,
-      content_overlay,
-      overlay_position,
-      overlay_effect,
-      overlay_background,
-      overlay_padding,
-      overlay_border_radius,
-      image_url,
-      video_url,
-      background_color,
-      text_color,
-      button_text,
-      button_color,
-      button_url,
-      show_button,
-      auto_close_seconds,
-      width,
-      height,
-      position,
-      animation,
-      delay_seconds,
-      show_frequency,
-      target_pages,
-      exclude_pages,
-      start_date,
-      end_date,
-      is_active,
-      priority
+      title, content_type, content, content_overlay, overlay_position, overlay_effect,
+      overlay_background, overlay_padding, overlay_border_radius, image_url, video_url,
+      background_color, text_color, button_text, button_color, button_url, show_button,
+      auto_close_seconds, width, height, position, animation, delay_seconds,
+      show_frequency, target_pages, exclude_pages, start_date, end_date, is_active, priority
     } = body;
 
     // Validate required fields
@@ -141,9 +100,8 @@ export async function PUT(
 
     try {
       if (target_pages) {
-        // If it's already a string, parse it to validate, then stringify
         if (typeof target_pages === 'string') {
-          JSON.parse(target_pages); // Validate JSON
+          JSON.parse(target_pages);
           targetPagesJson = target_pages;
         } else if (Array.isArray(target_pages)) {
           targetPagesJson = JSON.stringify(target_pages);
@@ -153,9 +111,8 @@ export async function PUT(
       }
 
       if (exclude_pages) {
-        // If it's already a string, parse it to validate, then stringify
         if (typeof exclude_pages === 'string') {
-          JSON.parse(exclude_pages); // Validate JSON
+          JSON.parse(exclude_pages);
           excludePagesJson = exclude_pages;
         } else if (Array.isArray(exclude_pages)) {
           excludePagesJson = JSON.stringify(exclude_pages);
@@ -184,35 +141,21 @@ export async function PUT(
       title, content_type, content, content_overlay || false, overlay_position || 'center', overlay_effect || 'none', overlay_background || 'rgba(0,0,0,0.7)', overlay_padding || 20, overlay_border_radius || 10,
       image_url || null, video_url || null,
       background_color || '#ffffff', text_color || '#000000',
-      button_text || 'Close', button_color || '#007bff', button_url || null, show_button !== undefined ? show_button : true, auto_close_seconds || 0,
-      width || 400, height || 300, position || 'center',
-      animation || 'fade', delay_seconds || 3,
-      show_frequency || 'once',
-      targetPagesJson,
-      excludePagesJson,
-      start_date || null, end_date || null,
-      is_active !== undefined ? is_active : true,
-      priority || 0,
+      button_text || 'Close', button_color || '#007bff', button_url || null, show_button || false, auto_close_seconds || 0,
+      width || 400, height || 300, position || 'center', animation || 'fade', delay_seconds || 3,
+      show_frequency || 'once', targetPagesJson, excludePagesJson,
+      start_date || null, end_date || null, is_active || true, priority || 0,
       popupId
     ]);
 
-    if (result && 'affectedRows' in result && result.affectedRows > 0) {
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Popup ad updated successfully'
-      });
-    } else {
-      return NextResponse.json({ 
-        error: 'Popup not found or no changes made' 
-      }, { status: 404 });
+    if (result.affectedRows === 0) {
+      return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
     }
 
+    return NextResponse.json({ message: 'Popup updated successfully' });
   } catch (error) {
-    await debugLog('🔍 Error updating popup ad:', error);
-    console.error('Error updating popup ad:', error);
-    return NextResponse.json({ 
-      error: 'Failed to update popup ad' 
-    }, { status: 500 });
+    console.error('Error updating popup:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -238,70 +181,34 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    await debugLog('🔍 PATCH /api/admin/popup-ads/[id] - Received data:', body);
-    
-    // Handle different types of updates
-    if (body.hasOwnProperty('is_active')) {
-      // Update popup status
-      const { is_active } = body;
-      
-      if (typeof is_active !== 'boolean') {
-        return NextResponse.json({ 
-          error: 'is_active must be a boolean' 
-        }, { status: 400 });
-      }
+    const updates = [];
+    const values = [];
 
-      const result = await databaseService.query(`
-        UPDATE popup_ads SET
-          is_active = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `, [is_active, popupId]);
-
-      if (result && 'affectedRows' in result && result.affectedRows > 0) {
-        return NextResponse.json({ 
-          success: true, 
-          message: `Popup ${is_active ? 'activated' : 'deactivated'} successfully`
-        });
-      } else {
-        return NextResponse.json({ 
-          error: 'Popup not found' 
-        }, { status: 404 });
+    // Build dynamic update query
+    Object.entries(body).forEach(([key, value]) => {
+      if (value !== undefined && key !== 'id') {
+        updates.push(`${key} = ?`);
+        values.push(value);
       }
-    } else if (body.hasOwnProperty('width') && body.hasOwnProperty('height')) {
-      // Update dimensions
-      const { width, height } = body;
-      
-      if (typeof width !== 'number' || typeof height !== 'number') {
-        return NextResponse.json({ 
-          error: 'width and height must be numbers' 
-        }, { status: 400 });
-      }
+    });
 
-      const result = await databaseService.query(`
-        UPDATE popup_ads SET width = ?, height = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-      `, [width, height, popupId]);
-
-      if (result && 'affectedRows' in result && result.affectedRows > 0) {
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Popup dimensions updated successfully'
-        });
-      } else {
-        return NextResponse.json({ 
-          error: 'Popup not found' 
-        }, { status: 404 });
-      }
-    } else {
-      return NextResponse.json({ 
-        error: 'Invalid update operation' 
-      }, { status: 400 });
+    if (updates.length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
+    values.push(popupId);
+    const query = `UPDATE popup_ads SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+
+    const result = await databaseService.query(query, values);
+
+    if (result.affectedRows === 0) {
+      return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: 'Popup updated successfully' });
   } catch (error) {
     console.error('Error updating popup:', error);
-    return NextResponse.json({ 
-      error: 'Failed to update popup' 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -326,26 +233,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid popup ID' }, { status: 400 });
     }
 
-    // Delete popup ad (this will also delete related analytics due to CASCADE)
-    const result = await databaseService.query(`
-      DELETE FROM popup_ads WHERE id = ?
-    `, [popupId]);
+    const result = await databaseService.query(
+      'DELETE FROM popup_ads WHERE id = ?',
+      [popupId]
+    );
 
-    if (result && 'affectedRows' in result && result.affectedRows > 0) {
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Popup ad deleted successfully'
-      });
-    } else {
-      return NextResponse.json({ 
-        error: 'Popup not found' 
-      }, { status: 404 });
+    if (result.affectedRows === 0) {
+      return NextResponse.json({ error: 'Popup not found' }, { status: 404 });
     }
 
+    return NextResponse.json({ message: 'Popup deleted successfully' });
   } catch (error) {
-    console.error('Error deleting popup ad:', error);
-    return NextResponse.json({ 
-      error: 'Failed to delete popup ad' 
-    }, { status: 500 });
+    console.error('Error deleting popup:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 
