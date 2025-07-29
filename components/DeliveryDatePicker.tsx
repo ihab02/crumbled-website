@@ -153,100 +153,88 @@ export default function DeliveryDatePicker({
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-          <Calendar className="h-4 w-4" />
-          Available Delivery Dates
-        </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span className="ml-3 text-gray-600">Loading available dates...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <span className="ml-3 text-gray-600">Loading available dates...</span>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 text-red-800">
-            <AlertCircle className="h-5 w-5" />
-            <span className="text-sm font-medium">{error}</span>
-          </div>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchAvailableDates}
-            className="mt-2"
-          >
-            Try Again
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="border-red-200 bg-red-50 p-4 rounded-lg">
+        <div className="flex items-center gap-2 text-red-800">
+          <AlertCircle className="h-5 w-5" />
+          <span className="text-sm font-medium">{error}</span>
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={fetchAvailableDates}
+          className="mt-2"
+        >
+          Try Again
+        </Button>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Calendar className="h-4 w-4" />
-          Available Delivery Dates
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {availableDates.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No delivery dates available for this zone</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Selected Date Display */}
-            {selectedDate && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle className="h-5 w-5 text-blue-600" />
-                    <div>
-                      <div className="font-medium text-blue-900">
-                        {availableDates.find(d => d.date === selectedDate)?.formattedDate}
-                      </div>
-                      <div className="text-sm text-blue-700 capitalize">
-                        {availableDates.find(d => d.date === selectedDate)?.dayName}
-                      </div>
+    <div>
+      {availableDates.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+          <p>No delivery dates available for this zone</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Selected Date Display */}
+          {selectedDate && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <div className="font-medium text-blue-900">
+                      {availableDates.find(d => d.date === selectedDate)?.formattedDate}
                     </div>
+                    <div className="text-sm text-blue-700 capitalize">
+                      {availableDates.find(d => d.date === selectedDate)?.dayName}
+                    </div>
+                    {/* Time Slot Information */}
+                    {zoneInfo?.timeSlot && (
+                      <div className="text-sm text-blue-600 mt-1">
+                        <Clock className="h-3 w-3 inline mr-1" />
+                        {zoneInfo.timeSlot.fromHour.substring(0, 5)} - {zoneInfo.timeSlot.toHour.substring(0, 5)}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {getDateBadge(availableDates.find(d => d.date === selectedDate)!)}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowAllDates(!showAllDates)}
-                      className="text-blue-600 border-blue-300 hover:bg-blue-100"
-                    >
-                      {showAllDates ? 'Hide Options' : 'Change Date'}
-                    </Button>
-                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {getDateBadge(availableDates.find(d => d.date === selectedDate)!)}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAllDates(!showAllDates)}
+                    className="text-blue-600 border-blue-300 hover:bg-blue-100"
+                  >
+                    {showAllDates ? 'Hide Options' : 'Change Date'}
+                  </Button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* All Available Dates (Hidden by default) */}
-            {showAllDates && (
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-gray-700 mb-2">
-                  Select a different delivery date:
-                </div>
-                <div className="grid gap-2">
-                  {availableDates.map((date) => (
-                    <Button
-                      key={date.date}
+          {/* All Available Dates (Hidden by default) */}
+          {showAllDates && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700 mb-2">
+                Select a different delivery date:
+              </div>
+              <div className="grid gap-2">
+                {availableDates.map((date) => (
+                  <Button
+                    key={date.date}
                       variant={selectedDate === date.date ? "default" : "outline"}
                       className={`justify-between h-auto p-3 ${
                         selectedDate === date.date 
@@ -294,9 +282,6 @@ export default function DeliveryDatePicker({
             </div>
           </div>
         )}
-        
-
-      </CardContent>
-    </Card>
-  );
+      </div>
+    );
 } 
