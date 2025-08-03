@@ -36,6 +36,7 @@ export async function GET(request: any) {
     const hideCancelled = searchParams.get('hideCancelled') === 'true'
     const hideDelivered = searchParams.get('hideDelivered') === 'true'
     const showTodayDelivery = searchParams.get('showTodayDelivery') === 'true'
+    const includeTomorrow = searchParams.get('includeTomorrow') === 'true'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
@@ -71,9 +72,13 @@ export async function GET(request: any) {
       conditions.push('o.status != "delivered"')
     }
 
-    // Show only orders to deliver today
+    // Show only orders to deliver today or tomorrow if filter is set
     if (showTodayDelivery) {
-      conditions.push('DATE(o.expected_delivery_date) = CURDATE()')
+      if (includeTomorrow) {
+        conditions.push('DATE(o.expected_delivery_date) = DATE_ADD(CURDATE(), INTERVAL 1 DAY)')
+      } else {
+        conditions.push('DATE(o.expected_delivery_date) <= CURDATE()')
+      }
     }
 
     // Combine all conditions
@@ -174,21 +179,68 @@ export async function GET(request: any) {
       const [rows] = await connection.query(ordersSql, allParams);
       const ordersArray = Array.isArray(rows) ? rows : [rows];
       
-      // Debug logging to see what data is returned
-      console.log('🔍 [DEBUG] Admin Orders API - Sample order data:', ordersArray[0]);
+      // Get order items for each order
+      const ordersWithItems = await Promise.all(
+        ordersArray.map(async (order: any) => {
+          const itemsSql = `
+            SELECT 
+              oi.id,
+              oi.quantity,
+              oi.unit_price,
+              oi.product_name,
+              oi.product_type,
+              oi.pack_size,
+              oi.flavor_details
+            FROM order_items oi
+            WHERE oi.order_id = ?
+          `;
+          
+          const [itemsRows] = await connection.query(itemsSql, [order.id]);
+          const items = Array.isArray(itemsRows) ? itemsRows : [itemsRows];
+          
+          // Parse flavor details for each item
+          const itemsWithFlavors = items.map((item: any) => {
+            let flavors = [];
+            let flavorDetails = item.flavor_details;
+            if (typeof flavorDetails === 'string') {
+              try {
+                flavorDetails = JSON.parse(flavorDetails);
+              } catch (error) {
+                console.error('Error parsing flavor details:', error, 'value:', flavorDetails);
+                flavorDetails = [];
+              }
+            }
+            if (Array.isArray(flavorDetails)) {
+              flavors = flavorDetails;
+            }
+            return {
+              ...item,
+              flavors: Array.isArray(flavors) ? flavors : []
+            };
+          });
+          
+          return {
+            ...order,
+            items: itemsWithFlavors
+          };
+        })
+      );
       
-      return NextResponse.json({
-        success: true,
-        data: ordersArray,
-        pagination: {
-          currentPage: page,
-          totalPages,
-          totalOrders,
-          limit,
-          hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
-      })
+      // Debug logging to see what data is returned
+      console.log('🔍 [DEBUG] Admin Orders API - Sample order data:', ordersWithItems[0]);
+      
+              return NextResponse.json({
+          success: true,
+          orders: ordersWithItems,
+          pagination: {
+            currentPage: page,
+            totalPages,
+            totalOrders,
+            limit,
+            hasNextPage: page < totalPages,
+            hasPrevPage: page > 1
+          }
+        })
     } finally {
       if (connection) {
         connection.release();

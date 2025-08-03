@@ -327,7 +327,7 @@ export default function AdminOrdersPage() {
         throw new Error('Failed to fetch orders');
       }
       const data = await response.json();
-      setOrders(data.data || []);
+      setOrders(data.orders || []);
       setPagination(data.pagination);
       setCurrentPage(page);
     } catch (error) {

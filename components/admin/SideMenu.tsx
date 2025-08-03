@@ -57,6 +57,11 @@ const menuItems = [
         icon: ShoppingCart
       },
       {
+        title: 'Order Preparation',
+        href: '/admin/order-preparation',
+        icon: Package
+      },
+      {
         title: 'Order Batches',
         href: '/admin/order-batches',
         icon: ClipboardList
