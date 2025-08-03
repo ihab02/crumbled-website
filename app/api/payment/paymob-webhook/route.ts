@@ -182,6 +182,7 @@ export async function POST(request: NextRequest) {
                 delivery_zone: addressData?.zone_name || '',
                 delivery_time: deliveryTime,
                 delivery_slot: deliverySlot,
+                expected_delivery_date: orderDetails.expected_delivery_date,
                 items: [] // TODO: Get actual order items
               }
             );

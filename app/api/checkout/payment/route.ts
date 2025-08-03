@@ -48,6 +48,12 @@ interface CheckoutPaymentRequest {
       email: string;
       phone: string;
     };
+    deliveryDate?: string;
+    deliveryTimeSlot?: {
+      name: string;
+      fromHour: string;
+      toHour: string;
+    };
   };
 }
 
@@ -183,6 +189,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
     console.log('🔍 [DEBUG] Payment API - Payment Method:', paymentMethod)
     console.log('🔍 [DEBUG] Payment API - Cart ID:', cartId)
     console.log('🔍 [DEBUG] Payment API - Order Data:', orderData)
+    console.log('🔍 [DEBUG] Payment API - Delivery Date:', orderData.deliveryDate)
     console.log('🔍 [DEBUG] Payment API - Cart items structure:', JSON.stringify(orderData.cart.items, null, 2))
 
     // Validate request
@@ -203,6 +210,31 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         message: 'Invalid payment method',
         error: 'Payment method must be either "cod" or "paymob"'
       }, { status: 400 });
+    }
+
+    // Validate delivery date if provided
+    if (orderData.deliveryDate) {
+      const deliveryDateObj = new Date(orderData.deliveryDate);
+      if (isNaN(deliveryDateObj.getTime())) {
+        console.error('❌ [DEBUG] Payment API - Invalid delivery date format:', orderData.deliveryDate)
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid delivery date format',
+          error: 'Delivery date must be a valid date'
+        }, { status: 400 });
+      }
+      
+      // Check if delivery date is in the future
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (deliveryDateObj < today) {
+        console.error('❌ [DEBUG] Payment API - Delivery date is in the past:', orderData.deliveryDate)
+        return NextResponse.json({
+          success: false,
+          message: 'Delivery date cannot be in the past',
+          error: 'Please select a future delivery date'
+        }, { status: 400 });
+      }
     }
 
     console.log('🔍 [DEBUG] Payment API - Starting database transaction')
@@ -311,8 +343,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           zone,
           delivery_fee,
           subtotal,
+          expected_delivery_date,
+          delivery_time_slot_name,
+          from_hour,
+          to_hour,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           customerId,
           finalPromoCodeId || null,
@@ -326,7 +362,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           orderData.deliveryAddress.zone_name,
           orderData.deliveryAddress.zone_name,
           orderData.cart.deliveryFee,
-          orderData.cart.subtotal
+          orderData.cart.subtotal,
+          orderData.deliveryDate || null,
+          orderData.deliveryTimeSlot?.name || null,
+          orderData.deliveryTimeSlot?.fromHour || null,
+          orderData.deliveryTimeSlot?.toHour || null
         ]
       );
       console.log('🔍 [DEBUG] Payment API - Inserted order with finalPromoCodeId:', finalPromoCodeId, 'and finalDiscountAmount:', finalDiscountAmount);
@@ -633,7 +673,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           customer_email: orderData.customerInfo.email,
           additional_info: orderData.deliveryAddress.additional_info,
           delivery_time: deliveryTime,
-          delivery_slot: deliverySlot
+          delivery_slot: deliverySlot,
+          expected_delivery_date: orderData.deliveryDate
         };
         
         console.log('🔍 [DEBUG] Payment API - Email order object:', {

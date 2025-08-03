@@ -170,6 +170,11 @@ export default function NewCheckoutPage() {
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string>('')
   const [currentZoneId, setCurrentZoneId] = useState<number | null>(null)
   const [deliveryDateInitialized, setDeliveryDateInitialized] = useState(false)
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState<{
+    name: string;
+    fromHour: string;
+    toHour: string;
+  } | null>(null)
 
   // Determine if user is logged in based on session status
   const isLoggedIn = status === 'authenticated' && session?.user
@@ -303,6 +308,14 @@ export default function NewCheckoutPage() {
       
       if (data.success) {
         setDeliveryRules(data.deliveryRules)
+        // Capture delivery time slot information
+        if (data.deliveryRules?.timeSlot) {
+          setDeliveryTimeSlot({
+            name: data.deliveryRules.timeSlot.name,
+            fromHour: data.deliveryRules.timeSlot.fromHour,
+            toHour: data.deliveryRules.timeSlot.toHour
+          })
+        }
       } else {
         toast.error('Failed to load delivery rules')
       }
@@ -518,6 +531,12 @@ export default function NewCheckoutPage() {
         saveNewAddress: checkoutData.userType === 'registered' && useNewAddress ? saveNewAddress : undefined,
         // Delivery date
         deliveryDate: selectedDeliveryDate,
+        // Delivery time slot information
+        deliveryTimeSlot: deliveryTimeSlot ? {
+          name: deliveryTimeSlot.name,
+          fromHour: deliveryTimeSlot.fromHour,
+          toHour: deliveryTimeSlot.toHour
+        } : undefined,
         promoCode: appliedPromoCode ? {
           id: appliedPromoCode.id,
           code: appliedPromoCode.code,
@@ -546,7 +565,11 @@ export default function NewCheckoutPage() {
       // Step 2: Process payment
       const paymentRequest = {
         paymentMethod,
-        orderData
+        orderData: {
+          ...orderData,
+          deliveryDate: selectedDeliveryDate, // Ensure delivery date is passed to payment API
+          deliveryTimeSlot: deliveryTimeSlot // Pass delivery time slot information
+        }
       }
 
       const paymentResponse = await fetch('/api/checkout/payment', {

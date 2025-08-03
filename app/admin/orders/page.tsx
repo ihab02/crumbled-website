@@ -18,7 +18,8 @@ declare module 'jspdf' {
 interface Order {
   id: number;
   total: number;
-  status: string;
+        status: string;
+      order_status?: string;
   created_at: string;
   payment_method: string;
   guest_otp: string | null;
@@ -57,6 +58,8 @@ interface Order {
   promo_code_id?: number | null;
   promo_code?: string | null;
   discount_amount?: number | null;
+        total_after_discount?: number | null;
+      total_amount?: number | null;
 }
 
 interface DeliveryPerson {
@@ -122,6 +125,8 @@ export default function AdminOrdersPage() {
   const [pendingStatusChange, setPendingStatusChange] = useState<{orderId: number, newStatus: string} | null>(null);
   const [selectedDeliveryPerson, setSelectedDeliveryPerson] = useState<number | null>(null);
   const [isAssigningDelivery, setIsAssigningDelivery] = useState(false);
+  const [sortBy, setSortBy] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<string>('DESC');
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -289,7 +294,9 @@ export default function AdminOrdersPage() {
       // Build query parameters
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '10'
+        limit: '10',
+        sortBy: sortBy,
+        sortOrder: sortOrder
       });
       
       if (fromDate) {
@@ -364,6 +371,16 @@ export default function AdminOrdersPage() {
       setShowConfirmationModal(false);
       setPendingStatusChange(null);
     }
+  };
+
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+    } else {
+      setSortBy(field);
+      setSortOrder('ASC');
+    }
+    fetchOrders(1);
   };
 
   const getStatusColor = (status: string) => {
@@ -485,11 +502,25 @@ export default function AdminOrdersPage() {
               
               <div class="order-info">
                 <h3>Order Information</h3>
-                <p><strong>Status:</strong> ${order.status}</p>
+                <p><strong>Status:</strong> ${order.order_status || order.status}</p>
                 <p><strong>Payment Method:</strong> ${order.payment_method}</p>
-                <p><strong>Total:</strong> EGP ${Number(order.total).toFixed(2)}</p>
-                ${order.subtotal ? `<p><strong>Subtotal:</strong> EGP ${Number(order.subtotal).toFixed(2)}</p>` : ''}
-                ${order.delivery_fee ? `<p><strong>Delivery Fee:</strong> EGP ${Number(order.delivery_fee).toFixed(2)}</p>` : ''}
+                ${order.expected_delivery_date ? `<p><strong>Expected Delivery:</strong> ${new Date(order.expected_delivery_date).toLocaleDateString()}</p>` : ''}
+                ${order.delivery_time_slot_name ? `<p><strong>Time Slot:</strong> ${order.delivery_time_slot_name}</p>` : ''}
+                ${order.from_hour && order.to_hour ? `<p><strong>Hours:</strong> ${order.from_hour.substring(0, 5)} - ${order.to_hour.substring(0, 5)}</p>` : ''}
+              </div>
+              
+              <div class="price-breakdown">
+                <h3>Price Breakdown</h3>
+                <p><strong>Subtotal:</strong> EGP ${(Number(order.subtotal) || 0).toFixed(2)}</p>
+                <p><strong>Delivery Fee:</strong> EGP ${(Number(order.delivery_fee) || 0).toFixed(2)}</p>
+                <p><strong>Discount ${order.promo_code ? `(${order.promo_code})` : ''}:</strong> -EGP ${(Number(order.discount_amount) || 0).toFixed(2)}</p>
+                <p><strong>Total to Collect:</strong> EGP ${(() => {
+                  const subtotal = Number(order.subtotal) || 0;
+                  const deliveryFee = Number(order.delivery_fee) || 0;
+                  const discount = Number(order.discount_amount) || 0;
+                  const calculatedTotal = subtotal + deliveryFee - discount;
+                  return calculatedTotal.toFixed(2);
+                })()}</p>
               </div>
               
               <div class="customer-info">
@@ -535,7 +566,13 @@ export default function AdminOrdersPage() {
               </table>
               
               <div class="total">
-                <p>Total Amount: EGP ${Number(order.total).toFixed(2)}</p>
+                <p>Total Amount: EGP ${(() => {
+                  const subtotal = Number(order.subtotal) || 0;
+                  const deliveryFee = Number(order.delivery_fee) || 0;
+                  const discount = Number(order.discount_amount) || 0;
+                  const calculatedTotal = subtotal + deliveryFee - discount;
+                  return calculatedTotal.toFixed(2);
+                })()}</p>
               </div>
             </body>
           </html>
@@ -565,8 +602,8 @@ export default function AdminOrdersPage() {
     const summaryData = Object.entries(ordersByZone).map(([zone, orders]) => ({
       'Zone': zone,
       'Total Orders': orders.length,
-      'Total Revenue': orders.reduce((sum, order) => sum + Number(order.total), 0).toFixed(2),
-      'Average Order Value': (orders.reduce((sum, order) => sum + Number(order.total), 0) / orders.length).toFixed(2)
+      'Total Revenue': orders.reduce((sum, order) => sum + (order.total_after_discount ? Number(order.total_after_discount) : Number(order.total)), 0).toFixed(2),
+      'Average Order Value': (orders.reduce((sum, order) => sum + (order.total_after_discount ? Number(order.total_after_discount) : Number(order.total)), 0) / orders.length).toFixed(2)
     }));
     
     const summaryWorksheet = XLSX.utils.json_to_sheet(summaryData);
@@ -580,7 +617,8 @@ export default function AdminOrdersPage() {
       'Customer Email': order.customer_email || 'N/A',
       'Status': order.status,
       'Payment Method': order.payment_method,
-      'Total': Number(order.total),
+      'Total (Before Discount)': Number(order.total),
+      'Total (After Discount)': order.total_after_discount ? Number(order.total_after_discount) : Number(order.total),
       'Subtotal': order.subtotal ? Number(order.subtotal) : null,
       'Delivery Fee': order.delivery_fee ? Number(order.delivery_fee) : null,
       'Delivery Address': order.delivery_address || 'N/A',
@@ -608,7 +646,8 @@ export default function AdminOrdersPage() {
       { wch: 25 }, // Customer Email
       { wch: 12 }, // Status
       { wch: 15 }, // Payment Method
-      { wch: 12 }, // Total
+      { wch: 18 }, // Total (Before Discount)
+      { wch: 18 }, // Total (After Discount)
       { wch: 12 }, // Subtotal
       { wch: 12 }, // Delivery Fee
       { wch: 30 }, // Delivery Address
@@ -634,7 +673,8 @@ export default function AdminOrdersPage() {
         'Customer Name': order.customer_name || 'Guest User',
         'Customer Phone': order.customer_phone || 'N/A',
         'Status': order.status,
-        'Total': Number(order.total),
+        'Total (Before Discount)': Number(order.total),
+        'Total (After Discount)': order.total_after_discount ? Number(order.total_after_discount) : Number(order.total),
         'Delivery Address': order.delivery_address || 'N/A',
         'Expected Delivery Date': order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
         'Delivery Time Slot': order.delivery_time_slot_name || 'N/A',
@@ -645,7 +685,7 @@ export default function AdminOrdersPage() {
       
       const zoneWorksheet = XLSX.utils.json_to_sheet(zoneData);
       const zoneColumnWidths = [
-        { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, 
+        { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, 
         { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 40 }
       ];
       zoneWorksheet['!cols'] = zoneColumnWidths;
@@ -734,6 +774,7 @@ export default function AdminOrdersPage() {
       order.delivery_zone || order.zone || 'N/A',
       order.status,
       `EGP ${Number(order.total).toFixed(2)}`,
+      `EGP ${order.total_after_discount ? Number(order.total_after_discount).toFixed(2) : Number(order.total).toFixed(2)}`,
       order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
       order.delivery_time_slot_name || 'N/A',
       order.delivery_man_name || 'Not Assigned',
@@ -743,7 +784,7 @@ export default function AdminOrdersPage() {
     // Add detailed table
     autoTable(doc, {
       startY: currentY,
-      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Expected Delivery', 'Time Slot', 'Delivery Person', 'Order Date']],
+      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Total After Discount', 'Expected Delivery', 'Time Slot', 'Delivery Person', 'Order Date']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
@@ -755,11 +796,12 @@ export default function AdminOrdersPage() {
         2: { cellWidth: 20 }, // Phone
         3: { cellWidth: 20 }, // Zone
         4: { cellWidth: 15 }, // Status
-        5: { cellWidth: 20 }, // Total
-        6: { cellWidth: 25 }, // Expected Delivery
-        7: { cellWidth: 20 }, // Time Slot
-        8: { cellWidth: 20 }, // Delivery Person
-        9: { cellWidth: 20 }  // Order Date
+        5: { cellWidth: 18 }, // Total
+        6: { cellWidth: 18 }, // Total After Discount
+        7: { cellWidth: 25 }, // Expected Delivery
+        8: { cellWidth: 20 }, // Time Slot
+        9: { cellWidth: 20 }, // Delivery Person
+        10: { cellWidth: 20 }  // Order Date
       }
     });
     
@@ -1003,20 +1045,20 @@ export default function AdminOrdersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Expand
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order ID
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('id')}>
+                      Order ID {sortBy === 'id' && (sortOrder === 'ASC' ? '↑' : '↓')}
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('customer_name')}>
+                      Customer {sortBy === 'customer_name' && (sortOrder === 'ASC' ? '↑' : '↓')}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Phone
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Zone
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('delivery_zone')}>
+                      Zone {sortBy === 'delivery_zone' && (sortOrder === 'ASC' ? '↑' : '↓')}
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Expected Delivery
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('expected_delivery_date')}>
+                      Expected Delivery {sortBy === 'expected_delivery_date' && (sortOrder === 'ASC' ? '↑' : '↓')}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Time Slot
@@ -1024,8 +1066,11 @@ export default function AdminOrdersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Delivery Person
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
+                      Total {sortBy === 'total' && (sortOrder === 'ASC' ? '↑' : '↓')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total_after_discount')}>
+                      Total After Discount {sortBy === 'total_after_discount' && (sortOrder === 'ASC' ? '↑' : '↓')}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Promo Code
@@ -1136,6 +1181,9 @@ export default function AdminOrdersPage() {
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                         EGP {Number(order.total).toFixed(2)}
                       </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        EGP {order.total_after_discount ? Number(order.total_after_discount).toFixed(2) : Number(order.total).toFixed(2)}
+                      </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{order.promo_code || order.promo_code_id || '-'}</td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{order.discount_amount ? `EGP ${Number(order.discount_amount).toFixed(2)}` : '-'}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
@@ -1180,7 +1228,7 @@ export default function AdminOrdersPage() {
                     {/* Expanded Order Items Row */}
                     {expandedOrders.has(order.id) && (
                       <tr key={`${order.id}-expanded`} className="bg-gray-50">
-                        <td colSpan={13} className="px-4 py-4">
+                        <td colSpan={14} className="px-4 py-4">
                           <div className="bg-white rounded-lg border border-gray-200 p-4">
                             <h4 className="text-sm font-medium text-gray-900 mb-3">Order Items</h4>
                             {order.items && order.items.length > 0 ? (
@@ -1381,7 +1429,7 @@ export default function AdminOrdersPage() {
                     <h3 className="text-sm font-medium text-gray-500 mb-2">Order Information</h3>
                     <div className="bg-gray-50 p-3 rounded-md">
                       <p className="text-sm text-gray-900">
-                        <span className="font-medium">Status:</span> {selectedOrder.status}
+                        <span className="font-medium">Status:</span> {selectedOrder.order_status || selectedOrder.status}
                       </p>
                       <p className="text-sm text-gray-500">
                         <span className="font-medium">Payment:</span> {selectedOrder.payment_method}
@@ -1389,35 +1437,43 @@ export default function AdminOrdersPage() {
                       <p className="text-sm text-gray-500">
                         <span className="font-medium">Date:</span> {new Date(selectedOrder.created_at).toLocaleString()}
                       </p>
-                      <p className="text-sm text-gray-900 font-medium">
-                        <span className="font-medium">Total:</span> EGP {Number(selectedOrder.total).toFixed(2)}
-                      </p>
-                      {selectedOrder.subtotal && (
-                        <p className="text-sm text-gray-500">
-                          <span className="font-medium">Subtotal:</span> EGP {Number(selectedOrder.subtotal).toFixed(2)}
-                        </p>
-                      )}
-                      {selectedOrder.delivery_fee && (
-                        <p className="text-sm text-gray-500">
-                          <span className="font-medium">Delivery Fee:</span> EGP {Number(selectedOrder.delivery_fee).toFixed(2)}
-                        </p>
-                      )}
+                      {/* Price Breakdown */}
+                      <div className="bg-gray-50 p-3 rounded-md mb-3">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Price Breakdown</h4>
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                          <span>Subtotal:</span>
+                          <span>EGP {(Number(selectedOrder.subtotal) || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                          <span>Delivery Fee:</span>
+                          <span>EGP {(Number(selectedOrder.delivery_fee) || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                          <span>Discount {selectedOrder.promo_code ? `(${selectedOrder.promo_code})` : ''}:</span>
+                          <span className={selectedOrder.discount_amount ? 'text-red-600' : 'text-gray-600'}>
+                            -EGP {(Number(selectedOrder.discount_amount) || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="border-t border-gray-300 pt-1 mt-2">
+                          <div className="flex justify-between text-sm font-semibold text-gray-900">
+                            <span>Total to Collect:</span>
+                            <span>EGP {(() => {
+                              const subtotal = Number(selectedOrder.subtotal) || 0;
+                              const deliveryFee = Number(selectedOrder.delivery_fee) || 0;
+                              const discount = Number(selectedOrder.discount_amount) || 0;
+                              const calculatedTotal = subtotal + deliveryFee - discount;
+                              return calculatedTotal.toFixed(2);
+                            })()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
                       {selectedOrder.guest_otp && (
                         <p className="text-sm text-gray-500">
                           <span className="font-medium">Guest OTP:</span> {selectedOrder.guest_otp} 
                           {selectedOrder.otp_verified && (
                             <span className="text-green-600 ml-2">✓ Verified</span>
                           )}
-                        </p>
-                      )}
-                      {selectedOrder.promo_code && (
-                        <p className="text-sm text-gray-500">
-                          <span className="font-medium">Promo Code:</span> {selectedOrder.promo_code}
-                        </p>
-                      )}
-                      {selectedOrder.discount_amount && (
-                        <p className="text-sm text-gray-500">
-                          <span className="font-medium">Discount:</span> EGP {Number(selectedOrder.discount_amount).toFixed(2)}
                         </p>
                       )}
                     </div>

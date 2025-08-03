@@ -555,7 +555,7 @@ export class EmailService {
                             <p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Email:</strong> ${order.customerInfo?.email || order.customer_email || ''}</p>
                             ${order.delivery_time ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Delivery Date:</strong> ${order.delivery_time}</p>` : ''}
                             ${order.delivery_slot ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Delivery Time Slot:</strong> ${order.delivery_slot}</p>` : ''}
-                            ${order.expected_delivery_date ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Expected Delivery:</strong> ${order.expected_delivery_date}</p>` : ''}
+                            ${order.expected_delivery_date ? `<p style="color: #6b7280; margin: 5px 0; font-size: 14px;"><strong>Expected Delivery:</strong> ${new Date(order.expected_delivery_date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>` : ''}
                           </td>
                         </tr>
                       </table>

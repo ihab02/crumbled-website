@@ -35,6 +35,12 @@ interface CheckoutConfirmRequest {
     zone_id: number;
   };
   saveNewAddress?: boolean;
+  deliveryDate?: string;
+  deliveryTimeSlot?: {
+    name: string;
+    fromHour: string;
+    toHour: string;
+  };
   promoCode?: {
     id: number;
     code: string;
@@ -142,7 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     
     // Handle both field names for backward compatibility
     const guestData = requestBody.guestData || requestBody.guest;
-    const { selectedAddressId, useNewAddress, newAddress, saveNewAddress } = requestBody;
+    const { selectedAddressId, useNewAddress, newAddress, saveNewAddress, deliveryDate } = requestBody;
     
     console.log('🔍 [DEBUG] Confirm API - Request body:', JSON.stringify(requestBody, null, 2))
     console.log('🔍 [DEBUG] Confirm API - Guest data:', JSON.stringify(guestData, null, 2))
@@ -153,6 +159,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     console.log('🔍 [DEBUG] Confirm API - Session:', session?.user?.email)
     console.log('🔍 [DEBUG] Confirm API - Selected Address ID:', selectedAddressId)
     console.log('🔍 [DEBUG] Confirm API - Use New Address:', useNewAddress)
+    console.log('🔍 [DEBUG] Confirm API - Delivery Date:', deliveryDate)
     console.log('🔍 [DEBUG] Confirm API - Cart ID:', cartId)
 
     // Validate cart
@@ -590,6 +597,31 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       }, { status: 400 });
     }
 
+    // Validate delivery date if provided
+    if (deliveryDate) {
+      const deliveryDateObj = new Date(deliveryDate);
+      if (isNaN(deliveryDateObj.getTime())) {
+        console.error('❌ [DEBUG] Confirm API - Invalid delivery date format:', deliveryDate)
+        return NextResponse.json({
+          success: false,
+          message: 'Invalid delivery date format',
+          error: 'Delivery date must be a valid date'
+        }, { status: 400 });
+      }
+      
+      // Check if delivery date is in the future
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (deliveryDateObj < today) {
+        console.error('❌ [DEBUG] Confirm API - Delivery date is in the past:', deliveryDate)
+        return NextResponse.json({
+          success: false,
+          message: 'Delivery date cannot be in the past',
+          error: 'Please select a future delivery date'
+        }, { status: 400 });
+      }
+    }
+
     console.log('🔍 [DEBUG] Confirm API - All validations passed, proceeding with order confirmation')
 
     const total = subtotal + Number(deliveryFee);
@@ -609,6 +641,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
       };
     }
 
+    // Extract delivery time slot info from request if present
+    let deliveryTimeSlot = undefined;
+    if ('deliveryTimeSlot' in requestBody && requestBody.deliveryTimeSlot) {
+      deliveryTimeSlot = {
+        name: requestBody.deliveryTimeSlot.name,
+        fromHour: requestBody.deliveryTimeSlot.fromHour,
+        toHour: requestBody.deliveryTimeSlot.toHour
+      };
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Order confirmed successfully',
@@ -622,6 +664,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         },
         deliveryAddress,
         customerInfo,
+        deliveryDate,
+        ...(deliveryTimeSlot ? { deliveryTimeSlot } : {}),
         ...(promoCode ? { promoCode } : {})
       }
     });

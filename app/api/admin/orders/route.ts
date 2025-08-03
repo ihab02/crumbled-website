@@ -36,6 +36,8 @@ export async function GET(request: any) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
+    const sortBy = searchParams.get('sortBy') || 'created_at'
+    const sortOrder = searchParams.get('sortOrder') || 'DESC'
 
     // Build WHERE clause for date filtering
     let whereClause = ''
@@ -102,18 +104,21 @@ export async function GET(request: any) {
         c.email as customer_email,
         c.phone as customer_phone,
         z.delivery_days,
-        CASE 
-          WHEN z.delivery_days > 0 THEN 
-            DATE_ADD(o.created_at, INTERVAL z.delivery_days DAY)
-          ELSE 
-            o.created_at
-        END as expected_delivery_date,
+        COALESCE(o.expected_delivery_date, 
+          CASE 
+            WHEN z.delivery_days > 0 THEN 
+              DATE_ADD(o.created_at, INTERVAL z.delivery_days DAY)
+            ELSE 
+              o.created_at
+          END
+        ) as expected_delivery_date,
         o.delivery_man_id,
         dm.name as delivery_man_name,
         dm.mobile_phone as delivery_man_phone,
         dts.name as delivery_time_slot_name,
         dts.from_hour,
-        dts.to_hour
+        dts.to_hour,
+        (o.subtotal + o.delivery_fee - COALESCE(o.discount_amount, 0)) as total_after_discount
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
        LEFT JOIN promo_codes pc ON o.promo_code_id = pc.id
@@ -121,7 +126,12 @@ export async function GET(request: any) {
        LEFT JOIN delivery_men dm ON o.delivery_man_id = dm.id
        LEFT JOIN delivery_time_slots dts ON z.time_slot_id = dts.id
        ${whereClause}
-       ORDER BY o.created_at DESC
+       ORDER BY ${sortBy === 'expected_delivery_date' ? 'o.expected_delivery_date' : 
+                 sortBy === 'delivery_zone' ? 'o.delivery_zone' :
+                 sortBy === 'total_after_discount' ? 'total_after_discount' :
+                 sortBy === 'customer_name' ? 'customer_name' :
+                 sortBy === 'status' ? 'o.status' :
+                 sortBy === 'created_at' ? 'o.created_at' : 'o.created_at'} ${sortOrder}
        LIMIT ? OFFSET ?
     `
     

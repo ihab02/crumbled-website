@@ -101,7 +101,8 @@ export async function POST(request: NextRequest) {
         validationResult = await validateLoyaltyReward(promoCode, customerId);
         break;
       
-      default: // basic
+      case 'basic':
+      default: // fallback for any other types
         validationResult = await validateBasicPromo(promoCode, subtotal);
         break;
     }

@@ -155,6 +155,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
       promo_code_id: order.promo_code_id,
       promo_code: order.promo_code,
       discount_amount: order.discount_amount,
+      // Delivery timing information
+      expected_delivery_date: order.expected_delivery_date,
+      delivery_time_slot_name: order.delivery_time_slot_name,
+      delivery_days: order.delivery_days,
+      from_hour: order.from_hour,
+      to_hour: order.to_hour,
       items: itemsWithFlavors
     };
 

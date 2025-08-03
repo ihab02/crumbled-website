@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyJWT } from '@/lib/middleware/auth';
-import db from '@/lib/db';
+import { databaseService } from '@/lib/services/databaseService';
+import pool from '@/lib/db';
 
 // GET - Fetch all pricing rules
 export async function GET(request: NextRequest) {
@@ -47,8 +48,18 @@ export async function GET(request: NextRequest) {
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM pricing_rules ${whereClause}`;
-    const [countResult] = await db.execute(countQuery, params);
-    const total = (countResult as any)[0].total;
+    
+    let total = 0;
+    let countConnection;
+    try {
+      countConnection = await pool.getConnection();
+      const [countRows] = await countConnection.query(countQuery, params);
+      total = (countRows as any)[0].total;
+    } finally {
+      if (countConnection) {
+        countConnection.release();
+      }
+    }
 
     // Get pricing rules with pagination
     const query = `
@@ -62,17 +73,30 @@ export async function GET(request: NextRequest) {
       LIMIT ? OFFSET ?
     `;
 
-    const [pricingRules] = await db.execute(query, [...params, limit, offset]);
-
-    return NextResponse.json({
-      data: pricingRules,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+    // Ensure all parameters are properly defined and convert to numbers
+    const queryParams = [...params, Number(limit), Number(offset)];
+    
+    // Use direct connection.query like the working admin orders API
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      const [rows] = await connection.query(query, queryParams);
+      const pricingRules = Array.isArray(rows) ? rows : [rows];
+      
+      return NextResponse.json({
+        data: pricingRules,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
+    } finally {
+      if (connection) {
+        connection.release();
       }
-    });
+    }
 
   } catch (error) {
     console.error('Error fetching pricing rules:', error);
@@ -132,24 +156,34 @@ export async function POST(request: NextRequest) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    const [result] = await db.execute(insertQuery, [
-      name, description, rule_type, target_id, target_value, discount_type,
-      discount_value, minimum_order_amount || 0, maximum_discount, start_date,
-      end_date, is_active !== false, priority || 0, decoded.id
-    ]);
+    let connection;
+    try {
+      connection = await pool.getConnection();
+      const [result] = await connection.query(insertQuery, [
+        name, description, rule_type, target_id, target_value, discount_type,
+        discount_value, minimum_order_amount || 0, maximum_discount, start_date,
+        end_date, is_active !== false, priority || 0, decoded.id
+      ]);
 
-    const pricingRuleId = (result as any).insertId;
+      const pricingRuleId = (result as any).insertId;
 
-    // Fetch the created pricing rule
-    const [newPricingRule] = await db.execute(
-      'SELECT * FROM pricing_rules WHERE id = ?',
-      [pricingRuleId]
-    );
+      // Fetch the created pricing rule
+      const [newPricingRuleRows] = await connection.query(
+        'SELECT * FROM pricing_rules WHERE id = ?',
+        [pricingRuleId]
+      );
+      
+      const newPricingRule = Array.isArray(newPricingRuleRows) ? newPricingRuleRows : [newPricingRuleRows];
 
-    return NextResponse.json({
-      message: 'Pricing rule created successfully',
-      data: (newPricingRule as any[])[0]
-    }, { status: 201 });
+      return NextResponse.json({
+        message: 'Pricing rule created successfully',
+        data: newPricingRule[0]
+      }, { status: 201 });
+    } finally {
+      if (connection) {
+        connection.release();
+      }
+    }
 
   } catch (error) {
     console.error('Error creating pricing rule:', error);

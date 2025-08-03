@@ -247,7 +247,13 @@ export default function ConfirmPage() {
       }
       const orderData = confirmResult.data
       // Step 2: Process payment
-      const paymentRequest = { paymentMethod, orderData }
+      const paymentRequest = { 
+        paymentMethod, 
+        orderData: {
+          ...orderData,
+          deliveryDate: selectedDeliveryDate // Ensure delivery date is passed to payment API
+        }
+      }
       const paymentResponse = await fetch('/api/checkout/payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
