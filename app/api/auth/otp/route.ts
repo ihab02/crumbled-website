@@ -54,13 +54,7 @@ export async function POST(request: Request) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     console.log('🔑 Generated OTP:', otp);
     
-    // Set expiration time (10 minutes from now) in MySQL format
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-    const mysqlExpiresAt = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
-    console.log('⏰ Expires at:', mysqlExpiresAt);
-
-    // Send OTP via SMS (this will also store it in database)
+    // Send OTP via SMS (this will also store it in database with MySQL timezone)
     const smsResult = await sendVerificationCode(phone, otp);
 
     if (!smsResult.success) {
@@ -150,6 +144,24 @@ export async function PUT(request: Request) {
       // Use the same verification logic as verifyCode function
       console.log('🔍 Checking OTP in database with MySQL time comparison...');
       
+      // First, let's check what OTPs exist for this phone
+      const [allOtps] = await databaseService.query(
+        `SELECT 
+          id,
+          verification_code,
+          expires_at,
+          is_verified,
+          created_at
+        FROM phone_verification
+        WHERE phone = ?
+        ORDER BY created_at DESC
+        LIMIT 5`,
+        [formattedPhone]
+      );
+      
+      console.log('🔍 All OTPs for this phone:', allOtps);
+      
+      // Now check for valid OTP
       const [result] = await databaseService.query(
         `SELECT 
           id,
@@ -168,6 +180,7 @@ export async function PUT(request: Request) {
 
       if (!Array.isArray(result) || result.length === 0) {
         console.log('❌ No valid OTP found for this phone and code');
+        console.log('🔍 Current MySQL time:', new Date().toISOString());
         return NextResponse.json(
           { error: 'Invalid or expired OTP' },
           { status: 400 }

@@ -6,6 +6,10 @@ export const databaseService = {
     let connection;
     try {
       connection = await pool.getConnection();
+      
+      // Set timezone for this connection
+      await connection.execute("SET time_zone = '+03:00'");
+      
       const [rows] = await connection.execute(sql, params);
       return rows as T;
     } catch (error) {
