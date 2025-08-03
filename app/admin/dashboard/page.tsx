@@ -256,19 +256,41 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-            Dashboard
-          </h1>
-          <p className="text-gray-600 mt-2">Welcome back! Here's what's happening with your store.</p>
+      {/* New Hero Header */}
+      <div className="relative rounded-xl overflow-hidden mb-8 shadow-lg bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 border border-pink-200">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-8">
+          <div className="flex items-center gap-4">
+            <img
+              src="/images/logo-no-background.png"
+              alt="Crumbled Logo"
+              className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-white shadow border border-pink-200"
+            />
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-pink-700 tracking-tight mb-1">Crumbled Admin Dashboard</h1>
+              <p className="text-gray-700 text-base sm:text-lg font-medium">Welcome back! Manage your store, orders, and analytics all in one place.</p>
+            </div>
+          </div>
+          <div className="mt-4 sm:mt-0">
+            <Button onClick={handleRefresh} variant="outline" className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
-        <Button onClick={handleRefresh} variant="outline" className="flex items-center gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+        {/* Optional: Decorative SVG or pattern for extra flair */}
+        <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none select-none">
+          <svg width="180" height="100" viewBox="0 0 180 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="90" cy="50" rx="90" ry="50" fill="url(#paint0_radial)" />
+            <defs>
+              <radialGradient id="paint0_radial" cx="0" cy="0" r="1" gradientTransform="translate(90 50) scale(90 50)" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#f472b6" />
+                <stop offset="1" stopColor="#a78bfa" />
+              </radialGradient>
+            </defs>
+          </svg>
+        </div>
       </div>
+      {/* End New Hero Header */}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
