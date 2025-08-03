@@ -33,28 +33,52 @@ export async function GET(request: any) {
     const { searchParams } = new URL(request.url)
     const fromDate = searchParams.get('fromDate')
     const toDate = searchParams.get('toDate')
+    const hideCancelled = searchParams.get('hideCancelled') === 'true'
+    const hideDelivered = searchParams.get('hideDelivered') === 'true'
+    const showTodayDelivery = searchParams.get('showTodayDelivery') === 'true'
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
     const sortBy = searchParams.get('sortBy') || 'created_at'
     const sortOrder = searchParams.get('sortOrder') || 'DESC'
 
-    // Build WHERE clause for date filtering
+    // Build WHERE clause for filtering
     let whereClause = ''
     let params: any[] = []
+    let conditions: string[] = []
 
+    // Date filtering
     if (fromDate || toDate) {
-      whereClause = 'WHERE '
       if (fromDate && toDate) {
-        whereClause += 'DATE(o.created_at) BETWEEN ? AND ?'
+        conditions.push('DATE(o.created_at) BETWEEN ? AND ?')
         params.push(fromDate, toDate)
       } else if (fromDate) {
-        whereClause += 'DATE(o.created_at) >= ?'
+        conditions.push('DATE(o.created_at) >= ?')
         params.push(fromDate)
       } else if (toDate) {
-        whereClause += 'DATE(o.created_at) <= ?'
+        conditions.push('DATE(o.created_at) <= ?')
         params.push(toDate)
       }
+    }
+
+    // Hide cancelled orders
+    if (hideCancelled) {
+      conditions.push('o.status != "cancelled"')
+    }
+
+    // Hide delivered orders
+    if (hideDelivered) {
+      conditions.push('o.status != "delivered"')
+    }
+
+    // Show only orders to deliver today
+    if (showTodayDelivery) {
+      conditions.push('DATE(o.expected_delivery_date) = CURDATE()')
+    }
+
+    // Combine all conditions
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ')
     }
 
     // Always add limit and offset parameters
@@ -62,12 +86,18 @@ export async function GET(request: any) {
 
     // Debug logging
     console.log('🔍 [DEBUG] Admin Orders API - Parameters:', {
+      fromDate,
+      toDate,
+      hideCancelled,
+      hideDelivered,
+      showTodayDelivery,
       params,
       limit,
       offset,
       allParams,
       paramsLength: params.length,
-      allParamsLength: allParams.length
+      allParamsLength: allParams.length,
+      whereClause
     })
 
     // Get total count for pagination

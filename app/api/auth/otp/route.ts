@@ -147,67 +147,42 @@ export async function PUT(request: Request) {
     console.log('📱 Formatted phone:', formattedPhone);
     
     try {
-      // Step 1: Get the LATEST OTP for this phone (most recent one)
-      const [latestOtpResult] = await databaseService.query(
-        'SELECT id, phone, verification_code, created_at, expires_at, is_verified FROM phone_verification WHERE phone = ? ORDER BY created_at DESC LIMIT 1',
-        [formattedPhone]
+      // Use the same verification logic as verifyCode function
+      console.log('🔍 Checking OTP in database with MySQL time comparison...');
+      
+      const [result] = await databaseService.query(
+        `SELECT 
+          id,
+          verification_code,
+          expires_at,
+          is_verified
+        FROM phone_verification
+        WHERE phone = ?
+          AND verification_code = ?
+          AND expires_at > NOW()
+          AND is_verified = false
+        ORDER BY created_at DESC
+        LIMIT 1`,
+        [formattedPhone, otp]
       );
-      
-      const latestOtp = Array.isArray(latestOtpResult) ? latestOtpResult[0] : latestOtpResult;
-      
-      if (!latestOtp) {
-        console.log('❌ No OTP found for this phone');
+
+      if (!Array.isArray(result) || result.length === 0) {
+        console.log('❌ No valid OTP found for this phone and code');
         return NextResponse.json(
           { error: 'Invalid or expired OTP' },
-          { status: 400 }
-        );
-      }
-      
-      console.log('🔍 Latest OTP record:', latestOtp);
-      console.log('🔍 Expected OTP:', latestOtp.verification_code);
-      console.log('🔍 Provided OTP:', otp);
-      
-      // Step 2: Check if the provided OTP matches the latest one
-      if (latestOtp.verification_code !== otp) {
-        console.log('❌ OTP does not match the latest one');
-        return NextResponse.json(
-          { error: 'Invalid or expired OTP' },
-          { status: 400 }
-        );
-      }
-      
-      // Step 3: Check if the latest OTP is already verified
-      if (latestOtp.is_verified) {
-        console.log('❌ OTP has already been verified');
-        return NextResponse.json(
-          { error: 'OTP has already been used' },
-          { status: 400 }
-        );
-      }
-      
-      // Step 4: Check if OTP is expired
-      const now = new Date();
-      const expiresAt = new Date(latestOtp.expires_at);
-      
-      console.log('⏰ Current time:', now.toISOString());
-      console.log('⏰ Expires at:', expiresAt.toISOString());
-      console.log('⏰ Is expired:', now > expiresAt);
-      
-      if (now > expiresAt) {
-        console.log('❌ OTP has expired');
-        return NextResponse.json(
-          { error: 'OTP has expired' },
           { status: 400 }
         );
       }
 
-      // Step 5: Mark OTP as verified
+      const otpRecord = result[0];
+      console.log('🔍 Valid OTP record found:', otpRecord);
+
+      // Mark OTP as verified
       console.log('✅ Marking OTP as verified');
-      const updateQuery = 'UPDATE phone_verification SET is_verified = true WHERE id = ?';
-      console.log('📝 Update query:', updateQuery);
-      console.log('🔢 Update params:', [latestOtp.id]);
-      
-      await databaseService.query(updateQuery, [latestOtp.id]);
+      await databaseService.query(
+        'UPDATE phone_verification SET is_verified = true WHERE id = ?',
+        [otpRecord.id]
+      );
       console.log('✅ OTP marked as verified');
     } catch (error) {
       console.error('❌ Database error:', error);

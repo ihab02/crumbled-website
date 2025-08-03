@@ -102,6 +102,9 @@ export default function AdminOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isLoadingOrderDetails, setIsLoadingOrderDetails] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [hideCancelled, setHideCancelled] = useState<boolean>(false);
+  const [hideDelivered, setHideDelivered] = useState<boolean>(false);
+  const [showTodayDelivery, setShowTodayDelivery] = useState<boolean>(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
   const [bulkSelectedOrders, setBulkSelectedOrders] = useState<Set<number>>(new Set());
   const [isLoadingBulkAction, setIsLoadingBulkAction] = useState(false);
@@ -304,6 +307,15 @@ export default function AdminOrdersPage() {
       }
       if (toDate) {
         params.append('toDate', toDate);
+      }
+      if (hideCancelled) {
+        params.append('hideCancelled', 'true');
+      }
+      if (hideDelivered) {
+        params.append('hideDelivered', 'true');
+      }
+      if (showTodayDelivery) {
+        params.append('showTodayDelivery', 'true');
       }
       
       const response = await fetch(`/api/admin/orders?${params.toString()}`);
@@ -715,11 +727,14 @@ export default function AdminOrdersPage() {
     doc.text(`Total Orders: ${ordersToExport.length}`, 105, 55, { align: 'center' });
     
     // Add filter info
-    if (filterStatus !== 'all' || searchTerm) {
+    if (filterStatus !== 'all' || searchTerm || hideCancelled || hideDelivered || showTodayDelivery) {
       doc.setFontSize(10);
       let filterText = 'Filters: ';
       if (filterStatus !== 'all') filterText += `Status: ${filterStatus} `;
-      if (searchTerm) filterText += `Search: ${searchTerm}`;
+      if (searchTerm) filterText += `Search: ${searchTerm} `;
+      if (hideCancelled) filterText += `Hide Cancelled `;
+      if (hideDelivered) filterText += `Hide Delivered `;
+      if (showTodayDelivery) filterText += `To Deliver Today `;
       doc.text(filterText, 20, 65);
     }
     
@@ -883,7 +898,30 @@ export default function AdminOrdersPage() {
         <div className="bg-white rounded-lg shadow">
           <div className="px-4 py-5 sm:p-6">
             <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-semibold text-gray-900">Orders</h1>
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Orders</h1>
+                {/* Active Filters Display */}
+                {(hideCancelled || hideDelivered || showTodayDelivery) && (
+                  <div className="flex items-center space-x-2 mt-2">
+                    <span className="text-sm text-gray-600">Active filters:</span>
+                    {hideCancelled && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Hide Cancelled
+                      </span>
+                    )}
+                    {hideDelivered && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Hide Delivered
+                      </span>
+                    )}
+                    {showTodayDelivery && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                        🚚 To Deliver Today
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <input
@@ -939,6 +977,49 @@ export default function AdminOrdersPage() {
                   >
                     Filter
                   </button>
+                  
+                  {/* Quick Filter Buttons */}
+                  <div className="flex items-center space-x-2">
+                    <label className="flex items-center space-x-1">
+                      <input
+                        type="checkbox"
+                        checked={hideCancelled}
+                        onChange={(e) => {
+                          setHideCancelled(e.target.checked);
+                          fetchOrders(1);
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-700">Hide Cancelled</span>
+                    </label>
+                    
+                    <label className="flex items-center space-x-1">
+                      <input
+                        type="checkbox"
+                        checked={hideDelivered}
+                        onChange={(e) => {
+                          setHideDelivered(e.target.checked);
+                          fetchOrders(1);
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-700">Hide Delivered</span>
+                    </label>
+                    
+                    <button
+                      onClick={() => {
+                        setShowTodayDelivery(!showTodayDelivery);
+                        fetchOrders(1);
+                      }}
+                      className={`inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                        showTodayDelivery 
+                          ? 'border-transparent text-white bg-orange-600 hover:bg-orange-700' 
+                          : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      🚚 To Deliver Today
+                    </button>
+                  </div>
                   <button
                     onClick={() => {
                       setFromDate('');
@@ -946,6 +1027,9 @@ export default function AdminOrdersPage() {
                       setSearchTerm('');
                       setFilterStatus('all');
                       setFilterDeliveryPerson('all');
+                      setHideCancelled(false);
+                      setHideDelivered(false);
+                      setShowTodayDelivery(false);
                       fetchOrders(1);
                     }}
                     className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
