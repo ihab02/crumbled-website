@@ -37,7 +37,9 @@ import {
   Phone,
   Star,
   Building2,
-  Route
+  Route,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
@@ -255,6 +257,7 @@ export function SideMenu() {
   const { user, logout, loading } = useAdminAuth();
   const { debugLog } = useDebugLogger();
   const [open, setOpen] = useState(false); // for mobile/tablet
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   debugLog('SideMenu render:', { user, loading, pathname });
@@ -288,6 +291,16 @@ export function SideMenu() {
     );
     firstFocusable?.focus();
   }, [open]);
+
+  // Toggle menu expansion
+  const handleMenuClick = (item: any) => {
+    if (item.submenu) {
+      setExpandedMenu(expandedMenu === item.href ? null : item.href);
+    } else {
+      setOpen(false);
+      // Use router to navigate if needed, or let Link handle it
+    }
+  };
 
   // Hamburger button (mobile/tablet only)
   const Hamburger = (
@@ -361,24 +374,38 @@ export function SideMenu() {
         <nav className="flex-1 space-y-1 p-2 overflow-y-auto">
           {menuItems.map((item) => {
             const isItemActive = isActive(item.href);
-            const showSubmenu = item.submenu && shouldExpandSubmenu(item);
+            const showSubmenu = item.submenu && expandedMenu === item.href;
             return (
               <div key={item.href}>
-                <Link
-                  href={item.href}
+                <button
+                  type="button"
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors w-full text-left',
                     isItemActive
                       ? 'bg-pink-100 text-pink-600'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-gray-600 hover:bg-gray-100',
+                    item.submenu ? 'justify-between' : ''
                   )}
-                  onClick={() => setOpen(false)}
+                  onClick={() => handleMenuClick(item)}
+                  aria-expanded={!!showSubmenu}
+                  aria-controls={item.href + '-submenu'}
                 >
-                  <item.icon className="h-5 w-5" />
-                  {item.title}
-                </Link>
+                  <span className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5" />
+                    {item.title}
+                  </span>
+                  {item.submenu && (
+                    <span>
+                      {showSubmenu ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </span>
+                  )}
+                </button>
                 {showSubmenu && (
-                  <div className="ml-6 mt-1 space-y-1">
+                  <div id={item.href + '-submenu'} className="ml-6 mt-1 space-y-1">
                     {item.submenu.map((subItem) => (
                       <Link
                         key={subItem.href}

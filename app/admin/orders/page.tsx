@@ -53,6 +53,7 @@ interface Order {
       flavor_name: string;
       size_name: string;
       quantity: number;
+      image_url?: string;
     }>;
   }>;
   promo_code_id?: number | null;
@@ -1350,15 +1351,25 @@ export default function AdminOrdersPage() {
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                               {item.flavors.map((flavor, flavorIndex) => (
                                                 <div key={flavorIndex} className="flex items-center justify-between p-2 bg-pink-50 rounded-md border border-pink-100">
-                                                  <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-pink-800">
-                                                      {flavor.flavor_name}
-                                                    </span>
-                                                    <span className="text-xs text-pink-600 bg-pink-100 px-2 py-1 rounded">
-                                                      {flavor.size_name}
-                                                    </span>
+                                                  <div className="flex items-center gap-4">
+                                                    {flavor.image_url && (
+                                                      <img
+                                                        src={flavor.image_url}
+                                                        alt={flavor.flavor_name}
+                                                        className="w-24 h-24 object-cover rounded shadow-lg border-2 border-pink-300 flex-shrink-0"
+                                                        style={{ minWidth: '6rem', minHeight: '6rem' }}
+                                                      />
+                                                    )}
+                                                    <div className="flex flex-col">
+                                                      <span className="text-base font-semibold text-pink-800">
+                                                        {flavor.flavor_name}
+                                                      </span>
+                                                      <span className="text-sm text-pink-600 bg-pink-100 px-2 py-1 rounded mt-2">
+                                                        {flavor.size_name}
+                                                      </span>
+                                                    </div>
                                                   </div>
-                                                  <span className="text-sm font-semibold text-pink-700">
+                                                  <span className="text-lg font-bold text-pink-700">
                                                     {flavor.quantity}x
                                                   </span>
                                                 </div>
@@ -1665,15 +1676,25 @@ export default function AdminOrdersPage() {
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {item.flavors.map((flavor, flavorIndex) => (
                                       <div key={flavorIndex} className="flex items-center justify-between p-2 bg-pink-50 rounded-md border border-pink-100">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-sm font-medium text-pink-800">
-                                            {flavor.flavor_name}
-                                          </span>
-                                          <span className="text-xs text-pink-600 bg-pink-100 px-2 py-1 rounded">
-                                            {flavor.size_name}
-                                          </span>
+                                        <div className="flex items-center gap-4">
+                                          {flavor.image_url && (
+                                            <img
+                                              src={flavor.image_url}
+                                              alt={flavor.flavor_name}
+                                              className="w-24 h-24 object-cover rounded shadow-lg border-2 border-pink-300 flex-shrink-0"
+                                              style={{ minWidth: '6rem', minHeight: '6rem' }}
+                                            />
+                                          )}
+                                          <div className="flex flex-col">
+                                            <span className="text-base font-semibold text-pink-800">
+                                              {flavor.flavor_name}
+                                            </span>
+                                            <span className="text-sm text-pink-600 bg-pink-100 px-2 py-1 rounded mt-2">
+                                              {flavor.size_name}
+                                            </span>
+                                          </div>
                                         </div>
-                                        <span className="text-sm font-semibold text-pink-700">
+                                        <span className="text-lg font-bold text-pink-700">
                                           {flavor.quantity}x
                                         </span>
                                       </div>
