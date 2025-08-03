@@ -148,24 +148,28 @@ export async function PUT(request: Request) {
       await databaseService.query('SET time_zone = "+00:00"');
       
       // Check for valid OTP using MySQL time comparison
-      const [result] = await databaseService.query(
-        `SELECT 
-          id,
-          verification_code,
-          expires_at,
-          is_verified,
-          created_at,
-          UTC_TIMESTAMP() as current_utc_time,
-          TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), expires_at) as minutes_until_expiry
-        FROM phone_verification
-        WHERE phone = ?
-          AND verification_code = ?
-          AND expires_at > UTC_TIMESTAMP()
-          AND is_verified = 0
-        ORDER BY created_at DESC
-        LIMIT 1`,
-        [formattedPhone, otp]
-      );
+      const query = `SELECT 
+        id,
+        verification_code,
+        expires_at,
+        is_verified,
+        created_at,
+        UTC_TIMESTAMP() as current_utc_time,
+        TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), expires_at) as minutes_until_expiry
+      FROM phone_verification
+      WHERE phone = ?
+        AND verification_code = ?
+        AND expires_at > UTC_TIMESTAMP()
+        AND is_verified = 0
+      ORDER BY created_at DESC
+      LIMIT 1`;
+      
+      console.log('🔍 Executing query:', query);
+      console.log('🔍 Query parameters:', [formattedPhone, otp]);
+      
+      const [result] = await databaseService.query(query, [formattedPhone, otp]);
+      
+      console.log('🔍 Query result:', result);
 
       if (!Array.isArray(result) || result.length === 0) {
         console.log('❌ No valid OTP found for this phone and code');
