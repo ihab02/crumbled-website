@@ -161,7 +161,7 @@ export async function PUT(request: Request) {
         WHERE phone = ?
           AND verification_code = ?
           AND expires_at > UTC_TIMESTAMP()
-          AND is_verified = false
+          AND is_verified = 0
         ORDER BY created_at DESC
         LIMIT 1`,
         [formattedPhone, otp]
