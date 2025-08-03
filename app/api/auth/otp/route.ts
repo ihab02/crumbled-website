@@ -167,11 +167,14 @@ export async function PUT(request: Request) {
       console.log('🔍 Executing query:', query);
       console.log('🔍 Query parameters:', [formattedPhone, otp]);
       
-      const [result] = await databaseService.query(query, [formattedPhone, otp]);
+            const result = await databaseService.query(query, [formattedPhone, otp]);
       
       console.log('🔍 Query result:', result);
-
-      if (!Array.isArray(result) || result.length === 0) {
+      
+      // Check if we have a valid result
+      const otpRecord = Array.isArray(result) ? result[0] : result;
+      
+      if (!otpRecord) {
         console.log('❌ No valid OTP found for this phone and code');
         
         // Debug: Check what OTPs exist for this phone
@@ -198,7 +201,6 @@ export async function PUT(request: Request) {
         );
       }
 
-      const otpRecord = result[0];
       console.log('🔍 Valid OTP record found:', otpRecord);
       console.log('⏰ Minutes until expiry:', otpRecord.minutes_until_expiry);
 
