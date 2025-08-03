@@ -199,7 +199,7 @@ export async function GET(request: any) {
           const items = Array.isArray(itemsRows) ? itemsRows : [itemsRows];
           
           // Parse flavor details for each item
-          const itemsWithFlavors = items.map((item: any) => {
+          const itemsWithFlavors = await Promise.all(items.map(async (item: any) => {
             let flavors = [];
             let flavorDetails = item.flavor_details;
             if (typeof flavorDetails === 'string') {
@@ -211,13 +211,29 @@ export async function GET(request: any) {
               }
             }
             if (Array.isArray(flavorDetails)) {
-              flavors = flavorDetails;
+              // For each flavor, fetch its image_url
+              flavors = await Promise.all(flavorDetails.map(async (flavor: any) => {
+                let image_url = null;
+                try {
+                  const [rows] = await connection.query(
+                    'SELECT image_url FROM flavor_images WHERE flavor_id = ? AND is_cover = 1 LIMIT 1',
+                    [flavor.id]
+                  );
+                  if (rows && rows.length > 0) image_url = rows[0].image_url;
+                } catch {}
+                return {
+                  ...flavor,
+                  flavor_name: flavor.name ?? flavor.flavor_name ?? '',
+                  size_name: flavor.size ?? flavor.size_name ?? '',
+                  image_url,
+                };
+              }));
             }
             return {
               ...item,
               flavors: Array.isArray(flavors) ? flavors : []
             };
-          });
+          }));
           
           return {
             ...order,

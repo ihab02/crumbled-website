@@ -34,6 +34,7 @@ interface Order {
       flavor_name: string;
       size_name: string;
       quantity: number;
+      image_url?: string;
     }>;
   }>;
 }
@@ -404,11 +405,24 @@ export default function OrderPreparationPage() {
                                     {item.flavors && item.flavors.length > 0 && (
                                       <div className="mt-2">
                                         <p className="text-sm font-medium text-gray-700">Flavors:</p>
-                                        <div className="flex flex-wrap gap-1 mt-1">
+                                        <div className="flex flex-col gap-1 mt-1">
                                           {item.flavors.map((flavor, flavorIndex) => (
-                                            <Badge key={flavorIndex} variant="outline" className="text-xs">
-                                              {flavor.flavor_name} ({flavor.size_name}) - {flavor.quantity}
-                                            </Badge>
+                                            <div key={flavorIndex} className="flex items-center gap-2 mb-1">
+                                              {flavor.image_url ? (
+                                                <img
+                                                  src={flavor.image_url}
+                                                  alt={flavor.flavor_name}
+                                                  className="w-6 h-6 object-cover rounded"
+                                                />
+                                              ) : (
+                                                <span className="w-6 h-6 bg-gray-200 rounded flex items-center justify-center">
+                                                  <Package className="h-4 w-4 text-gray-400" />
+                                                </span>
+                                              )}
+                                              <span className="text-xs">
+                                                {flavor.flavor_name} ({flavor.size_name}) - {flavor.quantity}
+                                              </span>
+                                            </div>
                                           ))}
                                         </div>
                                       </div>
