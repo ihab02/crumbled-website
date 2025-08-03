@@ -547,10 +547,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           // Continue without delivery rules if fetch fails
         }
 
-        // Extract delivery details from deliveryRules
-        const deliveryTime = deliveryRules?.formattedDeliveryDate || '';
-        const deliverySlot = deliveryRules?.timeSlot
-          ? `${deliveryRules.timeSlot.name} (${deliveryRules.timeSlot.fromHour} - ${deliveryRules.timeSlot.toHour})`
+        // Extract delivery details from orderData (user's actual selection)
+        const deliveryTime = orderData.deliveryDate ? new Date(orderData.deliveryDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '';
+        const deliverySlot = orderData.deliveryTimeSlot
+          ? `${orderData.deliveryTimeSlot.name} (${orderData.deliveryTimeSlot.fromHour} - ${orderData.deliveryTimeSlot.toHour})`
           : '';
         // Fetch order items and use flavor_details for pack flavors
         const orderItemsResult = await databaseService.query('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
