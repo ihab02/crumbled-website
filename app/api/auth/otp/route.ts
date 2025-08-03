@@ -141,13 +141,13 @@ export async function PUT(request: Request) {
     console.log('📱 Formatted phone:', formattedPhone);
     
     try {
-      // PROPER FIX: Use UTC timezone for consistent time comparison
-      console.log('🔍 Checking OTP in database with UTC timezone...');
+      // FINAL FIX: Use MySQL time comparison for consistency
+      console.log('🔍 Checking OTP in database (MySQL time comparison)...');
       
-      // Set timezone to UTC for this connection to avoid timezone issues
+      // Force UTC timezone for this connection
       await databaseService.query('SET time_zone = "+00:00"');
       
-      // Check for valid OTP using UTC time
+      // Check for valid OTP using MySQL time comparison
       const [result] = await databaseService.query(
         `SELECT 
           id,
@@ -177,6 +177,7 @@ export async function PUT(request: Request) {
             verification_code,
             expires_at,
             is_verified,
+            created_at,
             UTC_TIMESTAMP() as current_utc_time,
             TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), expires_at) as minutes_until_expiry
           FROM phone_verification

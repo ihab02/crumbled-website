@@ -260,6 +260,9 @@ export async function sendVerificationCode(phoneNumber: string, existingOtp?: st
     debugLog('⏰ [SMS Service] Storing OTP with 10-minute expiration (UTC)');
     debugLog('💾 [SMS Service] Inserting into database:', { phone: formattedPhone, code })
 
+    // Force UTC timezone for this connection
+    await databaseService.query('SET time_zone = "+00:00"');
+    
     const result = await databaseService.query(
       'INSERT INTO phone_verification (phone, verification_code, expires_at) VALUES (?, ?, UTC_TIMESTAMP() + INTERVAL 10 MINUTE)',
       [formattedPhone, code]
