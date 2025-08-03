@@ -270,18 +270,18 @@ export default function OrderPreparationPage() {
         </div>
 
         {/* Controls above tabs */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col gap-4 items-stretch sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:gap-4">
             <Button
               variant="outline"
               onClick={() => setShowTomorrow((v) => !v)}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 w-full sm:w-auto"
             >
               {showTomorrow ? "Hide Tomorrow" : "Show Tomorrow"}
             </Button>
-            <label className="text-sm font-medium text-gray-700">Show flavors for:
+            <label className="text-sm font-medium text-gray-700 w-full sm:w-auto">Show flavors for:
               <select
-                className="ml-2 border rounded px-2 py-1 text-sm"
+                className="ml-0 sm:ml-2 border rounded px-2 py-2 text-sm w-full sm:w-auto mt-2 sm:mt-0"
                 value={daysAhead}
                 onChange={e => setDaysAhead(e.target.value === 'all' ? 'all' : Number(e.target.value))}
               >
@@ -294,33 +294,46 @@ export default function OrderPreparationPage() {
             </label>
           </div>
         </div>
-
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          {/* Mobile pill switcher for tabs */}
+          <div className="flex sm:hidden w-full mb-4 sticky top-0 z-10 bg-white">
+            <button
+              className={`flex-1 py-2 rounded-l-full border border-pink-300 text-sm font-medium transition-colors ${
+                activeTab === 'delivery'
+                  ? 'bg-pink-500 text-white'
+                  : 'bg-white text-pink-700'
+              }`}
+              onClick={() => setActiveTab('delivery')}
+            >
+              <Calendar className="inline h-4 w-4 mr-1" />
+              Delivery Orders
+            </button>
+            <button
+              className={`flex-1 py-2 rounded-r-full border border-pink-300 border-l-0 text-sm font-medium transition-colors ${
+                activeTab === 'preparation'
+                  ? 'bg-pink-500 text-white'
+                  : 'bg-white text-pink-700'
+              }`}
+              onClick={() => setActiveTab('preparation')}
+            >
+              <Package className="inline h-4 w-4 mr-1" />
+              Flavor Preparation
+            </button>
+          </div>
+          {/* Desktop tabs */}
+          <TabsList className="hidden sm:grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="delivery" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              Delivery Orders
+              <span className="text-base sm:text-lg">Delivery Orders</span>
             </TabsTrigger>
             <TabsTrigger value="preparation" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
-              Flavor Preparation
+              <span className="text-base sm:text-lg">Flavor Preparation</span>
             </TabsTrigger>
           </TabsList>
           {/* Delivery Orders Tab */}
           <TabsContent value="delivery" className="space-y-6">
-            {/* Controls */}
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-              <div className="flex items-center gap-4">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {showTomorrow ? "Today & Tomorrow's" : "Today's"} Delivery Orders
-                </h2>
-                <Badge variant="secondary" className="text-sm">
-                  {filteredDisplayOrders.length} orders
-                </Badge>
-              </div>
-            </div>
-
             {/* Orders List */}
             <div className="space-y-4">
               {filteredDisplayOrders.length === 0 ? (
@@ -336,15 +349,15 @@ export default function OrderPreparationPage() {
                 filteredDisplayOrders.map((order) => (
                   <Card key={order.id} className="overflow-hidden">
                     <CardHeader className="pb-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-3">
                           <div className="flex-shrink-0">
-                                                       <Badge className={getStatusColor(order.status)}>
-                               {order.status}
-                             </Badge>
+                            <Badge className={getStatusColor(order.status)}>
+                              {order.status}
+                            </Badge>
                           </div>
                           <div>
-                            <h3 className="font-semibold text-gray-900">
+                            <h3 className="font-semibold text-gray-900 text-base sm:text-lg">
                               Order #{order.id}
                             </h3>
                             <p className="text-sm text-gray-500">
@@ -356,7 +369,7 @@ export default function OrderPreparationPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-gray-900">
+                          <span className="text-base sm:text-lg font-bold text-gray-900">
                             EGP {Number(order.total_after_discount ?? order.total).toFixed(2)}
                           </span>
                           <Button
@@ -374,7 +387,6 @@ export default function OrderPreparationPage() {
                         </div>
                       </div>
                     </CardHeader>
-
                     {/* Expanded Order Details */}
                     {expandedOrders.has(order.id) && (
                       <CardContent className="pt-0">
@@ -401,14 +413,22 @@ export default function OrderPreparationPage() {
                                   {order.delivery_address || 'N/A'}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2 text-sm">
-                                <Clock className="h-4 w-4 text-gray-500" />
-                                <span className="font-medium">Created:</span>
-                                <span>{formatTime(order.created_at)}</span>
-                              </div>
+                              {order.delivery_city && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <MapPin className="h-4 w-4 text-gray-500" />
+                                  <span className="font-medium">City:</span>
+                                  <span>{order.delivery_city}</span>
+                                </div>
+                              )}
+                              {order.delivery_zone && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <MapPin className="h-4 w-4 text-gray-500" />
+                                  <span className="font-medium">Zone:</span>
+                                  <span>{order.delivery_zone}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-
                           {/* Order Items */}
                           <div className="space-y-2">
                             <h4 className="font-medium text-gray-900">Order Items:</h4>
