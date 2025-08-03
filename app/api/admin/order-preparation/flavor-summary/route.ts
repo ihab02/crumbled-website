@@ -13,11 +13,27 @@ export async function GET(request: NextRequest) {
 
     // Get query param
     const { searchParams } = new URL(request.url);
-    const includeTomorrow = searchParams.get('includeTomorrow') === 'true';
+    const daysAheadParam = searchParams.get('daysAhead');
+    let daysAhead: number | 'all' = 1;
+    if (daysAheadParam === 'all') {
+      daysAhead = 'all';
+    } else if (daysAheadParam && !isNaN(Number(daysAheadParam))) {
+      daysAhead = Number(daysAheadParam);
+    }
 
     connection = await pool.getConnection();
 
-    // Get orders with status 'pending' or 'confirmed'
+    let dateWhereClause = '';
+    if (daysAhead === 1) {
+      // Today or any past date
+      dateWhereClause = 'AND DATE(o.expected_delivery_date) <= CURDATE()';
+    } else if (daysAhead === 'all') {
+      dateWhereClause = '';
+    } else {
+      dateWhereClause = `AND DATE(o.expected_delivery_date) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ${daysAhead - 1} DAY)`;
+    }
+
+    // Get orders with status 'pending' or 'confirmed' and date filter
     const [orders] = await connection.query(`
       SELECT 
         o.id,
@@ -28,27 +44,16 @@ export async function GET(request: NextRequest) {
       WHERE o.status IN ('pending', 'confirmed')
         AND oi.flavor_details IS NOT NULL
         AND oi.flavor_details != ''
+        ${dateWhereClause}
     `);
 
-    // Filter orders for today or tomorrow only (not both)
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
+    // No JS-side date filtering needed
+    const filteredOrders = orders;
 
-    const filteredOrders = orders.filter((order) => {
-      const date = order.expected_delivery_date ? new Date(order.expected_delivery_date) : null;
-      if (!date) return false;
-      if (includeTomorrow) {
-        return date.toDateString() === tomorrow.toDateString();
-      } else {
-        return true; // include all pending/confirmed orders regardless of date
-      }
-    });
-
-    // Aggregate flavors
+    // Aggregate flavors by expected_delivery_date, flavor_id, and size
     const flavorMap = new Map<
       string,
-      { total_quantity: number; orders_count: Set<number>; flavor_id: number; flavor_name: string; size_name: string }
+      { total_quantity: number; orders_count: Set<number>; flavor_id: number; flavor_name: string; size_name: string; expected_delivery_date: string }
     >();
 
     filteredOrders.forEach((order: any) => {
@@ -62,7 +67,12 @@ export async function GET(request: NextRequest) {
       }
       if (Array.isArray(flavorDetails)) {
         flavorDetails.forEach((flavor: any) => {
-          const key = `${flavor.id}_${flavor.size}`;
+          const dateObj = order.expected_delivery_date ? new Date(order.expected_delivery_date) : null;
+          let dateKey = 'unknown';
+          if (dateObj) {
+            dateKey = dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+          }
+          const key = `${dateKey}_${flavor.id}_${flavor.size}`;
           if (!flavorMap.has(key)) {
             flavorMap.set(key, {
               total_quantity: 0,
@@ -70,6 +80,7 @@ export async function GET(request: NextRequest) {
               flavor_id: flavor.id,
               flavor_name: flavor.name,
               size_name: flavor.size,
+              expected_delivery_date: dateKey,
             });
           }
           const entry = flavorMap.get(key)!;
@@ -97,6 +108,7 @@ export async function GET(request: NextRequest) {
           total_quantity: data.total_quantity,
           orders_count: data.orders_count.size,
           image_url,
+          expected_delivery_date: data.expected_delivery_date,
         };
       })
     );

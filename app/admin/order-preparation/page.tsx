@@ -45,6 +45,7 @@ interface FlavorSummary {
   total_quantity: number;
   image_url?: string;
   orders_count: number;
+  expected_delivery_date: string;
 }
 
 export default function OrderPreparationPage() {
@@ -62,13 +63,14 @@ export default function OrderPreparationPage() {
   };
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
   const [activeTab, setActiveTab] = useState('delivery');
+  const [daysAhead, setDaysAhead] = useState<number | 'all'>(1);
 
   useEffect(() => {
     if (!authLoading && user) {
       fetchOrders();
       fetchFlavorSummary();
     }
-  }, [showTomorrow, authLoading, user]);
+  }, [showTomorrow, daysAhead, authLoading, user]);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -89,7 +91,8 @@ export default function OrderPreparationPage() {
 
   const fetchFlavorSummary = async () => {
     try {
-      const response = await fetch(`/api/admin/order-preparation/flavor-summary?includeTomorrow=${showTomorrow}`, {
+      const param = daysAhead === 'all' ? 'all' : daysAhead;
+      const response = await fetch(`/api/admin/order-preparation/flavor-summary?daysAhead=${param}`, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -129,8 +132,10 @@ export default function OrderPreparationPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
+    // If dateString is only YYYY-MM-DD, append T00:00:00Z to ensure correct parsing as UTC
+    const safeDateString = dateString.length === 10 ? dateString + 'T00:00:00Z' : dateString;
+    return new Date(safeDateString).toLocaleDateString('en-US', {
+      weekday: 'long', // Show full day of the week
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -200,13 +205,16 @@ export default function OrderPreparationPage() {
     });
   }
 
-  // Group flavorSummary by size_name
-  const groupedBySize: { [size: string]: FlavorSummary[] } = {};
+  // Group flavorSummary by expected_delivery_date, then by size_name
+  const groupedByDate: { [date: string]: { [size: string]: FlavorSummary[] } } = {};
   flavorSummary.forEach((flavor) => {
-    if (!groupedBySize[flavor.size_name]) {
-      groupedBySize[flavor.size_name] = [];
+    if (!groupedByDate[flavor.expected_delivery_date]) {
+      groupedByDate[flavor.expected_delivery_date] = {};
     }
-    groupedBySize[flavor.size_name].push(flavor);
+    if (!groupedByDate[flavor.expected_delivery_date][flavor.size_name]) {
+      groupedByDate[flavor.expected_delivery_date][flavor.size_name] = [];
+    }
+    groupedByDate[flavor.expected_delivery_date][flavor.size_name].push(flavor);
   });
 
   if (authLoading) {
@@ -271,6 +279,19 @@ export default function OrderPreparationPage() {
             >
               {showTomorrow ? "Hide Tomorrow" : "Show Tomorrow"}
             </Button>
+            <label className="text-sm font-medium text-gray-700">Show flavors for:
+              <select
+                className="ml-2 border rounded px-2 py-1 text-sm"
+                value={daysAhead}
+                onChange={e => setDaysAhead(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              >
+                <option value={1}>Today (default)</option>
+                <option value={3}>Next 3 Days (incl. today)</option>
+                <option value={7}>Next 7 Days (incl. today)</option>
+                <option value={14}>Next 14 Days (incl. today)</option>
+                <option value="all">Show All (Past, Today, Future)</option>
+              </select>
+            </label>
           </div>
         </div>
 
@@ -469,53 +490,58 @@ export default function OrderPreparationPage() {
               </Card>
             ) : (
               <div ref={printRef} className="printable-flavor-summary">
-                {Object.keys(groupedBySize).map((size) => (
-                  <div key={size} className="mb-8">
-                    <h3 className="text-lg font-bold text-indigo-700 mb-2">{size}</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {groupedBySize[size].map((flavor, index) => (
-                        <Card key={index} className="overflow-hidden">
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                              {/* Flavor Image */}
-                              <div className="flex-shrink-0">
-                                <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
-                                  {flavor.image_url ? (
-                                    <img
-                                      src={flavor.image_url}
-                                      alt={flavor.flavor_name}
-                                      className="w-full h-full object-cover rounded-lg"
-                                    />
-                                  ) : (
-                                    <Package className="h-8 w-8 text-gray-400" />
-                                  )}
-                                </div>
-                              </div>
-                              {/* Flavor Details */}
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-gray-900 truncate">
-                                  {flavor.flavor_name}
-                                </h3>
-                                <div className="flex items-center justify-between">
-                                  <div className="text-center">
-                                    <p className="text-2xl font-bold text-indigo-600">
-                                      {flavor.total_quantity}
-                                    </p>
-                                    <p className="text-xs text-gray-500">Total Needed</p>
+                {Object.keys(groupedByDate).sort().map((date) => (
+                  <div key={date} className="mb-12 border-2 border-indigo-200 rounded-lg bg-indigo-50 p-4 shadow-sm">
+                    <h2 className="text-2xl font-bold text-indigo-900 mb-4">{formatDate(date)}</h2>
+                    {Object.keys(groupedByDate[date]).map((size) => (
+                      <div key={size} className="mb-8">
+                        <h3 className="text-md font-bold text-indigo-700 mb-2">{size}</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {groupedByDate[date][size].map((flavor, index) => (
+                            <Card key={index} className="overflow-hidden">
+                              <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                  {/* Flavor Image */}
+                                  <div className="flex-shrink-0">
+                                    <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                                      {flavor.image_url ? (
+                                        <img
+                                          src={flavor.image_url}
+                                          alt={flavor.flavor_name}
+                                          className="w-full h-full object-cover rounded-lg"
+                                        />
+                                      ) : (
+                                        <Package className="h-8 w-8 text-gray-400" />
+                                      )}
+                                    </div>
                                   </div>
-                                  <div className="text-center">
-                                    <p className="text-lg font-semibold text-gray-700">
-                                      {flavor.orders_count}
-                                    </p>
-                                    <p className="text-xs text-gray-500">Orders</p>
+                                  {/* Flavor Details */}
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-semibold text-gray-900 truncate">
+                                      {flavor.flavor_name}
+                                    </h3>
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-center">
+                                        <p className="text-2xl font-bold text-indigo-600">
+                                          {flavor.total_quantity}
+                                        </p>
+                                        <p className="text-xs text-gray-500">Total Needed</p>
+                                      </div>
+                                      <div className="text-center">
+                                        <p className="text-lg font-semibold text-gray-700">
+                                          {flavor.orders_count}
+                                        </p>
+                                        <p className="text-xs text-gray-500">Orders</p>
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
