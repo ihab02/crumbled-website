@@ -75,9 +75,9 @@ export async function GET(request: any) {
     // Show only orders to deliver today or tomorrow if filter is set
     if (showTodayDelivery) {
       if (includeTomorrow) {
-        conditions.push('DATE(o.expected_delivery_date) = DATE_ADD(CURDATE(), INTERVAL 1 DAY)')
+        conditions.push("DATE(CONVERT_TZ(o.expected_delivery_date, '+00:00', '+03:00')) = DATE_ADD(CURDATE(), INTERVAL 1 DAY)");
       } else {
-        conditions.push('DATE(o.expected_delivery_date) <= CURDATE()')
+        conditions.push("DATE(CONVERT_TZ(o.expected_delivery_date, '+00:00', '+03:00')) <= CURDATE()");
       }
     }
 
