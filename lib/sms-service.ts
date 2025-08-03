@@ -256,12 +256,12 @@ export async function sendVerificationCode(phoneNumber: string, existingOtp?: st
     // Always send the SMS
     await smsService.sendVerificationCode(formattedPhone, code)
 
-    // Store the verification code in MySQL (always store, whether existing or new)
-    debugLog('⏰ [SMS Service] Storing OTP with 10-minute expiration');
+    // Store the verification code in MySQL with UTC timezone
+    debugLog('⏰ [SMS Service] Storing OTP with 10-minute expiration (UTC)');
     debugLog('💾 [SMS Service] Inserting into database:', { phone: formattedPhone, code })
 
     const result = await databaseService.query(
-      'INSERT INTO phone_verification (phone, verification_code, expires_at) VALUES (?, ?, NOW() + INTERVAL 10 MINUTE)',
+      'INSERT INTO phone_verification (phone, verification_code, expires_at) VALUES (?, ?, UTC_TIMESTAMP() + INTERVAL 10 MINUTE)',
       [formattedPhone, code]
     );
     
@@ -278,7 +278,7 @@ export async function verifyCode(phoneNumber: string, code: string) {
   try {
     const formattedPhone = phoneNumber.replace(/\D/g, "")
 
-    // Check if code exists and is valid
+    // Check if code exists and is valid (using UTC timezone)
     const [result] = await databaseService.query(
       `SELECT 
         id,
@@ -288,7 +288,7 @@ export async function verifyCode(phoneNumber: string, code: string) {
       FROM phone_verification
       WHERE phone = ?
         AND verification_code = ?
-        AND expires_at > NOW()
+        AND expires_at > UTC_TIMESTAMP()
         AND is_verified = false
       ORDER BY created_at DESC
       LIMIT 1`,

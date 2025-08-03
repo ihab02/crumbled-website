@@ -12,9 +12,7 @@ const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000, // 10 seconds
   idleTimeout: 60000, // 1 minute
-  maxIdle: 5, // Maximum number of idle connections to keep
-  timezone: '+03:00', // Set timezone to Africa/Cairo (UTC+3)
-  dateStrings: false // Ensure dates are returned as Date objects
+  maxIdle: 5 // Maximum number of idle connections to keep
 });
 
 // Test connection function

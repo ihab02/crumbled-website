@@ -141,37 +141,26 @@ export async function PUT(request: Request) {
     console.log('📱 Formatted phone:', formattedPhone);
     
     try {
-      // Use the same verification logic as verifyCode function
-      console.log('🔍 Checking OTP in database with MySQL time comparison...');
+      // PROPER FIX: Use UTC timezone for consistent time comparison
+      console.log('🔍 Checking OTP in database with UTC timezone...');
       
-      // First, let's check what OTPs exist for this phone
-      const [allOtps] = await databaseService.query(
-        `SELECT 
-          id,
-          verification_code,
-          expires_at,
-          is_verified,
-          created_at
-        FROM phone_verification
-        WHERE phone = ?
-        ORDER BY created_at DESC
-        LIMIT 5`,
-        [formattedPhone]
-      );
+      // Set timezone to UTC for this connection to avoid timezone issues
+      await databaseService.query('SET time_zone = "+00:00"');
       
-      console.log('🔍 All OTPs for this phone:', allOtps);
-      
-      // Now check for valid OTP
+      // Check for valid OTP using UTC time
       const [result] = await databaseService.query(
         `SELECT 
           id,
           verification_code,
           expires_at,
-          is_verified
+          is_verified,
+          created_at,
+          UTC_TIMESTAMP() as current_utc_time,
+          TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), expires_at) as minutes_until_expiry
         FROM phone_verification
         WHERE phone = ?
           AND verification_code = ?
-          AND expires_at > NOW()
+          AND expires_at > UTC_TIMESTAMP()
           AND is_verified = false
         ORDER BY created_at DESC
         LIMIT 1`,
@@ -180,7 +169,24 @@ export async function PUT(request: Request) {
 
       if (!Array.isArray(result) || result.length === 0) {
         console.log('❌ No valid OTP found for this phone and code');
-        console.log('🔍 Current MySQL time:', new Date().toISOString());
+        
+        // Debug: Check what OTPs exist for this phone
+        const [debugOtps] = await databaseService.query(
+          `SELECT 
+            id,
+            verification_code,
+            expires_at,
+            is_verified,
+            UTC_TIMESTAMP() as current_utc_time,
+            TIMESTAMPDIFF(MINUTE, UTC_TIMESTAMP(), expires_at) as minutes_until_expiry
+          FROM phone_verification
+          WHERE phone = ?
+          ORDER BY created_at DESC
+          LIMIT 3`,
+          [formattedPhone]
+        );
+        console.log('🔍 Debug - Recent OTPs for this phone:', debugOtps);
+        
         return NextResponse.json(
           { error: 'Invalid or expired OTP' },
           { status: 400 }
@@ -189,6 +195,7 @@ export async function PUT(request: Request) {
 
       const otpRecord = result[0];
       console.log('🔍 Valid OTP record found:', otpRecord);
+      console.log('⏰ Minutes until expiry:', otpRecord.minutes_until_expiry);
 
       // Mark OTP as verified
       console.log('✅ Marking OTP as verified');
