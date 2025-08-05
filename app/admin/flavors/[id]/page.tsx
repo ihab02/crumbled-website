@@ -96,32 +96,11 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
   };
 
   const handleRemoveImage = async (index: number) => {
-    try {
-      const imageToRemove = formData.images[index];
-      
-      // Only delete from database if it has a valid ID (not a temporary ID for new images)
-      if (imageToRemove.id && typeof imageToRemove.id === 'number') {
-        const response = await fetch(`/api/admin/flavors/${params.id}/images/${imageToRemove.id}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          throw new Error(data.error || 'Failed to delete image');
-        }
-      }
-
-      // Update the local state
-      const newImages = formData.images.filter((_, i) => i !== index);
-      setFormData({ ...formData, images: newImages });
-      setImagePreviews(prev => prev.filter((_, i) => i !== index));
-
-      toast.success('Image removed successfully');
-    } catch (error) {
-      console.error('Error removing image:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to remove image');
-    }
+    // Only update local state; do not call backend here
+    const newImages = formData.images.filter((_, i) => i !== index);
+    setFormData({ ...formData, images: newImages });
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    toast.success('Image removed from this session. Save to apply changes.');
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,58 +170,61 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
         throw new Error('Failed to update flavor');
       }
 
-      // Then handle image updates
-      if (images.length > 0) {
-        const imageFormData = new FormData();
-        images.forEach((image, index) => {
-          imageFormData.append('images', image);
-        });
-
-        const imageResponse = await fetch(`/api/admin/flavors/${params.id}/images`, {
+      // First, add new images (those in formData.images but not in originalImages)
+      const newImages = formData.images.filter(img => !originalImages.some(o => o.image_url === img.image_url));
+      for (const img of newImages) {
+        const res = await fetch(`/api/admin/flavors/${params.id}/images`, {
           method: 'POST',
-          body: imageFormData,
-          credentials: 'include'
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            image_url: img.image_url,
+            is_cover: img.is_cover
+          })
         });
-
-        if (!imageResponse.ok) {
-          throw new Error('Failed to update images');
+        if (!res.ok) {
+          throw new Error('Failed to add image');
         }
       }
 
-      // Delete removed images - only delete images that were in originalImages but not in current formData.images
+      // Then, delete removed images - only delete images that were in originalImages but not in current formData.images
       // and have a valid ID (not temporary IDs for new images)
+      const removedImageIds = new Set();
       const removedImages = originalImages.filter(
-        originalImage => 
-          originalImage.id && // Only delete images with valid IDs
-          !formData.images.some(
-            currentImage => currentImage.id === originalImage.id
-          )
+        originalImage => {
+          const shouldRemove = originalImage.id &&
+            !formData.images.some(currentImage => currentImage.id === originalImage.id);
+          if (shouldRemove && !removedImageIds.has(originalImage.id)) {
+            removedImageIds.add(originalImage.id);
+            return true;
+          }
+          return false;
+        }
       );
-
-      if (removedImages.length > 0) {
-        console.log('Deleting removed images:', removedImages);
-        
-        const deletePromises = removedImages.map(async (image) => {
+      for (const image of removedImages) {
+        // Only delete if the ID is a real DB ID (not a temporary one)
+        if (typeof image.id === 'number' && image.id > 0) {
           try {
             const response = await fetch(`/api/admin/flavors/${params.id}/images/${image.id}`, {
               method: 'DELETE',
               credentials: 'include'
             });
-            
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}));
-              console.error(`Failed to delete image ${image.id}:`, errorData);
-              throw new Error(`Failed to delete image: ${errorData.error || response.statusText}`);
+              // Ignore 404 errors (image already gone)
+              if (response.status !== 404) {
+                console.error(`Failed to delete image ${image.id}:`, errorData);
+                throw new Error(`Failed to delete image: ${errorData.error || response.statusText}`);
+              }
             }
-            
-            return response;
           } catch (error) {
-            console.error(`Error deleting image ${image.id}:`, error);
-            throw error;
+            // Only throw if not a 404
+            if (!(error instanceof Response && error.status === 404)) {
+              console.error(`Error deleting image ${image.id}:`, error);
+              throw error;
+            }
           }
-        });
-
-        await Promise.all(deletePromises);
+        }
       }
 
       toast.success('Flavor updated successfully');
@@ -389,20 +371,15 @@ export default function EditFlavorPage({ params }: { params: { id: string } }) {
                   htmlFor="image-upload"
                   className="w-full h-full flex items-center justify-center cursor-pointer"
                 >
-                  <div className="text-center">
-                    <Plus className="h-8 w-8 text-gray-400 mx-auto" />
-                    <span className="mt-2 block text-sm text-gray-500">
-                      Add Image
-                    </span>
-                  </div>
-                  <input
+                  <Input
                     id="image-upload"
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
                     onChange={handleImageUpload}
-                    multiple
                   />
+                  <Plus className="h-8 w-8 text-gray-400" />
                 </label>
               </div>
             </div>
