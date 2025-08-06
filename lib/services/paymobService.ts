@@ -129,6 +129,8 @@ class PaymobService {
 
   private async getAuthToken(): Promise<string> {
     try {
+      console.log('🔐 Getting Paymob auth token...');
+      
       const response = await fetch(`${this.config.baseUrl}/auth/tokens`, {
         method: 'POST',
         headers: {
@@ -140,13 +142,20 @@ class PaymobService {
       });
 
       if (!response.ok) {
-        throw new Error(`Paymob auth failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Paymob auth failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Paymob auth failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Paymob auth token received');
       return data.token;
     } catch (error) {
-      console.error('Paymob auth error:', error);
+      console.error('❌ Paymob auth error:', error);
       throw new Error('Failed to authenticate with Paymob');
     }
   }
@@ -162,6 +171,7 @@ class PaymobService {
     delivery_needed?: boolean;
   }): Promise<PaymobOrderResponse> {
     try {
+      console.log('🛒 Creating Paymob order...');
       const authToken = await this.getAuthToken();
 
       const orderRequest: PaymobOrderRequest = {
@@ -175,6 +185,13 @@ class PaymobService {
         }))
       };
 
+      console.log('🔍 Paymob order request:', {
+        amount_cents: orderRequest.amount_cents,
+        currency: orderRequest.currency,
+        delivery_needed: orderRequest.delivery_needed,
+        items_count: orderRequest.items.length
+      });
+
       const response = await fetch(`${this.config.baseUrl}/ecommerce/orders`, {
         method: 'POST',
         headers: {
@@ -184,13 +201,20 @@ class PaymobService {
       });
 
       if (!response.ok) {
-        throw new Error(`Paymob order creation failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Paymob order creation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Paymob order creation failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Paymob order created:', data.id);
       return data;
     } catch (error) {
-      console.error('Paymob order creation error:', error);
+      console.error('❌ Paymob order creation error:', error);
       throw new Error('Failed to create Paymob order');
     }
   }
@@ -214,8 +238,13 @@ class PaymobService {
     };
   }): Promise<PaymobPaymentKeyResponse> {
     try {
+      console.log('🔑 Generating Paymob payment key...');
       const authToken = await this.getAuthToken();
-      const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/payment/callback`;
+      
+      // Set up both callback URLs
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
+      const redirectCallbackUrl = `${baseUrl}/payment/callback`; // User redirect
+      const webhookCallbackUrl = `${baseUrl}/api/payment/paymob-webhook`; // Server webhook
 
       const paymentKeyRequest: PaymobPaymentKeyRequest = {
         auth_token: authToken,
@@ -242,6 +271,20 @@ class PaymobService {
         lock_order_when_paid: true
       };
 
+      console.log('🔍 Paymob payment key request:', {
+        amount_cents: paymentKeyRequest.amount_cents,
+        order_id: paymentKeyRequest.order_id,
+        integration_id: paymentKeyRequest.integration_id,
+        redirect_callback: redirectCallbackUrl,
+        webhook_callback: webhookCallbackUrl,
+        billing_data: {
+          email: paymentKeyRequest.billing_data.email,
+          first_name: paymentKeyRequest.billing_data.first_name,
+          last_name: paymentKeyRequest.billing_data.last_name,
+          phone_number: paymentKeyRequest.billing_data.phone_number
+        }
+      });
+
       const response = await fetch(`${this.config.baseUrl}/acceptance/payment_keys`, {
         method: 'POST',
         headers: {
@@ -251,13 +294,20 @@ class PaymobService {
       });
 
       if (!response.ok) {
-        throw new Error(`Paymob payment key generation failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Paymob payment key generation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Paymob payment key generation failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Paymob payment key generated:', data.token);
       return data;
     } catch (error) {
-      console.error('Paymob payment key error:', error);
+      console.error('❌ Paymob payment key error:', error);
       throw new Error('Failed to generate Paymob payment key');
     }
   }
@@ -275,6 +325,7 @@ class PaymobService {
 
   async verifyTransaction(transactionId: string): Promise<any> {
     try {
+      console.log('🔍 Verifying Paymob transaction:', transactionId);
       const authToken = await this.getAuthToken();
 
       const response = await fetch(`${this.config.baseUrl}/acceptance/transactions/${transactionId}`, {
@@ -286,13 +337,25 @@ class PaymobService {
       });
 
       if (!response.ok) {
-        throw new Error(`Paymob transaction verification failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('❌ Paymob transaction verification failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Paymob transaction verification failed: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('✅ Paymob transaction verified:', {
+        id: data.id,
+        success: data.success,
+        amount_cents: data.amount_cents,
+        payment_method: data.payment_method
+      });
       return data;
     } catch (error) {
-      console.error('Paymob transaction verification error:', error);
+      console.error('❌ Paymob transaction verification error:', error);
       throw new Error('Failed to verify Paymob transaction');
     }
   }

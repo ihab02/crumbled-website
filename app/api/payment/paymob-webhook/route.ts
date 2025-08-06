@@ -6,11 +6,13 @@ import { EmailService } from '@/lib/email-service';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('🔔 Paymob webhook received:', body);
+    console.log('🔔 Paymob webhook received:', JSON.stringify(body, null, 2));
 
-    const {
-      type,
-      obj: {
+    // Handle different webhook types
+    const { type, obj } = body;
+
+    if (type === 'TRANSACTION') {
+      const {
         id: transactionId,
         order: { id: paymobOrderId },
         success,
@@ -34,28 +36,53 @@ export async function POST(request: NextRequest) {
         processed,
         created_at,
         updated_at,
-        data: { order_id: ourOrderId }
+        data
+      } = obj;
+
+      // Extract our order ID from the data field
+      const ourOrderId = data?.order_id || merchant_order_id;
+      
+      if (!ourOrderId) {
+        console.error('❌ No order ID found in webhook data');
+        return NextResponse.json({ success: false, error: 'No order ID found' }, { status: 400 });
       }
-    } = body;
 
-    // Verify the transaction with Paymob
-    const transaction = await paymobService.verifyTransaction(transactionId);
-    console.log('🔍 Verified transaction:', transaction);
+      console.log('🔍 Processing transaction webhook:', {
+        transactionId,
+        paymobOrderId,
+        ourOrderId,
+        success,
+        error_occured,
+        is_canceled,
+        is_voided
+      });
 
-    if (type === 'TRANSACTION') {
-      // Update order status based on payment result
+      // Verify the transaction with Paymob (optional but recommended)
+      let verifiedTransaction = null;
+      try {
+        verifiedTransaction = await paymobService.verifyTransaction(transactionId);
+        console.log('🔍 Verified transaction:', verifiedTransaction);
+      } catch (verifyError) {
+        console.error('❌ Failed to verify transaction with Paymob:', verifyError);
+        // Continue with webhook data if verification fails
+      }
+
+      // Determine order status based on payment result
       let orderStatus = 'pending';
       let paymentStatus = 'pending';
 
-      if (success && !error_occured && !is_canceled && !is_voided) {
+      if (success && !error_occured && !is_canceled && !is_voided && !is_returned) {
         orderStatus = 'confirmed';
         paymentStatus = 'paid';
-      } else if (is_canceled || is_voided) {
+      } else if (is_canceled || is_voided || is_returned) {
         orderStatus = 'cancelled';
         paymentStatus = 'failed';
       } else if (error_occured) {
         orderStatus = 'failed';
         paymentStatus = 'failed';
+      } else if (pending) {
+        orderStatus = 'pending';
+        paymentStatus = 'pending';
       }
 
       // Update order in database
@@ -71,47 +98,49 @@ export async function POST(request: NextRequest) {
       console.log(`✅ Order ${ourOrderId} updated: ${orderStatus} / ${paymentStatus}`);
 
       // If payment failed, restore stock
-      if (paymentStatus === 'failed') {
-        // Get order items to determine what stock to restore
-        const [orderItemsResult] = await databaseService.query(
-          `SELECT oi.product_id, oi.quantity, oi.flavor_details, p.is_pack, p.flavor_size
-           FROM order_items oi
-           JOIN products p ON oi.product_id = p.id
-           WHERE oi.order_id = ?`,
-          [ourOrderId]
-        );
+      if (paymentStatus === 'failed' || orderStatus === 'cancelled') {
+        try {
+          // Get order items to determine what stock to restore
+          const [orderItemsResult] = await databaseService.query(
+            `SELECT oi.product_id, oi.quantity, oi.flavor_details, p.is_pack, p.flavor_size
+             FROM order_items oi
+             JOIN products p ON oi.product_id = p.id
+             WHERE oi.order_id = ?`,
+            [ourOrderId]
+          );
 
-        if (Array.isArray(orderItemsResult)) {
-          for (const item of orderItemsResult) {
-            if (item.is_pack) {
-              // For packs, restore flavor stock
-              // Parse flavor details to get flavor quantities
-              // Format is typically "Flavor1 (2x), Flavor2 (1x)"
-              const flavorMatches = item.flavor_details.match(/(\w+)\s*\((\d+)x\)/g);
-              if (flavorMatches) {
-                const packSize = (item.flavor_size || 'Large').toLowerCase();
-                const stockField = `stock_quantity_${packSize}`;
-                for (const match of flavorMatches) {
-                  const [, flavorName, quantityStr] = match.match(/(\w+)\s*\((\d+)x\)/) || [];
-                  if (flavorName && quantityStr) {
-                    const quantity = parseInt(quantityStr);
-                    await databaseService.query(
-                      `UPDATE flavors SET ${stockField} = ${stockField} + ? WHERE name = ?`,
-                      [quantity, flavorName]
-                    );
+          if (Array.isArray(orderItemsResult)) {
+            for (const item of orderItemsResult) {
+              if (item.is_pack) {
+                // For packs, restore flavor stock
+                const flavorMatches = item.flavor_details?.match(/(\w+)\s*\((\d+)x\)/g);
+                if (flavorMatches) {
+                  const packSize = (item.flavor_size || 'Large').toLowerCase();
+                  const stockField = `stock_quantity_${packSize}`;
+                  for (const match of flavorMatches) {
+                    const [, flavorName, quantityStr] = match.match(/(\w+)\s*\((\d+)x\)/) || [];
+                    if (flavorName && quantityStr) {
+                      const quantity = parseInt(quantityStr);
+                      await databaseService.query(
+                        `UPDATE flavors SET ${stockField} = ${stockField} + ? WHERE name = ?`,
+                        [quantity, flavorName]
+                      );
+                    }
                   }
                 }
+              } else {
+                // For individual products, restore product stock
+                await databaseService.query(
+                  'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                  [item.quantity, item.product_id]
+                );
               }
-            } else {
-              // For individual products, restore product stock
-              await databaseService.query(
-                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-                [item.quantity, item.product_id]
-              );
             }
           }
+          console.log(`🔄 Stock restored for order ${ourOrderId}`);
+        } catch (stockError) {
+          console.error('❌ Failed to restore stock:', stockError);
         }
-        console.log(`🔄 Stock restored for order ${ourOrderId}`);
       }
 
       // Send email notification for successful payments
@@ -129,41 +158,17 @@ export async function POST(request: NextRequest) {
           if (Array.isArray(orderDetailsResult) && orderDetailsResult.length > 0) {
             const orderDetails = orderDetailsResult[0] as any;
             
-            // Fetch delivery rules for the zone (if available)
-            let deliveryRules = null;
-            let deliveryTime = '';
-            let deliverySlot = '';
-            let addressData = null;
-            try {
-              // Get delivery address from order (if available)
-              const [addressResult] = await databaseService.query(
-                `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name, z.delivery_fee, ca.zone_id
-                 FROM customer_addresses ca
-                 JOIN cities c ON ca.city_id = c.id
-                 JOIN zones z ON ca.zone_id = z.id
-                 WHERE ca.customer_id = ? AND ca.is_default = 1`,
-                [orderDetails.customer_id]
-              );
-              
-              if (Array.isArray(addressResult) && addressResult.length > 0) {
-                addressData = addressResult[0];
-                const currentDate = new Date().toISOString().split('T')[0];
-                const deliveryRulesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'}/api/zones/delivery-rules?zoneId=${addressData.zone_id}&orderDate=${currentDate}`);
-                if (deliveryRulesResponse.ok) {
-                  const deliveryRulesData = await deliveryRulesResponse.json();
-                  if (deliveryRulesData.success) {
-                    deliveryRules = deliveryRulesData.deliveryRules;
-                    deliveryTime = deliveryRules?.formattedDeliveryDate || '';
-                    deliverySlot = deliveryRules?.timeSlot
-                      ? `${deliveryRules.timeSlot.name} (${deliveryRules.timeSlot.fromHour} - ${deliveryRules.timeSlot.toHour})`
-                      : '';
-                  }
-                }
-              }
-            } catch (rulesError) {
-              console.error('❌ Failed to fetch delivery rules in webhook:', rulesError);
-              // Continue without delivery rules if fetch fails
-            }
+            // Get delivery address
+            const [addressResult] = await databaseService.query(
+              `SELECT ca.street_address, ca.additional_info, c.name as city_name, z.name as zone_name
+               FROM customer_addresses ca
+               JOIN cities c ON ca.city_id = c.id
+               JOIN zones z ON ca.zone_id = z.id
+               WHERE ca.customer_id = ? AND ca.is_default = 1`,
+              [orderDetails.customer_id]
+            );
+            
+            const addressData = Array.isArray(addressResult) && addressResult.length > 0 ? addressResult[0] : null;
             
             await EmailService.sendOrderConfirmation(
               orderDetails.email,
@@ -172,18 +177,18 @@ export async function POST(request: NextRequest) {
                 customer_name: `${orderDetails.first_name} ${orderDetails.last_name}`,
                 customer_email: orderDetails.email,
                 customer_phone: orderDetails.phone,
-                subtotal: orderDetails.total,
-                delivery_fee: 0, // TODO: Get actual delivery fee
-                total: orderDetails.total,
+                subtotal: orderDetails.subtotal,
+                delivery_fee: orderDetails.delivery_fee,
+                total: orderDetails.total_amount,
                 status: 'confirmed',
                 payment_method: 'paymob',
                 delivery_address: addressData?.street_address || '',
                 delivery_city: addressData?.city_name || '',
                 delivery_zone: addressData?.zone_name || '',
-                delivery_time: deliveryTime,
-                delivery_slot: deliverySlot,
+                delivery_time: orderDetails.delivery_time || '',
+                delivery_slot: orderDetails.delivery_slot || '',
                 expected_delivery_date: orderDetails.expected_delivery_date,
-                items: [] // TODO: Get actual order items
+                items: [] // Will be populated by EmailService
               }
             );
             
@@ -194,6 +199,11 @@ export async function POST(request: NextRequest) {
           // Don't fail the webhook if email fails
         }
       }
+    } else if (type === 'ORDER') {
+      // Handle order-related webhooks if needed
+      console.log('🔔 Order webhook received:', obj);
+    } else {
+      console.log('🔔 Unknown webhook type:', type);
     }
 
     return NextResponse.json({ success: true });

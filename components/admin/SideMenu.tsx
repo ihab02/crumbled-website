@@ -217,7 +217,12 @@ const menuItems = [
     icon: BarChart,
     submenu: [
       {
-        title: 'Analytics',
+        title: 'Sales Analytics',
+        href: '/admin/analytics/sales',
+        icon: TrendingUp
+      },
+      {
+        title: 'General Analytics',
         href: '/admin/analytics',
         icon: BarChart
       },

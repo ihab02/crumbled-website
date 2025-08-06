@@ -1,0 +1,16 @@
+go through the whole workspace and study :
+1. authentications and sercurity management for both admin and front store
+2. the order preparation flow
+3. the images handling for saving and deletions
+4. otp validations flow
+5. order email confirmation flow
+6. change password flow and email preparation of it
+7. delivery time calculations and the time slots and the custom delivery override mechanism while placing the order
+8. the inventory management of the flavors
+9. the special flow of logging the dubug messages and how the admin panel has the setting for it to be enabled or disabled. also if any debug will be in the browser console to be a condition in the code not calling the server side method because it wont work in the browser.
+10. kitchen management and the relation between kitchens and zones and the zone kitchen priortization flow
+11. order management and preparation flow and how their pages are working to provide the ui/ux
+12. how order creation api is working and how it is related to the payment api
+13. how the admin/orders work and how it prints the details of the order
+14. how the promo codes works
+15

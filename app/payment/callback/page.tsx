@@ -30,7 +30,7 @@ function PaymentCallbackContent() {
         // Get payment parameters from URL
         const success = searchParams.get('success')
         const orderId = searchParams.get('order_id')
-        const transactionId = searchParams.get('transaction_id')
+        const transactionId = searchParams.get('transaction_id') || searchParams.get('id')
         const amount = searchParams.get('amount')
         const errorCode = searchParams.get('error_code')
         const errorMessage = searchParams.get('error_message')
@@ -44,24 +44,41 @@ function PaymentCallbackContent() {
           errorMessage
         })
 
-        if (success === 'true' && orderId) {
-          // Payment was successful
-          setPaymentResult({
-            success: true,
-            message: 'Payment completed successfully!',
+        if (!orderId) {
+          setError('Order ID is missing from payment callback')
+          return
+        }
+
+        // Verify payment with backend API
+        const verifyResponse = await fetch('/api/payment/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             orderId,
+            transactionId,
+            success: success === 'true',
+            pending: searchParams.get('pending') === 'true'
+          })
+        })
+
+        if (!verifyResponse.ok) {
+          throw new Error('Failed to verify payment with server')
+        }
+
+        const verifyData = await verifyResponse.json()
+        
+        if (verifyData.success) {
+          setPaymentResult({
+            success: verifyData.data.success,
+            message: verifyData.data.message,
+            orderId: verifyData.data.orderId?.toString(),
             transactionId: transactionId || undefined,
-            amount: amount ? parseFloat(amount) : undefined
+            amount: verifyData.data.amount
           })
         } else {
-          // Payment failed
-          setPaymentResult({
-            success: false,
-            message: errorMessage || 'Payment failed. Please try again.',
-            orderId: orderId || undefined,
-            transactionId: transactionId || undefined,
-            amount: amount ? parseFloat(amount) : undefined
-          })
+          setError(verifyData.error || 'Payment verification failed')
         }
       } catch (err) {
         console.error('❌ Error processing payment callback:', err)

@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth-options';
 import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
 import { EmailService } from '@/lib/email-service';
+import { invalidateOrderAnalytics } from '@/lib/analytics-cache';
 
 interface CheckoutPaymentRequest {
   cartId?: string;
@@ -700,6 +701,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         // Don't fail the order if email fails
       }
 
+      // Invalidate analytics cache since new order was created
+      await invalidateOrderAnalytics();
+
       return NextResponse.json({
         success: true,
         message: 'Order placed successfully with Cash on Delivery',
@@ -737,6 +741,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       console.log('🔍 [DEBUG] Payment API - Final Response Data:', responseData)
       console.log('🔍 [DEBUG] Payment API - Payment URL in response:', responseData.data.paymentUrl)
       console.log('🔍 [DEBUG] Payment API - Payment Token in response:', responseData.data.paymentToken)
+
+      // Invalidate analytics cache since new order was created
+      await invalidateOrderAnalytics();
 
       return NextResponse.json(responseData);
     }
