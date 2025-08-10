@@ -1,4 +1,4 @@
-import { databaseService } from '@/lib/database';
+import { databaseService } from '@/lib/services/databaseService';
 import { debugLog } from '@/lib/debug-utils';
 import { analyticsCache } from '@/lib/analytics-cache';
 
@@ -112,9 +112,7 @@ class BackgroundAnalyticsProcessor {
 
   // Generate comprehensive analytics (heavy operation)
   private async generateComprehensiveAnalytics(startDate: string, endDate: string) {
-    const connection = await databaseService.getConnection();
-    
-    try {
+    return await databaseService.transaction(async (connection) => {
       // This is a heavy operation that runs in background
       const [comprehensiveData] = await connection.execute(`
         SELECT 
@@ -144,10 +142,7 @@ class BackgroundAnalyticsProcessor {
       `, [startDate, endDate]);
 
       return (comprehensiveData as any)[0];
-      
-    } finally {
-      connection.release();
-    }
+    });
   }
 
   // Get job status

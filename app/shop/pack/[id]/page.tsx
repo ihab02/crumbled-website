@@ -227,6 +227,17 @@ export default function PackProductPage() {
       const productData = await productResponse.json();
       console.log('Product data:', productData);
       setProduct(productData);
+      
+      // TikTok Pixel - ViewContent Event
+      if (typeof window !== 'undefined' && window.ttq) {
+        window.ttq.track('ViewContent', {
+          content_type: 'product',
+          content_id: productData.id.toString(),
+          content_name: productData.name,
+          currency: 'EGP',
+          value: parseFloat(productData.base_price || '0')
+        });
+      }
 
       // Use flavors from the product response
       if (productData.flavors && Array.isArray(productData.flavors)) {

@@ -1,4 +1,4 @@
-import { databaseService } from '@/lib/database';
+import { databaseService } from '@/lib/services/databaseService';
 import { debugLog } from '@/lib/debug-utils';
 
 interface CacheEntry {

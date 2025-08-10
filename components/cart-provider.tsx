@@ -125,6 +125,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // Update cart count immediately
     setCartCount(prev => prev + item.quantity)
 
+    // TikTok Pixel - AddToCart Event
+    if (typeof window !== 'undefined' && window.ttq) {
+      window.ttq.track('AddToCart', {
+        content_type: 'product',
+        content_id: item.id,
+        content_name: item.name,
+        currency: 'EGP',
+        value: item.price,
+        quantity: item.quantity
+      });
+    }
+
     // Debounced API update
     debouncedCartUpdate(async () => {
       try {

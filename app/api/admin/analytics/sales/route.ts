@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { databaseService } from '@/lib/database';
+import { databaseService } from '@/lib/services/databaseService';
 import { adminAuth } from '@/lib/middleware/auth';
 import { debugLog } from '@/lib/debug-utils';
 import { analyticsCache } from '@/lib/analytics-cache';
+// Option A: use databaseService.transaction consistently (no direct pool usage)
 
 export async function GET(request: NextRequest) {
   try {
     // Verify admin authentication
     const authResult = await adminAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (authResult) {
+      // authResult is a NextResponse (error case)
+      return authResult;
     }
+
+    // Get admin info from headers (set by adminAuth)
+    const adminUsername = request.headers.get('x-admin-username');
+    const adminEmail = request.headers.get('x-admin-email');
 
     const { searchParams } = new URL(request.url);
     const range = searchParams.get('range') || 'this-month';
     const customStartDate = searchParams.get('startDate');
     const customEndDate = searchParams.get('endDate');
     
-    await debugLog('Sales Analytics API called', { range, adminId: authResult.adminId, customStartDate, customEndDate });
+    await debugLog('Sales Analytics API called', { range, adminUsername, adminEmail, customStartDate, customEndDate });
 
     // Check cache first
-    const cacheKey = analyticsCache.generateKey(range, authResult.adminId, customStartDate, customEndDate);
+    const cacheKey = analyticsCache.generateKey(range, adminUsername || 'admin', customStartDate, customEndDate);
     const cachedData = await analyticsCache.get(cacheKey);
     
     if (cachedData) {
-      await debugLog('Returning cached analytics data', { range, adminId: authResult.adminId });
+      await debugLog('Returning cached analytics data', { range, adminUsername });
       return NextResponse.json(cachedData);
     }
 
@@ -136,9 +142,7 @@ export async function GET(request: NextRequest) {
 }
 
 async function getRevenueAnalytics(startDate: string, endDate: string) {
-  const connection = await databaseService.getConnection();
-  
-  try {
+  return await databaseService.transaction(async (connection) => {
     // Total revenue and growth
     const [totalRevenueResult] = await connection.execute(`
       SELECT 
@@ -225,16 +229,11 @@ async function getRevenueAnalytics(startDate: string, endDate: string) {
         orders: row.orders
       }))
     };
-
-  } finally {
-    connection.release();
-  }
+  });
 }
 
 async function getOrderAnalytics(startDate: string, endDate: string) {
-  const connection = await databaseService.getConnection();
-  
-  try {
+  return await databaseService.transaction(async (connection) => {
     // Total orders and growth
     const [totalOrdersResult] = await connection.execute(`
       SELECT COUNT(*) as total_orders
@@ -302,16 +301,11 @@ async function getOrderAnalytics(startDate: string, endDate: string) {
         orders: row.orders
       }))
     };
-
-  } finally {
-    connection.release();
-  }
+  });
 }
 
 async function getProductAnalytics(startDate: string, endDate: string) {
-  const connection = await databaseService.getConnection();
-  
-  try {
+  return await databaseService.transaction(async (connection) => {
     // Top selling products
     const [topSellersResult] = await connection.execute(`
       SELECT 
@@ -391,16 +385,11 @@ async function getProductAnalytics(startDate: string, endDate: string) {
         recommendedReorder: Math.max(50, row.current_stock * 2)
       }))
     };
-
-  } finally {
-    connection.release();
-  }
+  });
 }
 
 async function getCustomerAnalytics(startDate: string, endDate: string) {
-  const connection = await databaseService.getConnection();
-  
-  try {
+  return await databaseService.transaction(async (connection) => {
     // Total customers
     const [totalCustomersResult] = await connection.execute(`
       SELECT COUNT(DISTINCT customer_id) as total_customers
@@ -474,16 +463,11 @@ async function getCustomerAnalytics(startDate: string, endDate: string) {
         orderCount: row.order_count
       }))
     };
-
-  } finally {
-    connection.release();
-  }
+  });
 }
 
 async function getDeliveryAnalytics(startDate: string, endDate: string) {
-  const connection = await databaseService.getConnection();
-  
-  try {
+  return await databaseService.transaction(async (connection) => {
     // Zone performance
     const [zonePerformanceResult] = await connection.execute(`
       SELECT 
@@ -507,16 +491,11 @@ async function getDeliveryAnalytics(startDate: string, endDate: string) {
         averageDeliveryTime: Math.round(row.avg_delivery_time || 0)
       }))
     };
-
-  } finally {
-    connection.release();
-  }
+  });
 }
 
 async function getPromotionAnalytics(startDate: string, endDate: string) {
-  const connection = await databaseService.getConnection();
-  
-  try {
+  return await databaseService.transaction(async (connection) => {
     // Total discounts
     const [totalDiscountsResult] = await connection.execute(`
       SELECT COALESCE(SUM(discount_amount), 0) as total_discounts
@@ -550,8 +529,5 @@ async function getPromotionAnalytics(startDate: string, endDate: string) {
         revenueGenerated: row.revenue_generated
       }))
     };
-
-  } finally {
-    connection.release();
-  }
+  });
 } 

@@ -1,4 +1,4 @@
-import { databaseService } from '@/lib/database';
+import { databaseService } from '@/lib/services/databaseService';
 import { debugLog } from '@/lib/debug-utils';
 
 // Optimized query functions for analytics
@@ -6,9 +6,7 @@ export class OptimizedAnalyticsQueries {
   
   // Batch multiple queries for better performance
   static async getRevenueAnalyticsBatch(startDate: string, endDate: string) {
-    const connection = await databaseService.getConnection();
-    
-    try {
+    return await databaseService.transaction(async (connection) => {
       // Single query to get multiple revenue metrics
       const [revenueMetrics] = await connection.execute(`
         SELECT 
@@ -38,64 +36,55 @@ export class OptimizedAnalyticsQueries {
         metrics: (revenueMetrics as any)[0],
         paymentMethods: paymentMethods as any[]
       };
-
-    } finally {
-      connection.release();
-    }
+    });
   }
 
   // Optimized product analytics with materialized view approach
   static async getProductAnalyticsOptimized(startDate: string, endDate: string) {
-    const connection = await databaseService.getConnection();
-    
-    try {
+    return await databaseService.transaction(async (connection) => {
       // Use temporary table for better performance on large datasets
-      await connection.execute(`
-        CREATE TEMPORARY TABLE IF NOT EXISTS temp_product_sales AS
-        SELECT 
-          JSON_EXTRACT(oi.flavor_details, '$[0].id') as flavor_id,
-          SUM(oi.quantity) as total_quantity,
-          SUM(oi.quantity * oi.unit_price) as total_revenue
-        FROM order_items oi
-        JOIN orders o ON oi.order_id = o.id
-        WHERE o.status != 'cancelled' 
-          AND DATE(o.created_at) BETWEEN ? AND ?
-        GROUP BY JSON_EXTRACT(oi.flavor_details, '$[0].id')
-      `, [startDate, endDate]);
+      try {
+        await connection.execute(`
+          CREATE TEMPORARY TABLE IF NOT EXISTS temp_product_sales AS
+          SELECT 
+            JSON_EXTRACT(oi.flavor_details, '$[0].id') as flavor_id,
+            SUM(oi.quantity) as total_quantity,
+            SUM(oi.quantity * oi.unit_price) as total_revenue
+          FROM order_items oi
+          JOIN orders o ON oi.order_id = o.id
+          WHERE o.status != 'cancelled' 
+            AND DATE(o.created_at) BETWEEN ? AND ?
+          GROUP BY JSON_EXTRACT(oi.flavor_details, '$[0].id')
+        `, [startDate, endDate]);
 
-      // Get top sellers with flavor details
-      const [topSellers] = await connection.execute(`
-        SELECT 
-          f.id,
-          f.name,
-          f.category,
-          f.stock_quantity_mini,
-          f.stock_quantity_medium,
-          f.stock_quantity_large,
-          tps.total_quantity,
-          tps.total_revenue
-        FROM temp_product_sales tps
-        JOIN flavors f ON tps.flavor_id = f.id
-        ORDER BY tps.total_revenue DESC
-        LIMIT 10
-      `);
+        // Get top sellers with flavor details
+        const [topSellers] = await connection.execute(`
+          SELECT 
+            f.id,
+            f.name,
+            f.category,
+            f.stock_quantity_mini,
+            f.stock_quantity_medium,
+            f.stock_quantity_large,
+            tps.total_quantity,
+            tps.total_revenue
+          FROM temp_product_sales tps
+          JOIN flavors f ON tps.flavor_id = f.id
+          ORDER BY tps.total_revenue DESC
+          LIMIT 10
+        `);
 
-      // Clean up temporary table
-      await connection.execute('DROP TEMPORARY TABLE IF EXISTS temp_product_sales');
-
-      return topSellers as any[];
-
-    } finally {
-      connection.release();
-    }
+        return topSellers as any[];
+      } finally {
+        await connection.execute('DROP TEMPORARY TABLE IF EXISTS temp_product_sales');
+      }
+    });
   }
 
   // Paginated customer analytics for large datasets
   static async getCustomerAnalyticsPaginated(startDate: string, endDate: string, page: number = 1, limit: number = 50) {
-    const connection = await databaseService.getConnection();
     const offset = (page - 1) * limit;
-    
-    try {
+    return await databaseService.transaction(async (connection) => {
       // Get total count first
       const [totalCount] = await connection.execute(`
         SELECT COUNT(DISTINCT customer_id) as total
@@ -128,17 +117,12 @@ export class OptimizedAnalyticsQueries {
         limit,
         totalPages: Math.ceil(((totalCount as any)[0]?.total || 0) / limit)
       };
-
-    } finally {
-      connection.release();
-    }
+    });
   }
 
   // Time-series data with date bucketing for better performance
   static async getTimeSeriesData(startDate: string, endDate: string, interval: 'day' | 'week' | 'month' = 'day') {
-    const connection = await databaseService.getConnection();
-    
-    try {
+    return await databaseService.transaction(async (connection) => {
       let dateFormat: string;
       let groupBy: string;
 
@@ -173,9 +157,6 @@ export class OptimizedAnalyticsQueries {
       `, [dateFormat, startDate, endDate]);
 
       return timeSeriesData as any[];
-
-    } finally {
-      connection.release();
-    }
+    });
   }
 } 

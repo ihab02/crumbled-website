@@ -49,6 +49,33 @@ export default function CheckoutSuccessPage() {
             })
             setOrderInfo(data.order)
             setError(null)
+            
+            // TikTok Pixel - Purchase Event
+            if (typeof window !== 'undefined' && window.ttq) {
+              const eventData: any = {
+                content_type: 'product',
+                currency: 'EGP',
+                value: parseFloat(data.order.total_amount),
+                content_id: data.order.id.toString(),
+                content_name: 'Cookie Order',
+                contents: data.order.items?.map((item: any) => ({
+                  content_id: item.product_id?.toString() || item.id?.toString(),
+                  content_name: item.name,
+                  quantity: item.quantity,
+                  price: parseFloat(item.unit_price)
+                })) || []
+              };
+              
+              // Add customer email and phone if available
+              if (data.order.customer_email) {
+                eventData.email = data.order.customer_email;
+              }
+              if (data.order.customer_phone) {
+                eventData.phone_number = data.order.customer_phone;
+              }
+              
+              window.ttq.track('CompletePayment', eventData);
+            }
           } else {
             debugLog('❌ [DEBUG] Success page - Failed to load order details:', data.error)
             setError(data.error || 'Failed to load order details')
@@ -60,9 +87,37 @@ export default function CheckoutSuccessPage() {
           const savedOrderInfo = localStorage.getItem("lastOrder")
           if (savedOrderInfo) {
             debugLog('🔍 [DEBUG] Success page - Found order info in localStorage')
-            setOrderInfo(JSON.parse(savedOrderInfo))
+            const orderData = JSON.parse(savedOrderInfo)
+            setOrderInfo(orderData)
             localStorage.removeItem("lastOrder") // Clean up
             setError(null)
+            
+            // TikTok Pixel - Purchase Event
+            if (typeof window !== 'undefined' && window.ttq) {
+              const eventData: any = {
+                content_type: 'product',
+                currency: 'EGP',
+                value: parseFloat(orderData.total_amount),
+                content_id: orderData.id.toString(),
+                content_name: 'Cookie Order',
+                contents: orderData.items?.map((item: any) => ({
+                  content_id: item.product_id?.toString() || item.id?.toString(),
+                  content_name: item.name,
+                  quantity: item.quantity,
+                  price: parseFloat(item.unit_price)
+                })) || []
+              };
+              
+              // Add customer email and phone if available
+              if (orderData.customer_email) {
+                eventData.email = orderData.customer_email;
+              }
+              if (orderData.customer_phone) {
+                eventData.phone_number = orderData.customer_phone;
+              }
+              
+              window.ttq.track('CompletePayment', eventData);
+            }
           } else {
             debugLog('🔍 [DEBUG] Success page - No order info found anywhere')
             setError('No order information found')

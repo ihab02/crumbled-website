@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Pixel Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        #results { background: #f5f5f5; padding: 10px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 TikTok Pixel Test Page</h1>
+    
+    <div class="test-section">
+        <h2>1. Check TikTok Pixel Installation</h2>
+        <button onclick="checkPixelInstallation()">Test Pixel Installation</button>
+        <div id="pixel-status"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Test Individual Events</h2>
+        <button onclick="testViewContent()">Test ViewContent Event</button>
+        <button onclick="testAddToCart()">Test AddToCart Event</button>
+        <button onclick="testInitiateCheckout()">Test InitiateCheckout Event</button>
+        <button onclick="testCompletePayment()">Test CompletePayment Event</button>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Test User Journey</h2>
+        <button onclick="simulateFullJourney()">Simulate Complete Customer Journey</button>
+    </div>
+
+    <div id="results">
+        <h3>Test Results:</h3>
+        <div id="test-log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('test-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'success' ? 'green' : type === 'error' ? 'red' : 'blue';
+            logDiv.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+        }
+
+        function checkPixelInstallation() {
+            const statusDiv = document.getElementById('pixel-status');
+            
+            if (typeof window.ttq !== 'undefined') {
+                statusDiv.innerHTML = '<span class="success">✅ TikTok Pixel is installed correctly!</span>';
+                log('TikTok Pixel installation: SUCCESS', 'success');
+                
+                // Test basic functionality
+                try {
+                    window.ttq.track('test_pixel_installation', { test: true });
+                    log('Basic pixel functionality: SUCCESS', 'success');
+                } catch (e) {
+                    log('Basic pixel functionality: ERROR - ' + e.message, 'error');
+                }
+            } else {
+                statusDiv.innerHTML = '<span class="error">❌ TikTok Pixel not found!</span>';
+                log('TikTok Pixel installation: FAILED', 'error');
+            }
+        }
+
+        function testViewContent() {
+            if (typeof window.ttq === 'undefined') {
+                log('ViewContent Test: FAILED - Pixel not installed', 'error');
+                return;
+            }
+
+            try {
+                window.ttq.track('ViewContent', {
+                    content_type: 'product',
+                    content_id: 'test_product_123',
+                    content_name: 'Test Cookie Pack',
+                    currency: 'EGP',
+                    value: 200
+                });
+                log('ViewContent Event: SUCCESS', 'success');
+            } catch (e) {
+                log('ViewContent Event: ERROR - ' + e.message, 'error');
+            }
+        }
+
+        function testAddToCart() {
+            if (typeof window.ttq === 'undefined') {
+                log('AddToCart Test: FAILED - Pixel not installed', 'error');
+                return;
+            }
+
+            try {
+                window.ttq.track('AddToCart', {
+                    content_type: 'product',
+                    content_id: 'test_product_123',
+                    content_name: 'Test Cookie Pack',
+                    currency: 'EGP',
+                    value: 200,
+                    quantity: 1
+                });
+                log('AddToCart Event: SUCCESS', 'success');
+            } catch (e) {
+                log('AddToCart Event: ERROR - ' + e.message, 'error');
+            }
+        }
+
+        function testInitiateCheckout() {
+            if (typeof window.ttq === 'undefined') {
+                log('InitiateCheckout Test: FAILED - Pixel not installed', 'error');
+                return;
+            }
+
+            try {
+                window.ttq.track('InitiateCheckout', {
+                    content_type: 'product',
+                    currency: 'EGP',
+                    value: 200,
+                    contents: [{
+                        content_id: 'test_product_123',
+                        content_name: 'Test Cookie Pack',
+                        quantity: 1,
+                        price: 200
+                    }]
+                });
+                log('InitiateCheckout Event: SUCCESS', 'success');
+            } catch (e) {
+                log('InitiateCheckout Event: ERROR - ' + e.message, 'error');
+            }
+        }
+
+        function testCompletePayment() {
+            if (typeof window.ttq === 'undefined') {
+                log('CompletePayment Test: FAILED - Pixel not installed', 'error');
+                return;
+            }
+
+            try {
+                window.ttq.track('CompletePayment', {
+                    content_type: 'product',
+                    currency: 'EGP',
+                    value: 200,
+                    content_id: 'test_order_123',
+                    content_name: 'Cookie Order',
+                    contents: [{
+                        content_id: 'test_product_123',
+                        content_name: 'Test Cookie Pack',
+                        quantity: 1,
+                        price: 200
+                    }]
+                });
+                log('CompletePayment Event: SUCCESS', 'success');
+            } catch (e) {
+                log('CompletePayment Event: ERROR - ' + e.message, 'error');
+            }
+        }
+
+        function simulateFullJourney() {
+            log('🚀 Starting complete customer journey simulation...', 'info');
+            
+            setTimeout(() => {
+                testViewContent();
+                log('👀 Customer viewed product', 'info');
+            }, 1000);
+
+            setTimeout(() => {
+                testAddToCart();
+                log('🛒 Customer added to cart', 'info');
+            }, 2000);
+
+            setTimeout(() => {
+                testInitiateCheckout();
+                log('💳 Customer initiated checkout', 'info');
+            }, 3000);
+
+            setTimeout(() => {
+                testCompletePayment();
+                log('✅ Customer completed purchase', 'info');
+                log('🎉 Full customer journey simulation complete!', 'success');
+            }, 4000);
+        }
+
+        // Auto-run pixel check on page load
+        window.onload = function() {
+            setTimeout(checkPixelInstallation, 1000);
+        };
+    </script>
+</body>
+</html>

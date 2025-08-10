@@ -65,6 +65,22 @@ export default function ConfirmPage() {
       })
     }
     setCheckoutData(loadedCheckoutData)
+    
+    // TikTok Pixel - InitiateCheckout Event
+    if (loadedCheckoutData?.cart?.total && typeof window !== 'undefined' && window.ttq) {
+      window.ttq.track('InitiateCheckout', {
+        content_type: 'product',
+        currency: 'EGP',
+        value: loadedCheckoutData.cart.total,
+        contents: loadedCheckoutData.cart.items?.map((item: any) => ({
+          content_id: item.productId?.toString() || item.id?.toString(),
+          content_name: item.name,
+          quantity: item.quantity,
+          price: item.total / item.quantity
+        })) || []
+      });
+    }
+    
     setGuestData(JSON.parse(localStorage.getItem('guestData') || 'null'))
     setSelectedAddressId(JSON.parse(localStorage.getItem('selectedAddressId') || 'null'))
     setUseNewAddress(JSON.parse(localStorage.getItem('useNewAddress') || 'false'))

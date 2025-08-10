@@ -64,6 +64,17 @@ export default function FlavorDetailPage() {
         if (response.ok) {
           const data = await response.json()
           setFlavor(data.flavor)
+          
+          // TikTok Pixel - ViewContent Event
+          if (typeof window !== 'undefined' && window.ttq) {
+            window.ttq.track('ViewContent', {
+              content_type: 'product',
+              content_id: data.flavor.id.toString(),
+              content_name: data.flavor.name,
+              currency: 'EGP',
+              value: 0 // Flavors don't have individual prices
+            });
+          }
         }
       } catch (error) {
         console.error('Error fetching flavor:', error)
