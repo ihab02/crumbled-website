@@ -19,6 +19,17 @@ export default function CheckoutSuccessPage() {
   const [cancelling, setCancelling] = useState(false)
   const [cancellationSettings, setCancellationSettings] = useState<any>(null)
 
+  const normalizeEmail = (email?: string) => (email || '').trim().toLowerCase()
+  const normalizeEgyptPhone = (phone?: string) => {
+    if (!phone) return ''
+    const digits = phone.replace(/\D/g, '')
+    // Build E.164 with leading +
+    if (digits.startsWith('20')) return `+${digits}`
+    if (digits.startsWith('0') && digits.length >= 10) return `+2${digits.slice(1)}`
+    if (digits.startsWith('1') && digits.length === 10) return `+20${digits}`
+    return digits ? `+${digits}` : ''
+  }
+
   useEffect(() => {
     const fetchOrderInfo = async () => {
       try {
@@ -50,8 +61,16 @@ export default function CheckoutSuccessPage() {
             setOrderInfo(data.order)
             setError(null)
             
-            // TikTok Pixel - Purchase Event
+            // TikTok Pixel - Identify + Purchase Event
             if (typeof window !== 'undefined' && window.ttq) {
+              const emailNorm = normalizeEmail(data.order.customer_email)
+              const phoneNorm = normalizeEgyptPhone(data.order.customer_phone)
+              if (emailNorm || phoneNorm) {
+                window.ttq.identify({
+                  ...(emailNorm ? { email: emailNorm } : {}),
+                  ...(phoneNorm ? { phone_number: phoneNorm } : {}),
+                })
+              }
               const eventData: any = {
                 content_type: 'product',
                 currency: 'EGP',
@@ -66,13 +85,9 @@ export default function CheckoutSuccessPage() {
                 })) || []
               };
               
-              // Add customer email and phone if available
-              if (data.order.customer_email) {
-                eventData.email = data.order.customer_email;
-              }
-              if (data.order.customer_phone) {
-                eventData.phone_number = data.order.customer_phone;
-              }
+              // Optionally also include identifiers on the event payload
+              if (emailNorm) eventData.email = emailNorm
+              if (phoneNorm) eventData.phone_number = phoneNorm
               
               window.ttq.track('CompletePayment', eventData);
             }
@@ -92,8 +107,16 @@ export default function CheckoutSuccessPage() {
             localStorage.removeItem("lastOrder") // Clean up
             setError(null)
             
-            // TikTok Pixel - Purchase Event
+            // TikTok Pixel - Identify + Purchase Event
             if (typeof window !== 'undefined' && window.ttq) {
+              const emailNorm = normalizeEmail(orderData.customer_email)
+              const phoneNorm = normalizeEgyptPhone(orderData.customer_phone)
+              if (emailNorm || phoneNorm) {
+                window.ttq.identify({
+                  ...(emailNorm ? { email: emailNorm } : {}),
+                  ...(phoneNorm ? { phone_number: phoneNorm } : {}),
+                })
+              }
               const eventData: any = {
                 content_type: 'product',
                 currency: 'EGP',
@@ -107,14 +130,8 @@ export default function CheckoutSuccessPage() {
                   price: parseFloat(item.unit_price)
                 })) || []
               };
-              
-              // Add customer email and phone if available
-              if (orderData.customer_email) {
-                eventData.email = orderData.customer_email;
-              }
-              if (orderData.customer_phone) {
-                eventData.phone_number = orderData.customer_phone;
-              }
+              if (emailNorm) eventData.email = emailNorm
+              if (phoneNorm) eventData.phone_number = phoneNorm
               
               window.ttq.track('CompletePayment', eventData);
             }

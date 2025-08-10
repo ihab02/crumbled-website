@@ -110,14 +110,22 @@ export function generateSessionId(): string {
 export async function adminAuth(req: NextRequest) {
   try {
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    // Accept token from Authorization header or from cookie fallback (admin_token)
+    let token: string | undefined;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else {
+      // Align cookie name with login/check routes: 'adminToken'
+      const cookieToken = req.cookies.get('adminToken')?.value;
+      token = cookieToken;
+    }
+
+    if (!token) {
       return NextResponse.json(
-        { error: 'Missing or invalid authorization header' },
+        { error: 'Missing or invalid admin authentication' },
         { status: 401 }
       );
     }
-
-    const token = authHeader.split(' ')[1];
     const payload = verifyJWT(token, 'admin') as AdminPayload;
 
     // Add the admin info to the request for use in the route handler

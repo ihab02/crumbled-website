@@ -279,6 +279,32 @@ export default function ConfirmPage() {
       console.log('Payment API response:', paymentResult);
       if (paymentResponse.ok && paymentResult.success) {
         if (paymentMethod === 'cod') {
+          // TikTok Pixel - Identify + CompletePayment for COD
+          try {
+            if (typeof window !== 'undefined' && window.ttq && orderData?.customerInfo) {
+              const email = (orderData.customerInfo.email || '').trim().toLowerCase()
+              const ph = (orderData.customerInfo.phone || '').replace(/\D/g, '')
+              const phone = ph.startsWith('20') ? `+${ph}` : ph.startsWith('0') ? `+2${ph.slice(1)}` : ph.startsWith('1') && ph.length === 10 ? `+20${ph}` : (ph ? `+${ph}` : '')
+              if (email || phone) {
+                window.ttq.identify({ ...(email ? { email } : {}), ...(phone ? { phone_number: phone } : {}) })
+                window.ttq.track('CompletePayment', {
+                  content_type: 'product',
+                  currency: 'EGP',
+                  value: orderData?.cart?.total || 0,
+                  content_id: (paymentResult.data?.orderId || '').toString(),
+                  content_name: 'Cookie Order',
+                  ...(email ? { email } : {}),
+                  ...(phone ? { phone_number: phone } : {}),
+                  contents: (orderData?.cart?.items || []).map((item: any) => ({
+                    content_id: (item.productId || item.id || '').toString(),
+                    content_name: item.name,
+                    quantity: item.quantity,
+                    price: item.total / Math.max(item.quantity || 1, 1),
+                  }))
+                })
+              }
+            }
+          } catch {}
           toast.success('Order placed successfully!')
           router.push(`/checkout/success?orderId=${paymentResult.data?.orderId}`)
         } else if (paymentMethod === 'paymob' && paymentResult.data?.paymentToken) {

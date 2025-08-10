@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Package, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAdminAuth } from '@/hooks/use-admin-auth';
 
 interface SalesAnalyticsData {
   revenue: {
@@ -271,6 +272,7 @@ const SimpleChart = ({ data, title }: { data: Array<{ label: string; value: numb
 
 export default function SalesAnalyticsPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAdminAuth();
   const [analyticsData, setAnalyticsData] = useState<SalesAnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('this-month');
@@ -279,6 +281,12 @@ export default function SalesAnalyticsPage() {
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setAnalyticsData(null);
+      setLoading(false);
+      return;
+    }
     // Simulate API call
     const fetchAnalyticsData = async () => {
       // Validate custom date range
@@ -310,13 +318,24 @@ export default function SalesAnalyticsPage() {
           url += `&startDate=${customStartDate}&endDate=${customEndDate}`;
         }
         
-        // In real implementation, this would be an API call
-        // const response = await fetch(url);
-        // const data = await response.json();
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setAnalyticsData(mockAnalyticsData);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const response = await fetch(url, {
+          headers,
+          credentials: 'include'
+        });
+        if (!response.ok) {
+          setAnalyticsData(null);
+          toast.error('Failed to fetch analytics data');
+          return;
+        }
+        const data = await response.json();
+        if (data && data.revenue) {
+          setAnalyticsData(data);
+        } else {
+          setAnalyticsData(null);
+        }
       } catch (error) {
         toast.error('Failed to fetch analytics data');
         console.error('Error fetching analytics:', error);
@@ -326,7 +345,7 @@ export default function SalesAnalyticsPage() {
     };
 
     fetchAnalyticsData();
-  }, [dateRange, customStartDate, customEndDate]);
+  }, [authLoading, user, dateRange, customStartDate, customEndDate]);
 
   if (loading) {
     return (
@@ -339,7 +358,7 @@ export default function SalesAnalyticsPage() {
   if (!analyticsData) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-lg text-muted-foreground">No data available</p>
+        <p className="text-lg text-muted-foreground">No analytics data available</p>
       </div>
     );
   }
