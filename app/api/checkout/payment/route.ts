@@ -119,13 +119,8 @@ function setCartCookie(cartId: string) {
 // Real Paymob integration
 const generatePaymobPayment = async (orderData: any, customerInfo: any, orderId: number) => {
   try {
-    console.log('🔍 [DEBUG] generatePaymobPayment - Starting Paymob payment generation')
-    console.log('🔍 [DEBUG] generatePaymobPayment - Order Data:', orderData)
-    console.log('🔍 [DEBUG] generatePaymobPayment - Customer Info:', customerInfo)
-    console.log('🔍 [DEBUG] generatePaymobPayment - Order ID:', orderId)
-
+    console.log('🔍 [DEBUG] generatePaymobPayment - Starting payment key generation');
     // Create Paymob order
-    console.log('🔍 [DEBUG] generatePaymobPayment - Creating Paymob order')
     const paymobOrder = await paymobService.createOrder({
       amount: orderData.cart.total,
       items: orderData.cart.items.map((item: any) => ({
@@ -137,10 +132,8 @@ const generatePaymobPayment = async (orderData: any, customerInfo: any, orderId:
       delivery_needed: true
     });
 
-    console.log('🔍 [DEBUG] generatePaymobPayment - Paymob order created:', paymobOrder.id)
-
+    console.log('🔍 [DEBUG] generatePaymobPayment - Paymob order created, now generating payment key');
     // Generate payment key
-    console.log('🔍 [DEBUG] generatePaymobPayment - Generating payment key')
     const paymentKey = await paymobService.generatePaymentKey({
       orderId: paymobOrder.id,
       amount: orderData.cart.total,
@@ -160,42 +153,30 @@ const generatePaymobPayment = async (orderData: any, customerInfo: any, orderId:
       }
     });
 
-    console.log('🔍 [DEBUG] generatePaymobPayment - Payment key generated:', paymentKey.token)
-
+    console.log('🔍 [DEBUG] generatePaymobPayment - Payment key generated successfully:', paymentKey.token);
     // Get payment URL with order ID in the URL parameters
     const paymentUrl = `${paymobService.getPaymentUrl(paymentKey.token)}&order_id=${orderId}`;
-    console.log('🔍 [DEBUG] generatePaymobPayment - Payment URL generated:', paymentUrl)
 
+    console.log('🔍 [DEBUG] generatePaymobPayment - Payment URL generated:', paymentUrl);
     return {
       paymentToken: paymentKey.token,
       paymentUrl,
       paymobOrderId: paymobOrder.id
     };
   } catch (error) {
-    console.error('❌ [DEBUG] generatePaymobPayment - Error:', error);
-    throw new Error('Failed to generate Paymob payment');
+    console.error('❌ [DEBUG] generatePaymobPayment failed:', error);
+    throw error;
   }
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse<CheckoutPaymentResponse>> {
   try {
-    console.log('🔍 [DEBUG] Payment API called')
     const session = await getServerSession(authOptions);
     const { paymentMethod, orderData, promoCodeId, discountAmount } = await request.json() as CheckoutPaymentRequest & { promoCodeId?: number, discountAmount?: number };
-    console.log('🔍 [DEBUG] Payment API - Received promoCodeId:', promoCodeId)
-    console.log('🔍 [DEBUG] Payment API - Received discountAmount:', discountAmount)
     const cartId = await getOrCreateCart();
-
-    console.log('🔍 [DEBUG] Payment API - Session:', session?.user?.email)
-    console.log('🔍 [DEBUG] Payment API - Payment Method:', paymentMethod)
-    console.log('🔍 [DEBUG] Payment API - Cart ID:', cartId)
-    console.log('🔍 [DEBUG] Payment API - Order Data:', orderData)
-    console.log('🔍 [DEBUG] Payment API - Delivery Date:', orderData.deliveryDate)
-    console.log('🔍 [DEBUG] Payment API - Cart items structure:', JSON.stringify(orderData.cart.items, null, 2))
 
     // Validate request
     if (!cartId || !paymentMethod || !orderData) {
-      console.error('❌ [DEBUG] Payment API - Missing required fields')
       return NextResponse.json({
         success: false,
         message: 'Missing required fields',
@@ -205,7 +186,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
 
     // Validate payment method
     if (!['cod', 'paymob'].includes(paymentMethod)) {
-      console.error('❌ [DEBUG] Payment API - Invalid payment method:', paymentMethod)
       return NextResponse.json({
         success: false,
         message: 'Invalid payment method',
@@ -254,12 +234,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         console.log('🔍 [DEBUG] Payment API - User email:', session.user.email)
         
         // Find customer in customers table
-        const [customerRows] = await connection.query('SELECT id FROM customers WHERE email = ?', [session.user.email]);
+        const [customerRows] = await connection.query('SELECT id, first_name, last_name, email, phone FROM customers WHERE email = ?', [session.user.email]);
         console.log('🔍 [DEBUG] Payment API - Customer lookup result:', customerRows)
         
         if (Array.isArray(customerRows) && customerRows.length > 0) {
-          customerId = (customerRows[0] as any).id;
+          const customer = customerRows[0] as any;
+          customerId = customer.id;
           console.log('🔍 [DEBUG] Payment API - Found existing customer with ID:', customerId)
+          
+          // Build customer info for authenticated user
+          orderData.customerInfo = {
+            name: `${customer.first_name} ${customer.last_name}`.trim(),
+            email: customer.email,
+            phone: customer.phone
+          };
+          console.log('🔍 [DEBUG] Payment API - Customer info set for authenticated user:', orderData.customerInfo)
         } else {
           console.error('❌ [DEBUG] Payment API - Customer not found in customers table')
           throw new Error('Customer not found in database');
@@ -504,9 +493,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         }
       }
 
-      // Clear cart
-      await connection.query('DELETE FROM cart_items WHERE cart_id = ?', [cartId]);
-
       // After order is created, increment promo code usage if applicable
       if (finalPromoCodeId && customerId) {
         await connection.query(
@@ -701,6 +687,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         // Don't fail the order if email fails
       }
 
+      // Clear cart for successful COD orders
+      await databaseService.query('DELETE FROM cart_items WHERE cart_id = ?', [cartId]);
+      console.log('🔍 [DEBUG] Payment API - Cart cleared for successful COD order');
+
       // Invalidate analytics cache since new order was created
       await invalidateOrderAnalytics();
 
@@ -716,9 +706,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
       console.log('🔍 [DEBUG] Payment API - Generating Paymob payment')
       const { paymentToken, paymentUrl } = await generatePaymobPayment(orderData, orderData.customerInfo, orderId);
 
-      console.log('🔍 [DEBUG] Payment API - Paymob payment generated')
-      console.log('🔍 [DEBUG] Payment API - Payment Token:', paymentToken)
-      console.log('🔍 [DEBUG] Payment API - Payment URL:', paymentUrl)
+      // Payment generated successfully
 
       // Store payment token for webhook validation
       await databaseService.query(
@@ -726,7 +714,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         [paymentToken, orderId]
       );
 
-      console.log('🔍 [DEBUG] Payment API - Payment token stored in database')
+      // Payment token stored
 
       const responseData = {
         success: true,
@@ -738,9 +726,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         }
       };
 
-      console.log('🔍 [DEBUG] Payment API - Final Response Data:', responseData)
-      console.log('🔍 [DEBUG] Payment API - Payment URL in response:', responseData.data.paymentUrl)
-      console.log('🔍 [DEBUG] Payment API - Payment Token in response:', responseData.data.paymentToken)
+      // Remove excessive debugging logs that might cause issues
 
       // Invalidate analytics cache since new order was created
       await invalidateOrderAnalytics();
@@ -749,7 +735,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
     }
 
   } catch (error) {
-    console.error('Error processing payment:', error);
     return NextResponse.json({
       success: false,
       message: 'Failed to process payment',

@@ -581,13 +581,25 @@ export default function NewCheckoutPage() {
       })
 
       const paymentResult = await paymentResponse.json()
+      console.log('Payment API response:', paymentResult);
 
       if (paymentResponse.ok && paymentResult.success) {
         if (paymentMethod === 'cod') {
           toast.success('Order placed successfully!')
           router.push(`/checkout/success?orderId=${paymentResult.data?.orderId}`)
-        } else if (paymentMethod === 'paymob' && paymentResult.data?.paymentUrl) {
-          window.location.href = paymentResult.data.paymentUrl
+        } else if (paymentMethod === 'paymob' && paymentResult.data?.paymentToken) {
+          // Create a form and submit it as POST to Paymob (required) - NO SOURCE FIELD FOR CARD PAYMENTS
+          console.log('Paymob payment token received:', paymentResult.data.paymentToken);
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = 'https://accept.paymob.com/api/acceptance/payments/pay';
+          const tokenInput = document.createElement('input');
+          tokenInput.type = 'hidden';
+          tokenInput.name = 'payment_token';
+          tokenInput.value = paymentResult.data.paymentToken;
+          form.appendChild(tokenInput);
+          document.body.appendChild(form);
+          form.submit();
         } else {
           toast.error('No payment URL in response')
         }

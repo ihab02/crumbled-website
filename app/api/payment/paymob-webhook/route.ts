@@ -146,6 +146,17 @@ export async function POST(request: NextRequest) {
       // Send email notification for successful payments
       if (paymentStatus === 'paid') {
         try {
+          // Clear cart for successful Paymob payments
+          const [orderResult] = await databaseService.query(
+            'SELECT cart_id FROM orders WHERE id = ?',
+            [ourOrderId]
+          );
+          
+          if (Array.isArray(orderResult) && orderResult.length > 0 && orderResult[0].cart_id) {
+            await databaseService.query('DELETE FROM cart_items WHERE cart_id = ?', [orderResult[0].cart_id]);
+            console.log(`🛒 Cart cleared for successful Paymob payment, order ${ourOrderId}`);
+          }
+          
           // Get order details for email
           const [orderDetailsResult] = await databaseService.query(
             `SELECT o.*, c.first_name, c.last_name, c.email, c.phone 

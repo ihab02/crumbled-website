@@ -108,6 +108,8 @@ interface PaymobPaymentKeyRequest {
   currency: string;
   integration_id: number;
   lock_order_when_paid: boolean;
+  redirect_callback?: string;
+  webhook_callback?: string;
 }
 
 interface PaymobPaymentKeyResponse {
@@ -127,9 +129,9 @@ class PaymobService {
     };
   }
 
-  private async getAuthToken(): Promise<string> {
+  async getAuthToken(): Promise<string> {
     try {
-      console.log('🔐 Getting Paymob auth token...');
+      // Getting auth token
       
       const response = await fetch(`${this.config.baseUrl}/auth/tokens`, {
         method: 'POST',
@@ -152,7 +154,7 @@ class PaymobService {
       }
 
       const data = await response.json();
-      console.log('✅ Paymob auth token received');
+      // Auth token received
       return data.token;
     } catch (error) {
       console.error('❌ Paymob auth error:', error);
@@ -238,7 +240,7 @@ class PaymobService {
     };
   }): Promise<PaymobPaymentKeyResponse> {
     try {
-      console.log('🔑 Generating Paymob payment key...');
+      // Generating payment key
       const authToken = await this.getAuthToken();
       
       // Set up both callback URLs
@@ -268,22 +270,12 @@ class PaymobService {
         },
         currency: 'EGP',
         integration_id: this.config.integrationId,
-        lock_order_when_paid: true
+        lock_order_when_paid: true,
+        redirect_callback: redirectCallbackUrl,
+        webhook_callback: webhookCallbackUrl
       };
 
-      console.log('🔍 Paymob payment key request:', {
-        amount_cents: paymentKeyRequest.amount_cents,
-        order_id: paymentKeyRequest.order_id,
-        integration_id: paymentKeyRequest.integration_id,
-        redirect_callback: redirectCallbackUrl,
-        webhook_callback: webhookCallbackUrl,
-        billing_data: {
-          email: paymentKeyRequest.billing_data.email,
-          first_name: paymentKeyRequest.billing_data.first_name,
-          last_name: paymentKeyRequest.billing_data.last_name,
-          phone_number: paymentKeyRequest.billing_data.phone_number
-        }
-      });
+      // Payment key request prepared with callbacks
 
       const response = await fetch(`${this.config.baseUrl}/acceptance/payment_keys`, {
         method: 'POST',
@@ -304,7 +296,7 @@ class PaymobService {
       }
 
       const data = await response.json();
-      console.log('✅ Paymob payment key generated:', data.token);
+      // Payment key generated successfully
       return data;
     } catch (error) {
       console.error('❌ Paymob payment key error:', error);

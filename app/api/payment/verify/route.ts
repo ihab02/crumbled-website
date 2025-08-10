@@ -149,6 +149,12 @@ export async function POST(request: NextRequest) {
     // Send email notification for successful payments
     if (paymentStatus === 'paid') {
       try {
+        // Clear cart for successful payments
+        if (order.cart_id) {
+          await databaseService.query('DELETE FROM cart_items WHERE cart_id = ?', [order.cart_id]);
+          console.log(`🛒 Cart cleared for successful payment verification, order ${orderId}`);
+        }
+        
         // Get customer details
         const [customerResult] = await databaseService.query(
           `SELECT c.first_name, c.last_name, c.email, c.phone 

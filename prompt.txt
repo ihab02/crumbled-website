@@ -13,4 +13,4 @@ go through the whole workspace and study :
 12. how order creation api is working and how it is related to the payment api
 13. how the admin/orders work and how it prints the details of the order
 14. how the promo codes works
-15
+15. how the sales analytics works and how the performance enhancement is handled
