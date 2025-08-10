@@ -63,8 +63,13 @@ export async function POST(request: NextRequest) {
         );
         usageCount = (usageRows as any[])[0]?.usage_count || 0;
       } else if (customerEmail) {
+        // Guests are not stored in promo_code_usages. Approximate by counting orders placed
+        // by a customer with this email that used this promo code.
         [usageRows] = await db.execute(
-          'SELECT usage_count FROM promo_code_usages WHERE promo_code_id = ? AND guest_email = ?',
+          `SELECT COALESCE(COUNT(o.id), 0) AS usage_count
+           FROM orders o
+           JOIN customers c ON o.customer_id = c.id
+           WHERE o.promo_code_id = ? AND c.email = ?`,
           [promoCode.id, customerEmail]
         );
         usageCount = (usageRows as any[])[0]?.usage_count || 0;

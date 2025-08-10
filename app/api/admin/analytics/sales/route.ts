@@ -182,17 +182,16 @@ async function getRevenueAnalytics(startDate: string, endDate: string) {
       GROUP BY payment_method
     `, [startDate, endDate]);
 
-    // Revenue by zone
+    // Revenue by zone (orders stores zone as text; no FK column)
     const [zoneResult] = await connection.execute(`
       SELECT 
-        z.name as zone_name,
+        COALESCE(o.delivery_zone, 'Unknown') as zone_name,
         SUM(o.total) as revenue,
         COUNT(o.id) as orders
       FROM orders o
-      JOIN zones z ON o.delivery_zone_id = z.id
       WHERE o.status != 'cancelled' 
         AND DATE(o.created_at) BETWEEN ? AND ?
-      GROUP BY z.id, z.name
+      GROUP BY zone_name
       ORDER BY revenue DESC
     `, [startDate, endDate]);
 
@@ -274,10 +273,12 @@ async function getOrderAnalytics(startDate: string, endDate: string) {
     }));
 
     // Calculate completion and cancellation rates
+    // Use only finalized orders to avoid skew from in-progress/pending orders
     const deliveredOrders = statusData.find(s => s.status === 'delivered')?.count || 0;
     const cancelledOrders = statusData.find(s => s.status === 'cancelled')?.count || 0;
-    const completionRate = totalOrdersForPercentage > 0 ? (deliveredOrders / totalOrdersForPercentage) * 100 : 0;
-    const cancellationRate = totalOrdersForPercentage > 0 ? (cancelledOrders / totalOrdersForPercentage) * 100 : 0;
+    const finalizedOrders = deliveredOrders + cancelledOrders;
+    const completionRate = finalizedOrders > 0 ? (deliveredOrders / finalizedOrders) * 100 : 0;
+    const cancellationRate = finalizedOrders > 0 ? (cancelledOrders / finalizedOrders) * 100 : 0;
 
     // Orders by hour
     const [hourResult] = await connection.execute(`
@@ -471,15 +472,14 @@ async function getDeliveryAnalytics(startDate: string, endDate: string) {
     // Zone performance
     const [zonePerformanceResult] = await connection.execute(`
       SELECT 
-        z.name as zone_name,
+        COALESCE(o.delivery_zone, 'Unknown') as zone_name,
         SUM(o.total) as revenue,
         COUNT(o.id) as orders,
         AVG(TIMESTAMPDIFF(MINUTE, o.created_at, o.updated_at)) as avg_delivery_time
       FROM orders o
-      JOIN zones z ON o.delivery_zone_id = z.id
       WHERE o.status = 'delivered' 
         AND DATE(o.created_at) BETWEEN ? AND ?
-      GROUP BY z.id, z.name
+      GROUP BY zone_name
       ORDER BY revenue DESC
     `, [startDate, endDate]);
 
@@ -505,18 +505,28 @@ async function getPromotionAnalytics(startDate: string, endDate: string) {
         AND discount_amount > 0
     `, [startDate, endDate]);
 
-    // Promo code usage
+    // Promo code analytics
+    // usage_count comes from promo_code_usages (sum of usage_count per promo)
+    // revenue_generated comes from orders linked by orders.promo_code_id within date range
     const [promoUsageResult] = await connection.execute(`
       SELECT 
         pc.code,
-        COUNT(pcu.id) as usage_count,
-        SUM(o.total) as revenue_generated
+        COALESCE(u.usage_count, 0) AS usage_count,
+        COALESCE(r.revenue_generated, 0) AS revenue_generated
       FROM promo_codes pc
-      LEFT JOIN promo_code_usages pcu ON pc.id = pcu.promo_code_id
-      LEFT JOIN orders o ON pcu.order_id = o.id
-      WHERE DATE(pcu.created_at) BETWEEN ? AND ?
-        AND o.status != 'cancelled'
-      GROUP BY pc.id, pc.code
+      LEFT JOIN (
+        SELECT promo_code_id, SUM(usage_count) AS usage_count
+        FROM promo_code_usages
+        GROUP BY promo_code_id
+      ) u ON u.promo_code_id = pc.id
+      LEFT JOIN (
+        SELECT promo_code_id, SUM(total) AS revenue_generated
+        FROM orders
+        WHERE status != 'cancelled'
+          AND promo_code_id IS NOT NULL
+          AND DATE(created_at) BETWEEN ? AND ?
+        GROUP BY promo_code_id
+      ) r ON r.promo_code_id = pc.id
       ORDER BY usage_count DESC
       LIMIT 10
     `, [startDate, endDate]);
