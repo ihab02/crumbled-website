@@ -9,7 +9,8 @@
     "lint": "next lint",
     "generate-favicon": "node scripts/generate-favicon.js",
     "fix-review-stats": "node scripts/fix-review-statistics.js",
-    "fix-review-text": "node scripts/fix-review-text-nullable.js"
+    "fix-review-text": "node scripts/fix-review-text-nullable.js",
+    "cleanup-carts": "node scripts/cleanup-expired-carts.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

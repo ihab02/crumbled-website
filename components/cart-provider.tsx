@@ -75,8 +75,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true)
       debugLog('🔄 Fetching cart from API...')
       
-      const response = await fetch('/api/cart')
-      const data = await response.json()
+      // Try to fetch user cart first, fallback to session cart
+      let response = await fetch('/api/cart/user')
+      let data = await response.json()
+      
+      if (!response.ok || !data.success) {
+        // Fallback to session-based cart
+        debugLog('🔄 Falling back to session cart...')
+        response = await fetch('/api/cart')
+        data = await response.json()
+      }
       
       if (data.items) {
         setCart(data.items)
@@ -266,6 +274,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     fetchCart()
   }, []) // Empty dependency array to run only once
+
+  // Handle cart merging when user logs in
+  useEffect(() => {
+    const handleCartMerge = async () => {
+      try {
+        const response = await fetch('/api/cart/merge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.mergedItems > 0) {
+            debugLog('🔄 Cart merged successfully:', data.mergedItems, 'items merged');
+            // Refresh cart after merge
+            await fetchCart(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error merging cart:', error);
+      }
+    };
+
+    // Check if user is logged in and has cart items
+    if (cart.length > 0) {
+      // This will be called when the component mounts and user is logged in
+      // The actual merge logic is handled by the API
+      handleCartMerge();
+    }
+  }, [cart.length, fetchCart])
 
   // Cleanup timeouts on unmount
   useEffect(() => {

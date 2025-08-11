@@ -15,3 +15,4 @@ go through the whole workspace and study :
 14. how the promo codes works
 15. how the sales analytics works and how the performance enhancement is handled
 16. check how tiktok pixel is implemented
+17. check how delivey fees are calculated in the cart and checkout pages

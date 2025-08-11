@@ -7,15 +7,30 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { id, name, price, quantity, image, isBundle, bundleSize, bundleDiscount, bundleItems } = body
 
+    // Get user information from session
+    let userId: number | undefined;
+    
+    try {
+      const { getServerSession } = await import('next-auth');
+      const { authOptions } = await import('@/lib/auth-options');
+      const session = await getServerSession(authOptions);
+      
+      if (session?.user?.id) {
+        userId = parseInt(session.user.id as string);
+        console.log('POST /api/cart/add - User logged in:', userId);
+      }
+    } catch (error) {
+      console.log('POST /api/cart/add - No user session or auth error:', error);
+    }
+
     // Get cart ID from cookie
     const cookieStore = cookies()
-    const cartId = cookieStore.get('cart_id')?.value
+    let cartId = cookieStore.get('cart_id')?.value
 
     if (!cartId) {
-      return NextResponse.json({ 
-        success: false, 
-        error: "No cart found" 
-      }, { status: 400 })
+      // Create new cart with user association
+      const { getOrCreateCart } = await import('../route');
+      cartId = await getOrCreateCart(userId);
     }
 
     // Add item to cart

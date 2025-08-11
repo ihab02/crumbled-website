@@ -186,17 +186,17 @@ export default function NewCheckoutPage() {
   // Calculate effective delivery fee (considering free delivery promos)
   const effectiveDeliveryFee = appliedPromoCode?.enhanced_type === 'free_delivery' 
     ? 0 
-    : (deliveryFee || 0);
+    : (deliveryFee !== null ? deliveryFee : 0);
   
   // Debug logging for delivery fee calculation
-  if (deliveryFee !== null) {
-    debugLog('🔍 [DEBUG] Checkout - Delivery fee calculated:', {
-      deliveryFee: deliveryFee,
-      effectiveDeliveryFee: effectiveDeliveryFee,
-      hasFreeDeliveryPromo: appliedPromoCode?.enhanced_type === 'free_delivery',
-      promoCode: appliedPromoCode?.code
-    });
-  }
+  console.log('🔍 [DEBUG] Checkout - Delivery fee state:', {
+    deliveryFee: deliveryFee,
+    deliveryFeeType: typeof deliveryFee,
+    effectiveDeliveryFee: effectiveDeliveryFee,
+    hasFreeDeliveryPromo: appliedPromoCode?.enhanced_type === 'free_delivery',
+    promoCode: appliedPromoCode?.code,
+    shouldShowDeliveryFee: deliveryFee !== null
+  });
   
   const total = Math.max(0, Number(subtotal) + Number(effectiveDeliveryFee) - Number(promoDiscount));
 
@@ -282,6 +282,61 @@ export default function NewCheckoutPage() {
       fetchCurrentZoneRules();
     }
   }, [step, checkoutData, isLoggedIn, useNewAddress, selectedAddressId, selectedZone, newAddress.zone_id])
+
+  // Monitor delivery fee changes
+  useEffect(() => {
+    console.log('🔍 [DEBUG] Checkout - Delivery fee changed:', {
+      deliveryFee: deliveryFee,
+      deliveryFeeType: typeof deliveryFee,
+      selectedAddressId: selectedAddressId,
+      useNewAddress: useNewAddress,
+      timestamp: new Date().toISOString()
+    });
+  }, [deliveryFee, selectedAddressId, useNewAddress])
+
+  // Monitor checkout data changes
+  useEffect(() => {
+    if (checkoutData) {
+      console.log('🔍 [DEBUG] Checkout - Checkout data loaded:', {
+        userType: checkoutData.userType,
+        hasUser: !!checkoutData.user,
+        hasAddresses: !!checkoutData.user?.addresses,
+        addressCount: checkoutData.user?.addresses?.length || 0,
+        addresses: checkoutData.user?.addresses?.map((addr: any) => ({
+          id: addr.id,
+          name: addr.street_address,
+          deliveryFee: addr.delivery_fee,
+          deliveryFeeType: typeof addr.delivery_fee,
+          isDefault: addr.is_default
+        })) || [],
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [checkoutData])
+
+  // Set delivery fee when address is selected
+  useEffect(() => {
+    if (selectedAddressId && checkoutData?.user?.addresses && !useNewAddress) {
+      const selectedAddress = checkoutData.user.addresses.find(addr => addr.id === selectedAddressId);
+      if (selectedAddress) {
+        const deliveryFeeValue = Number(selectedAddress.delivery_fee);
+        if (!isNaN(deliveryFeeValue) && deliveryFee !== deliveryFeeValue) {
+          console.log('🔍 [DEBUG] Checkout - Address selected, setting delivery fee:', {
+            addressId: selectedAddress.id,
+            addressName: selectedAddress.street_address,
+            deliveryFee: selectedAddress.delivery_fee,
+            deliveryFeeType: typeof selectedAddress.delivery_fee,
+            currentDeliveryFee: deliveryFee,
+            newDeliveryFee: deliveryFeeValue
+          });
+          setDeliveryFee(deliveryFeeValue);
+        } else if (isNaN(deliveryFeeValue) && deliveryFee !== 0) {
+          console.error('🔍 [DEBUG] Checkout - Invalid delivery fee for selected address:', selectedAddress.delivery_fee);
+          setDeliveryFee(0);
+        }
+      }
+    }
+  }, [selectedAddressId, checkoutData, useNewAddress, deliveryFee])
 
   const fetchPaymentMethods = async () => {
     try {
@@ -370,14 +425,29 @@ export default function NewCheckoutPage() {
         if (result.data.userType === 'registered' && result.data.user?.addresses && result.data.user.addresses.length > 0) {
           const defaultAddress = result.data.user.addresses.find((addr: any) => addr.is_default) || result.data.user.addresses[0];
           if (defaultAddress) {
-            debugLog('🔍 [DEBUG] Checkout - Setting default address:', {
+            console.log('🔍 [DEBUG] Checkout - Setting default address:', {
               addressId: defaultAddress.id,
               addressName: defaultAddress.street_address,
               deliveryFee: defaultAddress.delivery_fee,
-              isDefault: defaultAddress.is_default
+              deliveryFeeType: typeof defaultAddress.delivery_fee,
+              isDefault: defaultAddress.is_default,
+              allAddresses: result.data.user.addresses.map((addr: any) => ({
+                id: addr.id,
+                name: addr.street_address,
+                deliveryFee: addr.delivery_fee,
+                deliveryFeeType: typeof addr.delivery_fee,
+                isDefault: addr.is_default
+              }))
             });
             setSelectedAddressId(defaultAddress.id);
-            setDeliveryFee(Number(defaultAddress.delivery_fee));
+            const deliveryFeeValue = Number(defaultAddress.delivery_fee);
+            console.log('🔍 [DEBUG] Checkout - Setting delivery fee to:', deliveryFeeValue, 'Type:', typeof deliveryFeeValue, 'Is NaN:', isNaN(deliveryFeeValue));
+            if (!isNaN(deliveryFeeValue)) {
+              setDeliveryFee(deliveryFeeValue);
+            } else {
+              console.error('🔍 [DEBUG] Checkout - Invalid delivery fee value:', defaultAddress.delivery_fee);
+              setDeliveryFee(0); // Set to 0 if invalid
+            }
           }
         } else if (result.data.userType === 'registered' && (!result.data.user?.addresses || result.data.user.addresses.length === 0)) {
           // Redirect to account page to add address if user has no addresses
@@ -1003,11 +1073,13 @@ export default function NewCheckoutPage() {
                                   checked={selectedAddressId === address.id && !useNewAddress}
                                   onChange={(e) => { 
                                     const addressId = Number(e.target.value);
-                                    debugLog('🔍 [DEBUG] Checkout - Address selected:', {
+                                    console.log('🔍 [DEBUG] Checkout - Address manually selected:', {
                                       addressId: addressId,
                                       addressName: address.street_address,
                                       deliveryFee: address.delivery_fee,
-                                      isDefault: address.is_default
+                                      isDefault: address.is_default,
+                                      currentSelectedAddressId: selectedAddressId,
+                                      useNewAddress: useNewAddress
                                     });
                                     setSelectedAddressId(addressId); 
                                     setUseNewAddress(false);
@@ -1025,6 +1097,12 @@ export default function NewCheckoutPage() {
                                       {address.city_name}, {address.zone_name}
                                     </p>
                                     <p className="text-sm text-gray-600">Delivery Fee: {address.delivery_fee} EGP</p>
+                                    {address.is_default && (
+                                      <p className="text-sm text-green-600 font-medium">✓ Default Address</p>
+                                    )}
+                                    {selectedAddressId === address.id && !useNewAddress && (
+                                      <p className="text-sm text-blue-600 font-medium">✓ Selected</p>
+                                    )}
                                   </div>
                                 </Label>
                               </div>
@@ -1438,11 +1516,12 @@ export default function NewCheckoutPage() {
                       <span>Subtotal</span>
                       <span>{subtotal.toFixed(2)} EGP</span>
                     </div>
-                    {deliveryFee !== null && (
+                    {/* Always show delivery fee when address is selected */}
+                    {(deliveryFee !== null || selectedAddressId) && (
                       <div className="flex justify-between">
                         <span>Delivery Fee</span>
                         <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
-                          {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                          {deliveryFee === null ? 'Calculating...' : (effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`)}
                         </span>
                       </div>
                     )}
@@ -1531,11 +1610,12 @@ export default function NewCheckoutPage() {
                       <span>Subtotal</span>
                       <span>{subtotal.toFixed(2)} EGP</span>
                     </div>
-                    {deliveryFee !== null && (
+                    {/* Always show delivery fee when address is selected - Step 2 */}
+                    {(deliveryFee !== null || selectedAddressId) && (
                       <div className="flex justify-between">
                         <span>Delivery Fee</span>
                         <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
-                          {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                          {deliveryFee === null ? 'Calculating...' : (effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`)}
                         </span>
                       </div>
                     )}

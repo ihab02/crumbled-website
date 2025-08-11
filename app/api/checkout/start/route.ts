@@ -69,20 +69,40 @@ interface CheckoutStartResponse {
 }
 
 // Helper function to get or create cart (same as cart API)
-async function getOrCreateCart(): Promise<string> {
+async function getOrCreateCart(userId?: number): Promise<string> {
   const cookieStore = cookies();
   let cartId = cookieStore.get('cart_id')?.value;
 
+  // Get cart settings for expiration
+  const cartSettings = await databaseService.query<{ cart_lifetime_days: number }[]>(
+    'SELECT cart_lifetime_days FROM cart_settings LIMIT 1'
+  );
+  const cartLifetimeDays = cartSettings?.[0]?.cart_lifetime_days || 7;
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + cartLifetimeDays);
+
   if (!cartId) {
     const sessionId = uuidv4();
-    const result = await databaseService.query<{ insertId: number }>(
-      'INSERT INTO carts (session_id, status, created_at) VALUES (?, "active", NOW())',
-      [sessionId]
-    );
+    let result: any;
+    
+    if (userId) {
+      // Create cart for logged-in user
+      result = await databaseService.query<{ insertId: number }>(
+        'INSERT INTO carts (user_id, session_id, status, created_at, expires_at) VALUES (?, ?, "active", NOW(), ?)',
+        [userId, sessionId, expiresAt]
+      );
+      console.log('Created new cart for user:', userId, 'Cart ID:', result.insertId);
+    } else {
+      // Create cart for guest user
+      result = await databaseService.query<{ insertId: number }>(
+        'INSERT INTO carts (session_id, status, created_at, expires_at) VALUES (?, "active", NOW(), ?)',
+        [sessionId, expiresAt]
+      );
+      console.log('Created new cart for guest. Cart ID:', result.insertId);
+    }
     
     cartId = result.insertId.toString();
     setCartCookie(cartId);
-    console.log('Created new cart:', cartId);
   } else {
     const cartExists = await databaseService.query(
       'SELECT * FROM carts WHERE id = ? AND status = "active"',
@@ -91,14 +111,36 @@ async function getOrCreateCart(): Promise<string> {
 
     if (!Array.isArray(cartExists) || cartExists.length === 0) {
       const sessionId = uuidv4();
-      const result = await databaseService.query<{ insertId: number }>(
-        'INSERT INTO carts (session_id, status, created_at) VALUES (?, "active", NOW())',
-        [sessionId]
-      );
+      let result: any;
+      
+      if (userId) {
+        // Create new cart for logged-in user
+        result = await databaseService.query<{ insertId: number }>(
+          'INSERT INTO carts (user_id, session_id, status, created_at, expires_at) VALUES (?, ?, "active", NOW(), ?)',
+          [userId, sessionId, expiresAt]
+        );
+        console.log('Created new cart for user (old one invalid):', userId, 'Cart ID:', result.insertId);
+      } else {
+        // Create new cart for guest user
+        result = await databaseService.query<{ insertId: number }>(
+          'INSERT INTO carts (session_id, status, created_at, expires_at) VALUES (?, "active", NOW(), ?)',
+          [sessionId, expiresAt]
+        );
+        console.log('Created new cart for guest (old one invalid). Cart ID:', result.insertId);
+      }
       
       cartId = result.insertId.toString();
       setCartCookie(cartId);
-      console.log('Created new cart (old one invalid):', cartId);
+    } else {
+      // Cart exists, update user_id if user is logged in and cart doesn't have user_id
+      const existingCart = cartExists[0];
+      if (userId && !existingCart.user_id) {
+        await databaseService.query(
+          'UPDATE carts SET user_id = ?, expires_at = ? WHERE id = ?',
+          [userId, expiresAt, cartId]
+        );
+        console.log('Updated cart with user_id:', userId, 'Cart ID:', cartId);
+      }
     }
   }
 
@@ -202,7 +244,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutS
       userType = 'guest';
     }
 
-    const cartId = await getOrCreateCart();
+    const cartId = await getOrCreateCart(userData?.id);
     
     console.log('🛒 Cart ID from cookies:', cartId)
     console.log('👤 Session user:', session?.user?.email)
