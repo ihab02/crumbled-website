@@ -367,7 +367,23 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const cartId = await getOrCreateCart();
+    // Get user information from session
+    let userId: number | undefined;
+    
+    try {
+      const { getServerSession } = await import('next-auth');
+      const { authOptions } = await import('@/lib/auth-options');
+      const session = await getServerSession(authOptions);
+      
+      if (session?.user?.id) {
+        userId = parseInt(session.user.id as string);
+        console.log('DELETE /api/cart - User logged in:', userId);
+      }
+    } catch (error) {
+      console.log('DELETE /api/cart - No user session or auth error:', error);
+    }
+    
+    const cartId = await getOrCreateCart(userId);
     const { itemId } = await request.json();
 
     if (!itemId) {

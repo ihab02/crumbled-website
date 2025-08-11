@@ -7,6 +7,7 @@ import { databaseService } from '@/lib/services/databaseService';
 import { paymobService } from '@/lib/services/paymobService';
 import { EmailService } from '@/lib/email-service';
 import { invalidateOrderAnalytics } from '@/lib/analytics-cache';
+import { getOrCreateCart } from '@/lib/cart-utils';
 
 interface CheckoutPaymentRequest {
   cartId?: string;
@@ -69,52 +70,7 @@ interface CheckoutPaymentResponse {
   error?: string;
 }
 
-// Helper function to get or create cart (same as cart API)
-async function getOrCreateCart(): Promise<string> {
-  const cookieStore = cookies();
-  let cartId = cookieStore.get('cart_id')?.value;
 
-  if (!cartId) {
-    const sessionId = uuidv4();
-    const result = await databaseService.query<{ insertId: number }>(
-      'INSERT INTO carts (session_id, status, created_at) VALUES (?, "active", NOW())',
-      [sessionId]
-    );
-    
-    cartId = result.insertId.toString();
-    setCartCookie(cartId);
-    console.log('Created new cart:', cartId);
-  } else {
-    const cartExists = await databaseService.query(
-      'SELECT * FROM carts WHERE id = ? AND status = "active"',
-      [cartId]
-    );
-
-    if (!Array.isArray(cartExists) || cartExists.length === 0) {
-      const sessionId = uuidv4();
-      const result = await databaseService.query<{ insertId: number }>(
-        'INSERT INTO carts (session_id, status, created_at) VALUES (?, "active", NOW())',
-        [sessionId]
-      );
-      
-      cartId = result.insertId.toString();
-      setCartCookie(cartId);
-      console.log('Created new cart (old one invalid):', cartId);
-    }
-  }
-
-  return cartId;
-}
-
-function setCartCookie(cartId: string) {
-  const cookieStore = cookies();
-  cookieStore.set('cart_id', cartId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60
-  });
-}
 
 // Real Paymob integration
 const generatePaymobPayment = async (orderData: any, customerInfo: any, orderId: number) => {
@@ -173,7 +129,15 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
   try {
     const session = await getServerSession(authOptions);
     const { paymentMethod, orderData, promoCodeId, discountAmount } = await request.json() as CheckoutPaymentRequest & { promoCodeId?: number, discountAmount?: number };
-    const cartId = await getOrCreateCart();
+    
+    // Get user ID from session
+    let userId: number | undefined;
+    if (session?.user?.id) {
+      userId = parseInt(session.user.id as string);
+      console.log('🔍 [DEBUG] Payment API - User logged in:', userId);
+    }
+    
+    const cartId = await getOrCreateCart(userId);
 
     // Validate request
     if (!cartId || !paymentMethod || !orderData) {
