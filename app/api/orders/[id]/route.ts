@@ -32,12 +32,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       );
     } else {
       // Guest user - get order without email restriction (for guest orders)
+      // Allow any order to be viewed on success page, regardless of customer type
       orderResult = await databaseService.query(
         `SELECT o.*, 
                 c.first_name, c.last_name, c.email as customer_email, c.phone as customer_phone, c.type as customer_type
          FROM orders o 
          JOIN customers c ON o.customer_id = c.id 
-         WHERE o.id = ? AND c.type = 'guest'`,
+         WHERE o.id = ?`,
         [orderId]
       );
     }

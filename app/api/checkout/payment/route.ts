@@ -687,12 +687,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         // Don't fail the order if email fails
       }
 
-      // Clear cart for successful COD orders
-      await databaseService.query('DELETE FROM cart_items WHERE cart_id = ?', [cartId]);
-      console.log('🔍 [DEBUG] Payment API - Cart cleared for successful COD order');
-
       // Invalidate analytics cache since new order was created
       await invalidateOrderAnalytics();
+
+      // Clear cart for successful COD orders - moved to after response
+      // This will be handled by the client after successful response
+      console.log('🔍 [DEBUG] Payment API - Order created successfully, cart will be cleared by client');
 
       return NextResponse.json({
         success: true,

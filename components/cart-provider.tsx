@@ -305,6 +305,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [cart.length, fetchCart])
 
+  // Listen for cart clearing events
+  useEffect(() => {
+    const handleCartCleared = () => {
+      debugLog('🔄 Cart cleared event received, refreshing cart...')
+      setCart([])
+      setCartCount(0)
+      setLastUpdated(new Date())
+      lastFetchRef.current = null // Reset cache
+    }
+
+    window.addEventListener('cartCleared', handleCartCleared)
+    
+    return () => {
+      window.removeEventListener('cartCleared', handleCartCleared)
+    }
+  }, [])
+
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {

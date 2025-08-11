@@ -23,6 +23,148 @@ import EnhancedCartItem from "@/components/EnhancedCartItem"
 
 export default function ConfirmPage() {
   const router = useRouter()
+  
+  // Add CSS for glowing effect and mobile layout fixes
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `
+      .glow-highlight {
+        animation: glowPulse 1.5s ease-in-out infinite;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.4);
+        border-color: #3b82f6 !important;
+        background-color: #eff6ff !important;
+      }
+      
+      .checkbox-pulse {
+        animation: checkboxPulse 1s ease-in-out infinite;
+        transform: scale(1.1);
+        transition: transform 0.3s ease;
+      }
+      
+      .checkbox-pulse + label {
+        color: #3b82f6 !important;
+        font-weight: 600 !important;
+        text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+      }
+      
+      @keyframes glowPulse {
+        0%, 100% {
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.6), 0 0 40px rgba(59, 130, 246, 0.4);
+        }
+        50% {
+          box-shadow: 0 0 30px rgba(59, 130, 246, 0.8), 0 0 60px rgba(59, 130, 246, 0.6);
+        }
+      }
+      
+      @keyframes checkboxPulse {
+        0%, 100% {
+          transform: scale(1.1);
+        }
+        50% {
+          transform: scale(1.2);
+        }
+      }
+      
+      /* Mobile layout fixes */
+      @media (max-width: 1023px) {
+        body {
+          overflow-x: hidden;
+        }
+        .sticky-footer-mobile {
+          position: fixed !important;
+          bottom: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          z-index: 9999 !important;
+          background: white !important;
+          border-top: 1px solid #e5e7eb !important;
+          padding: 1rem !important;
+          box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        /* Force mobile card layout */
+        .mobile-card {
+          width: 100% !important;
+          max-width: 100vw !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border-radius: 0.75rem !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+        }
+        
+        /* Force all card children to fit */
+        .mobile-card * {
+          box-sizing: border-box !important;
+          max-width: 100% !important;
+        }
+        
+        .mobile-card .card-header {
+          padding: 0.75rem !important;
+        }
+        
+        .mobile-card .card-content {
+          padding: 0.75rem !important;
+        }
+        
+        /* Override Card component default padding */
+        .mobile-card [class*="p-6"] {
+          padding: 0.75rem !important;
+        }
+        
+        /* Force override all Card component padding */
+        .mobile-card > div {
+          padding: 0.75rem !important;
+        }
+        
+        /* Override any p-6 classes */
+        .mobile-card .p-6 {
+          padding: 0.75rem !important;
+        }
+        
+        /* Ensure content fits */
+        .mobile-content {
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow-x: hidden !important;
+        }
+        
+        /* Responsive text sizing */
+        .mobile-text {
+          font-size: 0.875rem !important;
+          line-height: 1.25rem !important;
+        }
+        
+        /* Ensure proper spacing on small screens */
+        .mobile-spacing {
+          gap: 0.75rem !important;
+          padding: 0.75rem !important;
+        }
+      }
+      
+      /* Extra small mobile fixes */
+      @media (max-width: 480px) {
+        .mobile-card {
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        
+        .mobile-card .card-header,
+        .mobile-card .card-content {
+          padding: 0.5rem !important;
+        }
+        
+        .mobile-container {
+          padding: 0.25rem !important;
+        }
+      }
+    `
+    document.head.appendChild(style)
+    
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [])
   // State for all data loaded from localStorage
   const [checkoutData, setCheckoutData] = useState<any>(null)
   const [guestData, setGuestData] = useState<any>(null)
@@ -163,6 +305,17 @@ export default function ConfirmPage() {
     ? 0 
     : deliveryFee;
 
+  // Debug logging for button state
+  useEffect(() => {
+    console.log('🔍 [DEBUG] Button state:', {
+      placingOrder,
+      acknowledgeDeliveryRules,
+      selectedDeliveryDate,
+      deliveryDateInitialized,
+      isDisabled: placingOrder || !acknowledgeDeliveryRules || !selectedDeliveryDate || !deliveryDateInitialized
+    });
+  }, [placingOrder, acknowledgeDeliveryRules, selectedDeliveryDate, deliveryDateInitialized]);
+
   // Fetch delivery rules if not present
   useEffect(() => {
     if (!deliveryRules && currentZoneId) {
@@ -245,9 +398,124 @@ export default function ConfirmPage() {
       });
   }, []);
 
+  // Function to handle validation and show visual indicators
+  const handleValidationAndEffects = () => {
+    if (!acknowledgeDeliveryRules) {
+      // Auto-scroll to checkbox and add visual indicators with retry mechanism
+      const scrollToCheckbox = () => {
+        const checkbox = document.getElementById('acknowledge-rules')
+        if (checkbox) {
+          console.log('🔍 [DEBUG] Checkbox found, scrolling to it')
+          // Scroll to checkbox
+          checkbox.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          
+          // Add glowing effect immediately
+          const rulesSection = checkbox.closest('.delivery-rules-section')
+          if (rulesSection) {
+            rulesSection.classList.add('glow-highlight')
+            
+            // Add pulsing effect to the checkbox specifically
+            checkbox.classList.add('checkbox-pulse')
+            
+            // Remove effects after 5 seconds
+            setTimeout(() => {
+              rulesSection.classList.remove('glow-highlight')
+              checkbox.classList.remove('checkbox-pulse')
+            }, 5000)
+          }
+          return true
+        } else {
+          console.log('🔍 [DEBUG] Checkbox not found, will retry')
+          return false
+        }
+      }
+
+      // Try to scroll immediately
+      let scrollSuccess = scrollToCheckbox()
+      
+      // If first attempt fails, retry after a short delay
+      if (!scrollSuccess) {
+        setTimeout(() => {
+          scrollToCheckbox()
+        }, 100)
+      }
+      
+      // Show toast with shorter duration
+      toast.error('Please check the box below to acknowledge delivery rules before placing your order', {
+        duration: 3000,
+        position: 'top-center',
+        style: {
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          color: '#dc2626',
+          marginTop: '20px',
+          zIndex: 9999
+        }
+      })
+      return false
+    }
+    return true
+  }
+
   // Place order logic (copy from original step 3)
   const placeOrder = async () => {
-    if (!checkoutData) return
+    console.log('🔍 [DEBUG] placeOrder function called')
+    if (!checkoutData) {
+      console.log('🔍 [DEBUG] No checkout data, returning')
+      return
+    }
+    
+    console.log('🔍 [DEBUG] Checkout data:', {
+      cartItems: checkoutData.cart?.items?.length,
+      cartTotal: checkoutData.cart?.total,
+      userType: checkoutData.userType
+    })
+    
+    // Check if cart has items
+    if (!checkoutData.cart?.items || checkoutData.cart.items.length === 0) {
+      console.log('🔍 [DEBUG] Cart is empty, trying to refresh cart data')
+      
+      // Try to refresh cart data from API
+      try {
+        const cartResponse = await fetch('/api/cart')
+        const cartData = await cartResponse.json()
+        
+        if (cartData.items && cartData.items.length > 0) {
+          console.log('🔍 [DEBUG] Cart refreshed successfully, updating checkout data')
+          const updatedCheckoutData = {
+            ...checkoutData,
+            cart: {
+              items: cartData.items,
+              total: cartData.total,
+              itemCount: cartData.itemCount
+            }
+          }
+          setCheckoutData(updatedCheckoutData)
+          localStorage.setItem('checkoutData', JSON.stringify(updatedCheckoutData))
+          
+          // Continue with order placement
+          console.log('🔍 [DEBUG] Continuing with order placement after cart refresh')
+        } else {
+          console.log('🔍 [DEBUG] Cart is still empty after refresh')
+          toast.error('Cart is empty. Please add items to your cart and try again.', {
+            position: 'top-center',
+            duration: 4000
+          })
+          setPlacingOrder(false)
+          return
+        }
+               } catch (error) {
+           console.log('🔍 [DEBUG] Error refreshing cart:', error)
+           toast.error('Unable to refresh cart. Please refresh the page and try again.', {
+             position: 'top-center',
+             duration: 4000
+           })
+           setPlacingOrder(false)
+           return
+         }
+    }
+    
+    console.log('🔍 [DEBUG] Starting order placement')
     setPlacingOrder(true)
     try {
       const requestData = {
@@ -317,6 +585,45 @@ export default function ConfirmPage() {
             }
           } catch {}
           toast.success('Order placed successfully!')
+          
+          // Clear cart after successful order placement
+          try {
+            console.log('🔍 [DEBUG] Attempting to clear cart...')
+            
+            // Try DELETE first, then POST as fallback
+            let clearResponse = await fetch('/api/cart/clear', { method: 'DELETE' })
+            if (!clearResponse.ok) {
+              console.log('🔍 [DEBUG] DELETE failed, trying POST...')
+              clearResponse = await fetch('/api/cart/clear', { method: 'POST' })
+            }
+            
+            const clearResult = await clearResponse.json()
+            console.log('🔍 [DEBUG] Cart clear response:', clearResponse.status, clearResult)
+            
+            if (clearResponse.ok && clearResult.success) {
+              console.log('🔍 [DEBUG] Cart cleared successfully after order placement')
+              
+              // Also clear localStorage cart data
+              localStorage.removeItem('checkoutData')
+              console.log('🔍 [DEBUG] Checkout data cleared from localStorage')
+              
+              // Force refresh cart provider by triggering a cart update
+              window.dispatchEvent(new CustomEvent('cartCleared'))
+              console.log('🔍 [DEBUG] Cart cleared event dispatched')
+              
+              // Also try to refresh cart provider directly
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('cartCleared'))
+                console.log('🔍 [DEBUG] Second cart cleared event dispatched')
+              }, 100)
+            } else {
+              console.error('🔍 [DEBUG] Cart clear failed:', clearResult.error)
+            }
+          } catch (error) {
+            console.error('🔍 [DEBUG] Error clearing cart:', error)
+            // Don't fail the order if cart clearing fails
+          }
+          
           router.push(`/checkout/success?orderId=${paymentResult.data?.orderId}`)
         } else if (paymentMethod === 'paymob' && paymentResult.data?.paymentToken) {
           // Create a form and submit it as POST to Paymob (required) - NO SOURCE FIELD FOR CARD PAYMENTS
@@ -352,23 +659,34 @@ export default function ConfirmPage() {
   const finalTotal = Math.max(0, Number(subtotal) + Number(effectiveDeliveryFee) - Number(promoDiscount));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 p-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="border-2 border-pink-200 rounded-3xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-pink-800">
-                  <CheckCircle className="h-5 w-5" />
-                  Confirm & Place Order
-                </CardTitle>
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-pink-100 p-2 sm:p-4 pb-32 lg:pb-4 mobile-container">
+      <div className="max-w-5xl mx-auto w-full mobile-content">
+        <div className="grid gap-4 sm:gap-8 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6 w-full">
+            <div className="w-full max-w-full overflow-hidden">
+              <Card className="border-2 border-pink-200 rounded-3xl w-full mobile-card">
+              <CardHeader className="p-4 sm:p-6 card-header">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-pink-800 text-base sm:text-lg">
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                    Review Order
+                  </CardTitle>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => router.push('/checkout-new')}
+                    disabled={placingOrder}
+                    className="lg:hidden text-sm px-3 py-2"
+                  >
+                    Back
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 card-content">
                 {/* Order Summary */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Order Summary</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Order Summary</h3>
                   {/* Delivery Information */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <h4 className="font-medium text-gray-900 mb-2">Delivery Information</h4>
                     {checkoutData.userType === 'registered' && checkoutData.user ? (
                       <div>
@@ -433,9 +751,9 @@ export default function ConfirmPage() {
                     </p>
                   </div>
                   {/* Cart Items */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-gray-900 mb-2">Items</h4>
-                    <div className="space-y-4">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                    <h4 className="font-medium text-gray-900 mb-2 text-sm sm:text-base">Items</h4>
+                    <div className="space-y-3 sm:space-y-4">
                       {checkoutData.cart?.items.map((item: any) => (
                         <EnhancedCartItem
                           key={item.id}
@@ -448,7 +766,7 @@ export default function ConfirmPage() {
                     </div>
                   </div>
                   {/* Totals */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span>Subtotal</span>
@@ -512,7 +830,7 @@ export default function ConfirmPage() {
                   />
                 </div>
                 {/* Delivery Rules Section */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 delivery-rules-section transition-all duration-300">
                   <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
                     Delivery Rules & Conditions
@@ -585,6 +903,13 @@ export default function ConfirmPage() {
                           I understand that delivery will be made according to the specified time frame and conditions.
                         </label>
                       </div>
+                      {!acknowledgeDeliveryRules && (
+                        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-sm text-yellow-800 font-medium">
+                            ⚠️ Please check this box to acknowledge delivery rules before placing your order
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center py-4">
@@ -593,8 +918,8 @@ export default function ConfirmPage() {
                     </div>
                   )}
                 </div>
-                {/* Action Buttons */}
-                <div className="flex justify-between mt-8">
+                {/* Action Buttons - Hidden on mobile, shown in sticky footer */}
+                <div className="hidden lg:flex justify-between mt-8">
                   <Button 
                     variant="outline" 
                     onClick={() => router.push('/checkout-new')}
@@ -603,8 +928,26 @@ export default function ConfirmPage() {
                     Back
                   </Button>
                   <Button
-                    onClick={placeOrder}
-                    disabled={placingOrder || !acknowledgeDeliveryRules || !selectedDeliveryDate || !deliveryDateInitialized}
+                    onClick={() => {
+                      console.log('🔍 [DEBUG] Desktop button clicked')
+                      if (placingOrder) {
+                        return
+                      }
+                      
+                      if (!acknowledgeDeliveryRules) {
+                        handleValidationAndEffects()
+                        return
+                      }
+                      if (!selectedDeliveryDate || !deliveryDateInitialized) {
+                        toast.error('Please select a delivery date', {
+                          position: 'top-center',
+                          duration: 3000
+                        })
+                        return
+                      }
+                      placeOrder()
+                    }}
+                    disabled={placingOrder}
                     className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-8 py-3 text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {placingOrder ? (
@@ -619,6 +962,53 @@ export default function ConfirmPage() {
                 </div>
               </CardContent>
             </Card>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Sticky Footer for Mobile */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 sm:p-4 lg:hidden z-[9999] shadow-lg sticky-footer-mobile">
+        <div className="flex flex-col space-y-3 max-w-5xl mx-auto w-full px-2 sm:px-4">
+          {/* Total Display */}
+          <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
+            <span className="font-semibold text-gray-900 text-sm sm:text-base">Total:</span>
+            <span className="font-bold text-base sm:text-lg text-pink-600">{finalTotal.toFixed(2)} EGP</span>
+          </div>
+          {/* Action Buttons */}
+          <div className="flex justify-between items-center">
+            <Button
+              onClick={() => {
+                console.log('🔍 [DEBUG] Mobile button clicked')
+                if (placingOrder) {
+                  return
+                }
+                
+                if (!acknowledgeDeliveryRules) {
+                  handleValidationAndEffects()
+                  return
+                }
+                if (!selectedDeliveryDate || !deliveryDateInitialized) {
+                  toast.error('Please select a delivery date', {
+                    position: 'top-center',
+                    duration: 3000
+                  })
+                  return
+                }
+                placeOrder()
+              }}
+              disabled={placingOrder}
+              className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 rounded-full px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {placingOrder ? (
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 animate-spin" />
+                  {paymentMethod === 'cod' ? 'Placing...' : 'Processing...'}
+                </div>
+              ) : (
+                paymentMethod === 'cod' ? 'Place Order' : 'Pay Now'
+              )}
+            </Button>
           </div>
         </div>
       </div>

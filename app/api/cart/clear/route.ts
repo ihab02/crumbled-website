@@ -3,6 +3,14 @@ import { cookies } from 'next/headers'
 import { databaseService } from '@/lib/services/databaseService'
 
 export async function DELETE(request: Request) {
+  return clearCart()
+}
+
+export async function POST(request: Request) {
+  return clearCart()
+}
+
+async function clearCart() {
   try {
     // Get cart ID from cookie
     const cookieStore = cookies()
