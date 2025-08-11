@@ -71,6 +71,20 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       const data = await response.json();
       
       if (data.success) {
+        // TikTok Pixel - AddToCart Event
+        if (typeof window !== 'undefined' && window.ttq && product) {
+          const totalPrice = product.base_price * quantity;
+          
+          window.ttq.track('AddToCart', {
+            content_type: 'product',
+            content_id: product.id.toString(),
+            content_name: product.name,
+            currency: 'EGP',
+            value: totalPrice,
+            quantity: quantity
+          });
+        }
+        
         toast.success('Added to cart');
         router.push('/cart');
       } else {

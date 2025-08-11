@@ -393,6 +393,22 @@ export default function PackProductPage() {
       
       const data = await response.json();
       if (data.success) {
+        // TikTok Pixel - AddToCart Event
+        if (typeof window !== 'undefined' && window.ttq) {
+          const totalFlavorPrice = selectedFlavors.reduce((sum, flavor) => sum + (flavor.price * flavor.quantity), 0);
+          const basePrice = parseFloat(product.base_price);
+          const totalPrice = (basePrice + totalFlavorPrice) * quantity;
+          
+          window.ttq.track('AddToCart', {
+            content_type: 'product',
+            content_id: product.id.toString(),
+            content_name: product.name,
+            currency: 'EGP',
+            value: totalPrice,
+            quantity: quantity
+          });
+        }
+        
         toast.success('Added to cart!');
         setShowConfirmation(true);
       } else {

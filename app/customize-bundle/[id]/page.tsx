@@ -230,6 +230,20 @@ export default function CustomizeBundlePage() {
 
       const data = await response.json();
       if (data.success) {
+        // TikTok Pixel - AddToCart Event
+        if (typeof window !== 'undefined' && window.ttq && bundle) {
+          const totalPrice = bundle.price || 0;
+          
+          window.ttq.track('AddToCart', {
+            content_type: 'product',
+            content_id: bundle.id.toString(),
+            content_name: bundle.name,
+            currency: 'EGP',
+            value: totalPrice,
+            quantity: 1
+          });
+        }
+        
         router.push("/cart");
       } else {
         throw new Error(data.error || 'Failed to add to cart');
