@@ -131,7 +131,7 @@ export default function NewCheckoutPage() {
   const [saveNewAddress, setSaveNewAddress] = useState(false)
   const [selectedCity, setSelectedCity] = useState<string>('1')
   const [selectedZone, setSelectedZone] = useState<string>('')
-  const [deliveryFee, setDeliveryFee] = useState(50)
+  const [deliveryFee, setDeliveryFee] = useState<number | null>(null)
   const [phoneError, setPhoneError] = useState<string>('')
   const [emailError, setEmailError] = useState<string>('')
   const [otpModalOpen, setOtpModalOpen] = useState(false)
@@ -186,7 +186,7 @@ export default function NewCheckoutPage() {
   // Calculate effective delivery fee (considering free delivery promos)
   const effectiveDeliveryFee = appliedPromoCode?.enhanced_type === 'free_delivery' 
     ? 0 
-    : deliveryFee;
+    : (deliveryFee || 0);
   
   const total = Math.max(0, Number(subtotal) + Number(effectiveDeliveryFee) - Number(promoDiscount));
 
@@ -618,8 +618,8 @@ export default function NewCheckoutPage() {
     if (selectedCity && checkoutData) {
       const city = checkoutData.cities.find(c => c.id.toString() === selectedCity)
       if (city) {
-        setSelectedZone('')
-        setDeliveryFee(50)
+              setSelectedZone('')
+      setDeliveryFee(null)
       }
     }
   }, [selectedCity, checkoutData])
@@ -1415,12 +1415,14 @@ export default function NewCheckoutPage() {
                       <span>Subtotal</span>
                       <span>{subtotal.toFixed(2)} EGP</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Delivery Fee</span>
-                      <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
-                        {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
-                      </span>
-                    </div>
+                    {deliveryFee !== null && (
+                      <div className="flex justify-between">
+                        <span>Delivery Fee</span>
+                        <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
+                          {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                        </span>
+                      </div>
+                    )}
                   {appliedPromoCode && (
                     <div className="flex justify-between text-green-700">
                       <span>Promo Discount</span>
@@ -1506,12 +1508,14 @@ export default function NewCheckoutPage() {
                       <span>Subtotal</span>
                       <span>{subtotal.toFixed(2)} EGP</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Delivery Fee</span>
-                      <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
-                        {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
-                      </span>
-                    </div>
+                    {deliveryFee !== null && (
+                      <div className="flex justify-between">
+                        <span>Delivery Fee</span>
+                        <span className={effectiveDeliveryFee === 0 ? 'text-green-600 font-semibold' : ''}>
+                          {effectiveDeliveryFee === 0 ? 'FREE' : `${Number(effectiveDeliveryFee).toFixed(2)} EGP`}
+                        </span>
+                      </div>
+                    )}
                   {appliedPromoCode && (
                     <div className="flex justify-between text-green-700">
                       <span>Promo Discount</span>

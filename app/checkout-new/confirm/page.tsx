@@ -443,18 +443,20 @@ export default function ConfirmPage() {
                         <span>Subtotal</span>
                         <span>{subtotal.toFixed(2)} EGP</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span>Delivery Fee</span>
-                        <span>
-                          {effectiveDeliveryFee === 0 ? (
-                            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 font-semibold">
-                              FREE DELIVERY
-                            </Badge>
-                          ) : (
-                            `${Number(effectiveDeliveryFee).toFixed(2)} EGP`
-                          )}
-                        </span>
-                      </div>
+                      {deliveryFee !== null && (
+                        <div className="flex justify-between">
+                          <span>Delivery Fee</span>
+                          <span>
+                            {effectiveDeliveryFee === 0 ? (
+                              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 font-semibold">
+                                FREE DELIVERY
+                              </Badge>
+                            ) : (
+                              `${Number(effectiveDeliveryFee).toFixed(2)} EGP`
+                            )}
+                          </span>
+                        </div>
+                      )}
                       {promoDiscount > 0 && (
                         <div className="flex justify-between">
                           <span>Discount</span>

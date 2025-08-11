@@ -14,3 +14,4 @@ go through the whole workspace and study :
 13. how the admin/orders work and how it prints the details of the order
 14. how the promo codes works
 15. how the sales analytics works and how the performance enhancement is handled
+16. check how tiktok pixel is implemented

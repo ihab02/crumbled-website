@@ -162,9 +162,8 @@ export default function CartPage() {
   }
 
   const subtotal = calculateCartTotal()
-  const shippingCost = subtotal > 500 ? 0 : 50
   const promoDiscount = appliedPromoCode ? appliedPromoCode.discount_amount : 0
-  const total = subtotal + shippingCost - promoDiscount
+  const total = subtotal - promoDiscount
 
   const handleUpdateQuantity = async (itemId: number, newQuantity: number) => {
     if (newQuantity < 1) return
@@ -464,10 +463,10 @@ export default function CartPage() {
                     <span>Subtotal</span>
                     <span>{subtotal.toFixed(2)} EGP</span>
                   </div>
-                  <div className="flex justify-between text-xs sm:text-sm">
+                  {/* <div className="flex justify-between text-xs sm:text-sm">
                     <span>Shipping</span>
                     <span>{shippingCost.toFixed(2)} EGP</span>
-                  </div>
+                  </div> */}
                   {promoDiscount > 0 && (
                     <div className="flex justify-between text-xs sm:text-sm text-green-600">
                       <span>Promo Discount</span>
