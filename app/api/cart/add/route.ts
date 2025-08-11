@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { databaseService } from '@/lib/services/databaseService'
+import { getOrCreateCart } from '@/lib/cart-utils'
 
 export async function POST(request: Request) {
   try {
@@ -29,7 +30,6 @@ export async function POST(request: Request) {
 
     if (!cartId) {
       // Create new cart with user association
-      const { getOrCreateCart } = await import('../route');
       cartId = await getOrCreateCart(userId);
     }
 

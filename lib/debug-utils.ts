@@ -3,18 +3,7 @@
  * These functions use direct database access and should only be used in server-side code
  */
 
-import mysql from 'mysql2/promise';
-
-// Create a connection pool for debug mode checks
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'Goodmorning@1',
-  database: 'crumbled_nextDB',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+import pool from '@/lib/db';
 
 // Cache for debug mode to avoid frequent database queries
 let debugModeCache: boolean | null = null;
@@ -32,8 +21,10 @@ export async function getDebugMode(): Promise<boolean> {
     return debugModeCache;
   }
 
+  let connection;
   try {
-    const [rows] = await pool.query('SELECT debug_mode FROM cart_settings LIMIT 1');
+    connection = await pool.getConnection();
+    const [rows] = await connection.query('SELECT debug_mode FROM cart_settings LIMIT 1');
     const settings = rows[0] as any;
     
     debugModeCache = settings?.debug_mode === 1 || settings?.debug_mode === true;
@@ -44,6 +35,10 @@ export async function getDebugMode(): Promise<boolean> {
     console.error('Error fetching debug mode:', error);
     // Return false as fallback
     return false;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }
 

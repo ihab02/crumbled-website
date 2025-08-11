@@ -40,6 +40,7 @@ export const databaseService = {
       const [result] = await connection.query('SELECT NOW() as `current_time`, VERSION() as mysql_version');
       return {
         success: true,
+        message: "Database connected successfully",
         data: result[0]
       };
     } catch (error) {
@@ -53,5 +54,16 @@ export const databaseService = {
         connection.release();
       }
     }
+  },
+
+  // Add method to get pool statistics
+  getPoolStats() {
+    return {
+      threadId: pool.threadId,
+      config: {
+        connectionLimit: pool.config.connectionLimit,
+        queueLimit: pool.config.queueLimit
+      }
+    };
   }
 }; 

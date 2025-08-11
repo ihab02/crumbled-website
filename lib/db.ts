@@ -7,12 +7,29 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD || 'Goodmorning@1',
   database: process.env.DB_NAME || 'crumbled_nextDB',
   waitForConnections: true,
-  connectionLimit: 10, // Reduced from 50 to prevent too many connections
-  queueLimit: 0,
+  connectionLimit: 25, // Increased for better concurrent user support
+  queueLimit: 30, // Increased queue for traffic spikes
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000, // 10 seconds
-  idleTimeout: 60000, // 1 minute
-  maxIdle: 5 // Maximum number of idle connections to keep
+  idleTimeout: 60000, // 60 seconds - good balance
+  maxIdle: 12 // Increased for better connection reuse
+});
+
+// Add connection pool event listeners for monitoring
+pool.on('connection', (connection) => {
+  console.log('🔗 [DB] New connection established');
+});
+
+pool.on('acquire', (connection) => {
+  console.log('🔗 [DB] Connection acquired from pool');
+});
+
+pool.on('release', (connection) => {
+  console.log('🔗 [DB] Connection released back to pool');
+});
+
+pool.on('enqueue', () => {
+  console.log('⚠️ [DB] Waiting for available connection slot');
 });
 
 // Test connection function
