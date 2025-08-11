@@ -188,6 +188,16 @@ export default function NewCheckoutPage() {
     ? 0 
     : (deliveryFee || 0);
   
+  // Debug logging for delivery fee calculation
+  if (deliveryFee !== null) {
+    debugLog('🔍 [DEBUG] Checkout - Delivery fee calculated:', {
+      deliveryFee: deliveryFee,
+      effectiveDeliveryFee: effectiveDeliveryFee,
+      hasFreeDeliveryPromo: appliedPromoCode?.enhanced_type === 'free_delivery',
+      promoCode: appliedPromoCode?.code
+    });
+  }
+  
   const total = Math.max(0, Number(subtotal) + Number(effectiveDeliveryFee) - Number(promoDiscount));
 
   // Validation function for step 1
@@ -360,6 +370,12 @@ export default function NewCheckoutPage() {
         if (result.data.userType === 'registered' && result.data.user?.addresses && result.data.user.addresses.length > 0) {
           const defaultAddress = result.data.user.addresses.find((addr: any) => addr.is_default) || result.data.user.addresses[0];
           if (defaultAddress) {
+            debugLog('🔍 [DEBUG] Checkout - Setting default address:', {
+              addressId: defaultAddress.id,
+              addressName: defaultAddress.street_address,
+              deliveryFee: defaultAddress.delivery_fee,
+              isDefault: defaultAddress.is_default
+            });
             setSelectedAddressId(defaultAddress.id);
             setDeliveryFee(Number(defaultAddress.delivery_fee));
           }
@@ -986,7 +1002,14 @@ export default function NewCheckoutPage() {
                                   value={address.id}
                                   checked={selectedAddressId === address.id && !useNewAddress}
                                   onChange={(e) => { 
-                                    setSelectedAddressId(Number(e.target.value)); 
+                                    const addressId = Number(e.target.value);
+                                    debugLog('🔍 [DEBUG] Checkout - Address selected:', {
+                                      addressId: addressId,
+                                      addressName: address.street_address,
+                                      deliveryFee: address.delivery_fee,
+                                      isDefault: address.is_default
+                                    });
+                                    setSelectedAddressId(addressId); 
                                     setUseNewAddress(false);
                                     setDeliveryFee(Number(address.delivery_fee));
                                   }}

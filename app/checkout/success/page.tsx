@@ -63,14 +63,21 @@ export default function CheckoutSuccessPage() {
             
             // TikTok Pixel - Identify + Purchase Event
             if (typeof window !== 'undefined' && window.ttq) {
+              debugLog('🔍 [DEBUG] Success page - TikTok Pixel available, preparing CompletePayment event')
+              
               const emailNorm = normalizeEmail(data.order.customer_email)
               const phoneNorm = normalizeEgyptPhone(data.order.customer_phone)
+              
+              debugLog('🔍 [DEBUG] Success page - Customer identifiers:', { email: emailNorm, phone: phoneNorm })
+              
               if (emailNorm || phoneNorm) {
+                debugLog('🔍 [DEBUG] Success page - Calling ttq.identify')
                 window.ttq.identify({
                   ...(emailNorm ? { email: emailNorm } : {}),
                   ...(phoneNorm ? { phone_number: phoneNorm } : {}),
                 })
               }
+              
               const eventData: any = {
                 content_type: 'product',
                 currency: 'EGP',
@@ -89,7 +96,14 @@ export default function CheckoutSuccessPage() {
               if (emailNorm) eventData.email = emailNorm
               if (phoneNorm) eventData.phone_number = phoneNorm
               
+              debugLog('🔍 [DEBUG] Success page - CompletePayment event data:', eventData)
+              debugLog('🔍 [DEBUG] Success page - Firing CompletePayment event')
+              
               window.ttq.track('CompletePayment', eventData);
+              
+              debugLog('🔍 [DEBUG] Success page - CompletePayment event fired successfully')
+            } else {
+              debugLog('❌ [DEBUG] Success page - TikTok Pixel not available for CompletePayment')
             }
           } else {
             debugLog('❌ [DEBUG] Success page - Failed to load order details:', data.error)
@@ -109,14 +123,21 @@ export default function CheckoutSuccessPage() {
             
             // TikTok Pixel - Identify + Purchase Event
             if (typeof window !== 'undefined' && window.ttq) {
+              debugLog('🔍 [DEBUG] Success page - TikTok Pixel available (localStorage), preparing CompletePayment event')
+              
               const emailNorm = normalizeEmail(orderData.customer_email)
               const phoneNorm = normalizeEgyptPhone(orderData.customer_phone)
+              
+              debugLog('🔍 [DEBUG] Success page - Customer identifiers (localStorage):', { email: emailNorm, phone: phoneNorm })
+              
               if (emailNorm || phoneNorm) {
+                debugLog('🔍 [DEBUG] Success page - Calling ttq.identify (localStorage)')
                 window.ttq.identify({
                   ...(emailNorm ? { email: emailNorm } : {}),
                   ...(phoneNorm ? { phone_number: phoneNorm } : {}),
                 })
               }
+              
               const eventData: any = {
                 content_type: 'product',
                 currency: 'EGP',
@@ -133,7 +154,14 @@ export default function CheckoutSuccessPage() {
               if (emailNorm) eventData.email = emailNorm
               if (phoneNorm) eventData.phone_number = phoneNorm
               
+              debugLog('🔍 [DEBUG] Success page - CompletePayment event data (localStorage):', eventData)
+              debugLog('🔍 [DEBUG] Success page - Firing CompletePayment event (localStorage)')
+              
               window.ttq.track('CompletePayment', eventData);
+              
+              debugLog('🔍 [DEBUG] Success page - CompletePayment event fired successfully (localStorage)')
+            } else {
+              debugLog('❌ [DEBUG] Success page - TikTok Pixel not available for CompletePayment (localStorage)')
             }
           } else {
             debugLog('🔍 [DEBUG] Success page - No order info found anywhere')

@@ -67,7 +67,12 @@ export default function ConfirmPage() {
     setCheckoutData(loadedCheckoutData)
     
     // TikTok Pixel - InitiateCheckout Event
+    console.log('🔍 Debug - Checkout Data:', loadedCheckoutData);
+    console.log('🔍 Debug - Cart Total:', loadedCheckoutData?.cart?.total);
+    console.log('🔍 Debug - TikTok Pixel:', typeof window !== 'undefined' ? window.ttq : 'Window not available');
+    
     if (loadedCheckoutData?.cart?.total && typeof window !== 'undefined' && window.ttq) {
+      console.log('🔍 Debug - Firing InitiateCheckout event');
       window.ttq.track('InitiateCheckout', {
         content_type: 'product',
         currency: 'EGP',
@@ -78,6 +83,12 @@ export default function ConfirmPage() {
           quantity: item.quantity,
           price: item.total / item.quantity
         })) || []
+      });
+    } else {
+      console.log('🔍 Debug - InitiateCheckout conditions not met:', {
+        hasCartTotal: !!loadedCheckoutData?.cart?.total,
+        hasWindow: typeof window !== 'undefined',
+        hasTikTok: typeof window !== 'undefined' ? !!window.ttq : false
       });
     }
     
