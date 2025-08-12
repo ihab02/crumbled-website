@@ -283,13 +283,37 @@ export default function AdminOrdersPage() {
   };
 
   const printMultipleOrders = async (orderIds: number[]) => {
-    // For now, just print the first order
-    // In a real implementation, you might want to create a combined PDF
-    if (orderIds.length > 0) {
-      const order = orders.find(o => o.id === orderIds[0]);
-      if (order) {
-        printOrder(order);
+    try {
+      const response = await fetch('/api/admin/orders/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderIds,
+          type: orderIds.length > 1 ? 'bulk' : 'single'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
       }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orders-${orderIds.join('-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success(`PDF generated for ${orderIds.length} order(s)`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
     }
   };
 
@@ -483,116 +507,38 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const printOrder = (order: Order) => {
-    if (printRef.current) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Order #${order.id} - Crumbled</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .logo { max-width: 200px; margin-bottom: 10px; }
-                .order-info { margin-bottom: 20px; }
-                .customer-info { margin-bottom: 20px; }
-                .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                .items-table th, .items-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                .items-table th { background-color: #f8f9fa; }
-                .total { font-weight: bold; font-size: 18px; text-align: right; }
-                .flavor-details { font-size: 12px; color: #666; margin-left: 10px; }
-                @media print { body { margin: 0; } }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <img src="/images/logo-no-background.png" alt="Crumbled Logo" class="logo">
-                <h1>Order #${order.id}</h1>
-                <p>Date: ${new Date(order.created_at).toLocaleString()}</p>
-              </div>
-              
-              <div class="order-info">
-                <h3>Order Information</h3>
-                <p><strong>Status:</strong> ${order.order_status || order.status}</p>
-                <p><strong>Payment Method:</strong> ${order.payment_method}</p>
-                ${order.expected_delivery_date ? `<p><strong>Expected Delivery:</strong> ${new Date(order.expected_delivery_date).toLocaleDateString()}</p>` : ''}
-                ${order.delivery_time_slot_name ? `<p><strong>Time Slot:</strong> ${order.delivery_time_slot_name}</p>` : ''}
-                ${order.from_hour && order.to_hour ? `<p><strong>Hours:</strong> ${order.from_hour.substring(0, 5)} - ${order.to_hour.substring(0, 5)}</p>` : ''}
-              </div>
-              
-              <div class="price-breakdown">
-                <h3>Price Breakdown</h3>
-                <p><strong>Subtotal:</strong> EGP ${(Number(order.subtotal) || 0).toFixed(2)}</p>
-                <p><strong>Delivery Fee:</strong> EGP ${(Number(order.delivery_fee) || 0).toFixed(2)}</p>
-                <p><strong>Discount ${order.promo_code ? `(${order.promo_code})` : ''}:</strong> -EGP ${(Number(order.discount_amount) || 0).toFixed(2)}</p>
-                <p><strong>Total to Collect:</strong> EGP ${(() => {
-                  const subtotal = Number(order.subtotal) || 0;
-                  const deliveryFee = Number(order.delivery_fee) || 0;
-                  const discount = Number(order.discount_amount) || 0;
-                  const calculatedTotal = subtotal + deliveryFee - discount;
-                  return calculatedTotal.toFixed(2);
-                })()}</p>
-              </div>
-              
-              <div class="customer-info">
-                <h3>Customer Information</h3>
-                <p><strong>Name:</strong> ${order.customer_name || 'Guest User'}</p>
-                <p><strong>Phone:</strong> ${order.customer_phone || 'N/A'}</p>
-                ${order.customer_email ? `<p><strong>Email:</strong> ${order.customer_email}</p>` : ''}
-                ${order.delivery_address ? `<p><strong>Address:</strong> ${order.delivery_address}</p>` : ''}
-                ${order.delivery_city ? `<p><strong>City:</strong> ${order.delivery_city}</p>` : ''}
-                ${order.delivery_zone ? `<p><strong>Zone:</strong> ${order.delivery_zone}</p>` : ''}
-              </div>
-              
-              <table class="items-table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Type</th>
-                    <th>Quantity</th>
-                    <th>Unit Price</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${order.items.map(item => `
-                    <tr>
-                      <td>
-                        ${item.product_name}
-                        ${item.flavors && item.flavors.length > 0 ? `
-                          <div class="flavor-details">
-                            ${item.flavors.map(flavor => `
-                              • ${flavor.flavor_name} (${flavor.quantity}x) - ${flavor.size_name}
-                            `).join('')}
-                          </div>
-                        ` : ''}
-                      </td>
-                      <td>${item.product_type}</td>
-                      <td>${item.quantity}</td>
-                      <td>EGP ${Number(item.unit_price).toFixed(2)}</td>
-                      <td>EGP ${(Number(item.unit_price) * item.quantity).toFixed(2)}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-              
-              <div class="total">
-                <p>Total Amount: EGP ${(() => {
-                  const subtotal = Number(order.subtotal) || 0;
-                  const deliveryFee = Number(order.delivery_fee) || 0;
-                  const discount = Number(order.discount_amount) || 0;
-                  const calculatedTotal = subtotal + deliveryFee - discount;
-                  return calculatedTotal.toFixed(2);
-                })()}</p>
-              </div>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+  const printOrder = async (order: Order) => {
+    try {
+      const response = await fetch('/api/admin/orders/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderIds: [order.id],
+          type: 'single'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
       }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `order-${order.id}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('PDF generated successfully');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast.error('Failed to generate PDF');
     }
   };
 
