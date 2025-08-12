@@ -159,8 +159,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
 
     // Validate delivery date if provided
     if (orderData.deliveryDate) {
-      const deliveryDateObj = new Date(orderData.deliveryDate);
-      if (isNaN(deliveryDateObj.getTime())) {
+      // Parse the date string and compare as strings to avoid timezone issues
+      const [year, month, day] = orderData.deliveryDate.split('-').map(Number);
+      
+      if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
         console.error('❌ [DEBUG] Payment API - Invalid delivery date format:', orderData.deliveryDate)
         return NextResponse.json({
           success: false,
@@ -169,10 +171,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
         }, { status: 400 });
       }
       
-      // Check if delivery date is in the future
+      // Get today's date as YYYY-MM-DD string in local timezone
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (deliveryDateObj < today) {
+      const todayString = today.toLocaleDateString('en-CA'); // YYYY-MM-DD format in local timezone
+      
+      console.log('🔍 [DEBUG] Payment API - Delivery date validation:', {
+        deliveryDate: orderData.deliveryDate,
+        todayString: todayString,
+        isTodayOrFuture: orderData.deliveryDate >= todayString
+      });
+      
+      if (orderData.deliveryDate < todayString) {
         console.error('❌ [DEBUG] Payment API - Delivery date is in the past:', orderData.deliveryDate)
         return NextResponse.json({
           success: false,

@@ -105,6 +105,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
     const { selectedAddressId, useNewAddress, newAddress, saveNewAddress, deliveryDate } = requestBody;
     
     console.log('🔍 [DEBUG] Confirm API - Request body:', JSON.stringify(requestBody, null, 2))
+    console.log('🔍 [DEBUG] Confirm API - Selected delivery date from request:', deliveryDate)
     console.log('🔍 [DEBUG] Confirm API - Guest data:', JSON.stringify(guestData, null, 2))
     console.log('🔍 [DEBUG] Confirm API - Save New Address:', saveNewAddress)
     
@@ -560,8 +561,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
 
     // Validate delivery date if provided
     if (deliveryDate) {
-      const deliveryDateObj = new Date(deliveryDate);
-      if (isNaN(deliveryDateObj.getTime())) {
+      // Parse the date string and compare as strings to avoid timezone issues
+      const [year, month, day] = deliveryDate.split('-').map(Number);
+      
+      if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
         console.error('❌ [DEBUG] Confirm API - Invalid delivery date format:', deliveryDate)
         return NextResponse.json({
           success: false,
@@ -570,10 +573,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutC
         }, { status: 400 });
       }
       
-      // Check if delivery date is in the future
+      // Get today's date as YYYY-MM-DD string in local timezone
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (deliveryDateObj < today) {
+      const todayString = today.toLocaleDateString('en-CA'); // YYYY-MM-DD format in local timezone
+      
+      console.log('🔍 [DEBUG] Confirm API - Delivery date validation:', {
+        deliveryDate: deliveryDate,
+        todayString: todayString,
+        isTodayOrFuture: deliveryDate >= todayString,
+        serverTime: new Date().toISOString(),
+        serverLocalTime: new Date().toString(),
+        timezoneOffset: new Date().getTimezoneOffset()
+      });
+      
+      if (deliveryDate < todayString) {
         console.error('❌ [DEBUG] Confirm API - Delivery date is in the past:', deliveryDate)
         return NextResponse.json({
           success: false,

@@ -119,6 +119,15 @@ export async function GET(request: NextRequest) {
 
     // Calculate available delivery dates
     const orderDate = startDate ? new Date(startDate) : new Date();
+    
+    // Debug timezone information
+    console.log('🔍 [DEBUG] Timezone info:', {
+      serverTime: new Date().toISOString(),
+      serverLocalTime: new Date().toString(),
+      orderDate: orderDate.toISOString(),
+      orderDateLocal: orderDate.toString(),
+      timezoneOffset: new Date().getTimezoneOffset()
+    });
     const availableDeliveryDates = [];
     
     for (let i = 0; i < daysAhead; i++) {
@@ -128,20 +137,33 @@ export async function GET(request: NextRequest) {
       // Calculate delivery date for this order date
       const deliveryDate = calculateDeliveryDate(currentDate, zoneData.delivery_days, availableDays);
       
-      // Check if this delivery date is already in our list
-      const dateString = deliveryDate.toISOString().split('T')[0];
+             // Check if this delivery date is already in our list (use local timezone)
+       const dateString = deliveryDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format in local timezone
       const existingDate = availableDeliveryDates.find(d => d.date === dateString);
       
       if (!existingDate) {
+        // Create a date object in local timezone for consistent formatting
+        const [year, month, day] = dateString.split('-').map(Number);
+        const localDeliveryDate = new Date(year, month - 1, day);
+        
+        const formattedDateString = localDeliveryDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        
+        console.log('🔍 [DEBUG] Available delivery date:', {
+          date: dateString,
+          formattedDate: formattedDateString,
+          deliveryDate: deliveryDate.toISOString(),
+          localDeliveryDate: localDeliveryDate.toISOString()
+        });
+        
         availableDeliveryDates.push({
           date: dateString,
           dayName: getDayName(deliveryDate),
-          formattedDate: deliveryDate.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          }),
+          formattedDate: formattedDateString,
           isToday: deliveryDate.toDateString() === new Date().toDateString(),
           isTomorrow: deliveryDate.toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString()
         });
