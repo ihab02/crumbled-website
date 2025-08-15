@@ -69,13 +69,29 @@ interface Order {
 interface DeliveryPerson {
   id: number;
   name: string;
-  id_number: string;
   mobile_phone: string;
-  available_from_hour: string;
-  available_to_hour: string;
-  available_days: string;
-  notes: string | null;
+  available_from_hour?: string;
+  available_to_hour?: string;
+  available_days?: string;
+  notes?: string;
   is_active: boolean;
+}
+
+interface Zone {
+  id: number;
+  name: string;
+  city_id: number;
+  city_name: string;
+  city_is_active: boolean;
+  delivery_days: number;
+  time_slot_id: number;
+  time_slot_name: string;
+  time_slot_from: string;
+  time_slot_to: string;
+  delivery_fee: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 interface PaginationInfo {
@@ -127,7 +143,7 @@ export default function AdminOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
-  const [zones, setZones] = useState<string[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState<{orderId: number, newStatus: string} | null>(null);
@@ -159,11 +175,17 @@ export default function AdminOrdersPage() {
     }
   }, [user, authLoading, router]);
 
+  // Debug mobile filters state
+  useEffect(() => {
+    console.log('🔍 [DEBUG] showMobileFilters state changed:', showMobileFilters);
+  }, [showMobileFilters]);
+
   const fetchDeliveryPersons = async () => {
     try {
       const response = await fetch('/api/admin/delivery-men');
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 [DEBUG] Delivery persons data:', data);
         setDeliveryPersons(data.data || []);
       }
     } catch (error) {
@@ -176,6 +198,7 @@ export default function AdminOrdersPage() {
       const response = await fetch('/api/admin/zones');
       if (response.ok) {
         const data = await response.json();
+        console.log('🔍 [DEBUG] Zones data:', data);
         setZones(data.zones || []);
       }
     } catch (error) {
@@ -1283,11 +1306,18 @@ export default function AdminOrdersPage() {
                     <option value="all">All Delivery Persons</option>
                     <option value="assigned">Assigned Orders</option>
                     <option value="unassigned">Unassigned Orders</option>
-                    {deliveryPersons.map((person) => (
-                      <option key={person.id} value={person.id.toString()}>
-                        {person.name}
-                      </option>
-                    ))}
+                    {deliveryPersons.map((person) => {
+                      console.log('🔍 [DEBUG] Mapping delivery person:', person);
+                      if (!person || typeof person !== 'object' || !person.id || !person.name) {
+                        console.log('🔍 [DEBUG] Invalid delivery person data:', person);
+                        return null;
+                      }
+                      return (
+                        <option key={person.id} value={person.id.toString()}>
+                          {person.name}
+                        </option>
+                      );
+                    })}
                   </select>
                   <select
                     value={filterZone}
@@ -1295,11 +1325,14 @@ export default function AdminOrdersPage() {
                     className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="all">All Zones</option>
-                    {zones.map((zone) => (
-                      <option key={zone} value={zone}>
-                        {zone}
-                      </option>
-                    ))}
+                    {zones.map((zone) => {
+                      console.log('🔍 [DEBUG] Mapping zone:', zone);
+                      return (
+                        <option key={zone.id} value={zone.name}>
+                          {zone.name}
+                        </option>
+                      );
+                    })}
                   </select>
                   <input
                     type="date"
@@ -1396,7 +1429,9 @@ export default function AdminOrdersPage() {
             {/* Delivery Date Quick Filters */}
             <div className="mb-6">
               <div className="flex flex-wrap gap-2">
-                                  {getDeliveryDateFilters().map((filter) => (
+                {getDeliveryDateFilters().map((filter) => {
+                  console.log('🔍 [DEBUG] Mapping delivery date filter:', filter);
+                  return (
                     <button
                       key={filter.key}
                       onClick={() => {
@@ -1415,7 +1450,8 @@ export default function AdminOrdersPage() {
                       </span>
                     )}
                   </button>
-                ))}
+                );
+                })}
                 {selectedDeliveryDateFilters.size > 0 && (
                   <button
                     onClick={() => {
@@ -1479,13 +1515,18 @@ export default function AdminOrdersPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                     >
                       <option value="all">All Delivery Persons</option>
-                      <option value="assigned">Assigned Orders</option>
-                      <option value="unassigned">Unassigned Orders</option>
-                      {deliveryPersons.map((person) => (
-                        <option key={person.id} value={person.id.toString()}>
-                          {person.name}
-                        </option>
-                      ))}
+                      {deliveryPersons.map((person) => {
+                        console.log('🔍 [DEBUG] Mapping delivery person:', person);
+                        if (!person || typeof person !== 'object' || !person.id || !person.name) {
+                          console.log('🔍 [DEBUG] Invalid delivery person data:', person);
+                          return null;
+                        }
+                        return (
+                          <option key={person.id} value={person.id.toString()}>
+                            {person.name}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -1498,11 +1539,14 @@ export default function AdminOrdersPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                     >
                       <option value="all">All Zones</option>
-                      {zones.map((zone) => (
-                        <option key={zone} value={zone}>
-                          {zone}
-                        </option>
-                      ))}
+                      {zones.map((zone) => {
+                        console.log('🔍 [DEBUG] Mapping zone:', zone);
+                        return (
+                          <option key={zone.id} value={zone.name}>
+                            {zone.name}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -1528,66 +1572,44 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
 
-                  {/* Quick Filters */}
+                  {/* Checkboxes */}
                   <div className="space-y-2">
-                    <label className="flex items-center space-x-2">
+                    <label className="flex items-center">
                       <input
                         type="checkbox"
                         checked={hideCancelled}
-                        onChange={(e) => {
-                          const newHideCancelled = e.target.checked;
-                          setHideCancelled(newHideCancelled);
-                          fetchOrdersWithFilters(selectedDeliveryDateFilters, 1, newHideCancelled, hideDelivered);
-                        }}
+                        onChange={(e) => setHideCancelled(e.target.checked)}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
-                      <span className="text-sm text-gray-700">Hide Cancelled</span>
+                      <span className="text-sm text-gray-700 ml-2">Hide Cancelled</span>
                     </label>
-                    
-                    <label className="flex items-center space-x-2">
+                    <label className="flex items-center">
                       <input
                         type="checkbox"
                         checked={hideDelivered}
-                        onChange={(e) => {
-                          const newHideDelivered = e.target.checked;
-                          setHideDelivered(newHideDelivered);
-                          fetchOrdersWithFilters(selectedDeliveryDateFilters, 1, hideCancelled, newHideDelivered);
-                        }}
+                        onChange={(e) => setHideDelivered(e.target.checked)}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
-                      <span className="text-sm text-gray-700">Hide Delivered</span>
+                      <span className="text-sm text-gray-700 ml-2">Hide Delivered</span>
                     </label>
-                    
-
                   </div>
 
-
-
-                  {/* Action Buttons */}
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => fetchOrders(1)}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      Apply Filters
-                    </button>
-                    <button
-                      onClick={() => {
-                        setFromDate('');
-                        setToDate('');
-                        setSearchTerm('');
-                        setFilterStatus('all');
-                        setFilterDeliveryPerson('all');
-                        setFilterZone('all');
-                        setHideCancelled(false);
-                        setHideDelivered(false);
-                        setSelectedDeliveryDateFilters(new Set());
-                        fetchOrdersWithFilters(new Set());
-                      }}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                    >
-                      Clear
-                    </button>
+                  {/* Export Buttons for Mobile */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <div className="flex flex-col space-y-2">
+                      <button
+                        onClick={exportToExcel}
+                        className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 shadow-sm"
+                      >
+                        📊 Export Excel
+                      </button>
+                      <button
+                        onClick={exportToPDF}
+                        className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 shadow-sm"
+                      >
+                        📄 Export PDF
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2128,7 +2150,7 @@ export default function AdminOrdersPage() {
                           </div>
                           <button
                             onClick={() => openNoteModal(order.id, order.admin_note || '', 'admin')}
-                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ml-2"
                             title="Edit Crumbled note"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2684,14 +2706,21 @@ export default function AdminOrdersPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   >
                     <option value="">Choose a delivery person...</option>
-                    {deliveryPersons.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.name} - {person.mobile_phone}
-                        {person.available_from_hour && person.available_to_hour && 
-                          ` (${person.available_from_hour.substring(0, 5)}-${person.available_to_hour.substring(0, 5)})`
-                        }
-                      </option>
-                    ))}
+                    {deliveryPersons.map((person) => {
+                      console.log('🔍 [DEBUG] Mapping delivery person:', person);
+                      if (!person || typeof person !== 'object' || !person.id || !person.name) {
+                        console.log('🔍 [DEBUG] Invalid delivery person data:', person);
+                        return null;
+                      }
+                      return (
+                        <option key={person.id} value={person.id}>
+                          {person.name} - {person.mobile_phone}
+                          {person.available_from_hour && person.available_to_hour && 
+                            ` (${person.available_from_hour.substring(0, 5)}-${person.available_to_hour.substring(0, 5)})`
+                          }
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
