@@ -325,10 +325,61 @@ export class PDFGenerator {
               color: #6b7280;
               font-size: 8px;
             }
+            
+            .status-ribbon {
+              position: absolute;
+              top: 0;
+              right: 0;
+              width: 120px;
+              height: 120px;
+              overflow: hidden;
+              z-index: 10;
+            }
+            
+            .status-ribbon::before {
+              content: '';
+              position: absolute;
+              top: 0;
+              right: 0;
+              width: 0;
+              height: 0;
+              border-style: solid;
+              border-width: 0 60px 60px 0;
+            }
+            
+            .status-ribbon.delivered::before {
+              border-color: transparent #10b981 transparent transparent;
+            }
+            
+            .status-ribbon.cancelled::before {
+              border-color: transparent #ef4444 transparent transparent;
+            }
+            
+            .status-ribbon-text {
+              position: absolute;
+              top: 15px;
+              right: -25px;
+              transform: rotate(45deg);
+              color: white;
+              font-size: 10px;
+              font-weight: bold;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            }
+            
+            .container {
+              position: relative;
+            }
           </style>
         </head>
         <body>
           <div class="container">
+            ${((order.status?.toLowerCase().trim() === 'delivered' || order.status?.toLowerCase().trim() === 'cancelled') || (order.order_status?.toLowerCase().trim() === 'delivered' || order.order_status?.toLowerCase().trim() === 'cancelled')) ? `
+              <div class="status-ribbon ${(order.status || order.order_status)?.toLowerCase().trim()}">
+                <div class="status-ribbon-text">${(order.status || order.order_status)?.toLowerCase().trim()}</div>
+              </div>
+            ` : `<!-- No ribbon for status: "${order.status}" order_status: "${order.order_status}" -->`}
             <div class="header">
               <div class="logo-section">
                 ${logoBase64 ? `<img src="${logoBase64}" alt="Crumbled Logo" class="logo">` : ''}
@@ -378,6 +429,24 @@ export class PDFGenerator {
                   <span class="info-value">${order.delivery_city || 'N/A'} - ${order.delivery_zone || 'N/A'}</span>
                 </div>
               </div>
+              
+              ${(order.customer_note || order.admin_note) ? `
+                <div class="section">
+                  <div class="section-title">Notes</div>
+                  ${order.customer_note ? `
+                    <div class="info-item">
+                      <span class="info-label">Customer Note:</span>
+                      <span class="info-value">${order.customer_note}</span>
+                    </div>
+                  ` : ''}
+                  ${order.admin_note ? `
+                    <div class="info-item">
+                      <span class="info-label">Crumbled Note:</span>
+                      <span class="info-value">${order.admin_note}</span>
+                    </div>
+                  ` : ''}
+                </div>
+              ` : ''}
             </div>
             
             <div class="items-section">
@@ -495,7 +564,12 @@ export class PDFGenerator {
       const logoBase64 = this.getLogoBase64();
 
       return `
-        <div class="order-section" style="page-break-after: always;">
+        <div class="order-section" style="page-break-after: always; position: relative;">
+          ${((order.status?.toLowerCase().trim() === 'delivered' || order.status?.toLowerCase().trim() === 'cancelled') || (order.order_status?.toLowerCase().trim() === 'delivered' || order.order_status?.toLowerCase().trim() === 'cancelled')) ? `
+            <div class="status-ribbon ${(order.status || order.order_status)?.toLowerCase().trim()}">
+              <div class="status-ribbon-text">${(order.status || order.order_status)?.toLowerCase().trim()}</div>
+            </div>
+          ` : `<!-- No ribbon for status: "${order.status}" order_status: "${order.order_status}" -->`}
           <div class="header">
             <div class="logo-section">
               ${logoBase64 ? `<img src="${logoBase64}" alt="Crumbled Logo" class="logo">` : ''}
@@ -552,6 +626,24 @@ export class PDFGenerator {
                 <span class="info-value">${order.delivery_city || 'N/A'} - ${order.delivery_zone || 'N/A'}</span>
               </div>
             </div>
+            
+            ${(order.customer_note || order.admin_note) ? `
+              <div class="section">
+                <div class="section-title">Notes</div>
+                ${order.customer_note ? `
+                  <div class="info-item">
+                    <span class="info-label">Customer Note:</span>
+                    <span class="info-value">${order.customer_note}</span>
+                  </div>
+                ` : ''}
+                ${order.admin_note ? `
+                  <div class="info-item">
+                    <span class="info-label">Crumbled Note:</span>
+                    <span class="info-value">${order.admin_note}</span>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
           </div>
           
           <div class="items-section">

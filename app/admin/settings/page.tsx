@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { ShoppingCart, Bug, Share2 } from 'lucide-react';
+import { ShoppingCart, Bug, Share2, Clock } from 'lucide-react';
 import { DebugDemo } from '@/components/debug-demo';
 import { DebugTest } from '@/components/debug-test';
 import { useDebugMode } from '@/hooks/use-debug-mode';
 
 export default function SettingsPage() {
   const [cartLifetime, setCartLifetime] = useState(2);
+  const [earlyDeliveryCutoffTime, setEarlyDeliveryCutoffTime] = useState("06:30");
   const [socialSettings, setSocialSettings] = useState({
     whatsapp_number: '',
     facebook_url: '',
@@ -40,6 +41,7 @@ export default function SettingsPage() {
       
       if (settingsData.success) {
         setCartLifetime(settingsData.settings.cart_lifetime_days);
+        setEarlyDeliveryCutoffTime(settingsData.settings.early_delivery_cutoff_time || "06:30");
       }
       
       if (socialData.success) {
@@ -63,6 +65,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           cart_lifetime_days: cartLifetime,
+          early_delivery_cutoff_time: earlyDeliveryCutoffTime,
           debug_mode: isDebugMode,
         }),
       });
@@ -151,6 +154,41 @@ export default function SettingsPage() {
                 />
                 <p className="text-sm text-gray-500 mt-1">
                   How long should abandoned carts be kept before being cleared?
+                </p>
+              </div>
+
+              <Button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="bg-pink-600 hover:bg-pink-700"
+              >
+                {isSaving ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Delivery Settings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Early Delivery Cutoff Time
+                </label>
+                <Input
+                  type="time"
+                  value={earlyDeliveryCutoffTime}
+                  onChange={(e) => setEarlyDeliveryCutoffTime(e.target.value)}
+                  className="max-w-xs"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Orders placed before this time (for zones with 1-day delivery) will be delivered today instead of tomorrow
                 </p>
               </div>
 

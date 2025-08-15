@@ -140,6 +140,8 @@ export default function AdminOrdersPage() {
   const [isUpdatingAdminNote, setIsUpdatingAdminNote] = useState(false);
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteModalData, setNoteModalData] = useState<{orderId: number, currentNote: string, type: 'admin' | 'customer'} | null>(null);
+  const [showNoteViewModal, setShowNoteViewModal] = useState(false);
+  const [noteViewData, setNoteViewData] = useState<{note: string, type: 'customer' | 'admin', orderId: number} | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [selectedDeliveryDateFilters, setSelectedDeliveryDateFilters] = useState<Set<string>>(new Set());
   const printRef = useRef<HTMLDivElement>(null);
@@ -339,6 +341,8 @@ export default function AdminOrdersPage() {
         return;
       }
 
+      console.log('🔍 [DEBUG] Bulk printing orders:', selectedOrders.map(o => ({ id: o.id, status: o.status })));
+      
       // Generate HTML on client-side (identical to server-side format)
       const html = ClientPDFGenerator.generateBulkOrdersHTML(selectedOrders);
       
@@ -367,13 +371,29 @@ export default function AdminOrdersPage() {
       // Create blob and download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `orders-${orderIds.join('-')}-${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Check if it's a mobile device
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // For mobile devices, open in new tab
+        window.open(url, '_blank');
+        toast.success(`PDF opened in new tab for ${orderIds.length} order(s)`);
+      } else {
+        // For desktop, download normally
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `orders-${orderIds.join('-')}-${new Date().toISOString().split('T')[0]}.pdf`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+      }
 
       toast.success(`PDF generated for ${orderIds.length} order(s)`);
     } catch (error) {
@@ -517,6 +537,16 @@ export default function AdminOrdersPage() {
   const closeNoteModal = () => {
     setShowNoteModal(false);
     setNoteModalData(null);
+  };
+
+  const openNoteViewModal = (note: string, type: 'customer' | 'admin', orderId: number) => {
+    setNoteViewData({ note, type, orderId });
+    setShowNoteViewModal(true);
+  };
+
+  const closeNoteViewModal = () => {
+    setShowNoteViewModal(false);
+    setNoteViewData(null);
   };
 
   const updateNote = async (orderId: number, note: string, type: 'admin' | 'customer') => {
@@ -777,6 +807,14 @@ export default function AdminOrdersPage() {
 
   const printOrder = async (order: Order) => {
     try {
+      console.log('🔍 [DEBUG] Printing order:', order.id, 'Status:', order.status, 'Order Status:', order.order_status, 'Status type:', typeof order.status, 'Order Status type:', typeof order.order_status);
+      console.log('🔍 [DEBUG] Status comparison:', {
+        statusIsDelivered: order.status === 'delivered',
+        statusIsCancelled: order.status === 'cancelled',
+        orderStatusIsDelivered: order.order_status === 'delivered',
+        orderStatusIsCancelled: order.order_status === 'cancelled'
+      });
+      
       // Generate HTML on client-side (identical to server-side format)
       const html = ClientPDFGenerator.generateOrderHTML(order);
       
@@ -805,13 +843,29 @@ export default function AdminOrdersPage() {
       // Create blob and download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `order-${order.id}-${new Date().toISOString().split('T')[0]}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Check if it's a mobile device
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // For mobile devices, open in new tab
+        window.open(url, '_blank');
+        toast.success('PDF opened in new tab');
+      } else {
+        // For desktop, download normally
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `order-${order.id}-${new Date().toISOString().split('T')[0]}.pdf`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Clean up
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
+      }
 
       toast.success('PDF generated successfully');
     } catch (error) {
@@ -870,7 +924,9 @@ export default function AdminOrdersPage() {
       'Items Count': order.items.length,
       'Items Details': order.items.map(item => 
         `${item.product_name} (${item.quantity}x) - EGP ${Number(item.unit_price).toFixed(2)}`
-      ).join('; ')
+      ).join('; '),
+      'Customer Note': order.customer_note || 'N/A',
+      'Crumbled Note': order.admin_note || 'N/A'
     }));
     
     const detailedWorksheet = XLSX.utils.json_to_sheet(detailedData);
@@ -897,7 +953,9 @@ export default function AdminOrdersPage() {
       { wch: 15 }, // Delivery Person Phone
       { wch: 20 }, // Order Date
       { wch: 12 }, // Items Count
-      { wch: 50 }  // Items Details
+      { wch: 50 }, // Items Details
+      { wch: 30 }, // Customer Note
+      { wch: 30 }  // Crumbled Note
     ];
     detailedWorksheet['!cols'] = columnWidths;
     
@@ -917,13 +975,16 @@ export default function AdminOrdersPage() {
         'Delivery Time Slot': order.delivery_time_slot_name || 'N/A',
         'Delivery Person': order.delivery_man_name || 'Not Assigned',
         'Order Date': new Date(order.created_at).toLocaleDateString(),
-        'Items': order.items.map(item => `${item.product_name} (${item.quantity}x)`).join('; ')
+        'Items': order.items.map(item => `${item.product_name} (${item.quantity}x)`).join('; '),
+        'Customer Note': order.customer_note || 'N/A',
+        'Crumbled Note': order.admin_note || 'N/A'
       }));
       
       const zoneWorksheet = XLSX.utils.json_to_sheet(zoneData);
       const zoneColumnWidths = [
         { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, 
-        { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 40 }
+        { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 40 },
+        { wch: 30 }, { wch: 30 }
       ];
       zoneWorksheet['!cols'] = zoneColumnWidths;
       
@@ -1040,14 +1101,14 @@ export default function AdminOrdersPage() {
       order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
       order.delivery_man_name || 'Not Assigned',
       new Date(order.created_at).toLocaleDateString(),
-      order.admin_note || 'N/A',
-      order.customer_note || 'N/A'
+      order.customer_note || 'N/A',
+      order.admin_note || 'N/A'
     ]);
     
     // Add detailed table - optimized column widths for landscape
     autoTable(doc, {
       startY: currentY,
-      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Expected Delivery', 'Delivery Person', 'Order Date', 'Admin Note', 'Customer Note']],
+      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Expected Delivery', 'Delivery Person', 'Order Date', 'Customer Note', 'Crumbled Note']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [190, 24, 93], textColor: [255, 255, 255] }, // Crumbled pink
@@ -1063,8 +1124,8 @@ export default function AdminOrdersPage() {
         6: { cellWidth: 25 }, // Expected Delivery
         7: { cellWidth: 30 }, // Delivery Person
         8: { cellWidth: 20 }, // Order Date
-        9: { cellWidth: 35 }, // Admin Note
-        10: { cellWidth: 35 }  // Customer Note
+        9: { cellWidth: 35 }, // Customer Note
+        10: { cellWidth: 35 }  // Crumbled Note
       }
     });
     
@@ -1700,44 +1761,43 @@ export default function AdminOrdersPage() {
                         <p className="font-medium">{order.payment_method}</p>
                       </div>
                       <div className="col-span-2">
-                        <p className="text-gray-500">Admin Note</p>
+                        <p className="text-gray-500">Customer Note</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            {order.customer_note ? (
+                              <button
+                                onClick={() => openNoteViewModal(order.customer_note!, 'customer', order.id)}
+                                className="text-sm text-gray-900 truncate max-w-xs text-left hover:text-blue-600 hover:underline cursor-pointer"
+                                title="Click to view full note"
+                              >
+                                {order.customer_note}
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No note</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Crumbled Note</p>
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             {order.admin_note ? (
-                              <div className="text-sm text-gray-900 truncate" title={order.admin_note}>
+                              <button
+                                onClick={() => openNoteViewModal(order.admin_note!, 'admin', order.id)}
+                                className="text-sm text-gray-900 truncate max-w-xs text-left hover:text-blue-600 hover:underline cursor-pointer"
+                                title="Click to view full note"
+                              >
                                 {order.admin_note}
-                              </div>
+                              </button>
                             ) : (
                               <span className="text-gray-400 text-sm">No note</span>
                             )}
                           </div>
                           <button
                             onClick={() => openNoteModal(order.id, order.admin_note || '', 'admin')}
-                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            title="Edit admin note"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-gray-500">Customer Note</p>
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            {order.customer_note ? (
-                              <div className="text-sm text-gray-900 truncate" title={order.customer_note}>
-                                {order.customer_note}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">No note</span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => openNoteModal(order.id, order.customer_note || '', 'customer')}
-                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            title="Edit customer note"
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ml-2"
+                            title="Edit Crumbled note"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1870,10 +1930,10 @@ export default function AdminOrdersPage() {
                       Date
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Admin Note
+                      Customer Note
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer Note
+                      Crumbled Note
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -2035,12 +2095,33 @@ export default function AdminOrdersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-start space-x-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex-1 min-w-0">
+                            {order.customer_note ? (
+                              <button
+                                onClick={() => openNoteViewModal(order.customer_note!, 'customer', order.id)}
+                                className="text-sm text-gray-900 truncate max-w-xs text-left hover:text-blue-600 hover:underline cursor-pointer"
+                                title="Click to view full note"
+                              >
+                                {order.customer_note}
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No note</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-center space-x-2">
                           <div className="flex-1 min-w-0">
                             {order.admin_note ? (
-                              <div className="text-sm text-gray-900 max-w-xs truncate" title={order.admin_note}>
+                              <button
+                                onClick={() => openNoteViewModal(order.admin_note!, 'admin', order.id)}
+                                className="text-sm text-gray-900 truncate max-w-xs text-left hover:text-blue-600 hover:underline cursor-pointer"
+                                title="Click to view full note"
+                              >
                                 {order.admin_note}
-                              </div>
+                              </button>
                             ) : (
                               <span className="text-gray-400 text-sm">No note</span>
                             )}
@@ -2048,29 +2129,7 @@ export default function AdminOrdersPage() {
                           <button
                             onClick={() => openNoteModal(order.id, order.admin_note || '', 'admin')}
                             className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            title="Edit admin note"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-start space-x-2">
-                          <div className="flex-1 min-w-0">
-                            {order.customer_note ? (
-                              <div className="text-sm text-gray-900 max-w-xs truncate" title={order.customer_note}>
-                                {order.customer_note}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">No note</span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => openNoteModal(order.id, order.customer_note || '', 'customer')}
-                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            title="Edit customer note"
+                            title="Edit Crumbled note"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2457,6 +2516,31 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
 
+                {/* Notes Section */}
+                {(selectedOrder.customer_note || selectedOrder.admin_note) && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-medium text-gray-500 mb-2">Notes</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {selectedOrder.customer_note && (
+                        <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                          <h4 className="text-sm font-medium text-yellow-700 mb-2">Customer Note</h4>
+                          <p className="text-sm text-yellow-900 whitespace-pre-wrap">
+                            {selectedOrder.customer_note}
+                          </p>
+                        </div>
+                      )}
+                      {selectedOrder.admin_note && (
+                        <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                          <h4 className="text-sm font-medium text-blue-700 mb-2">Crumbled Note</h4>
+                          <p className="text-sm text-blue-900 whitespace-pre-wrap">
+                            {selectedOrder.admin_note}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Order Items */}
                 {selectedOrder.items && selectedOrder.items.length > 0 && (
                   <div>
@@ -2788,6 +2872,74 @@ export default function AdminOrdersPage() {
                     className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isUpdatingAdminNote ? 'Saving...' : 'Save Note'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Note View Modal */}
+        {showNoteViewModal && noteViewData && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-medium text-gray-900">
+                    {noteViewData.type === 'admin' ? 'Crumbled' : 'Customer'} Note
+                  </h2>
+                  <button
+                    onClick={closeNoteViewModal}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg
+                      className="h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 py-4">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Order #{noteViewData.orderId} - {noteViewData.type === 'admin' ? 'Crumbled' : 'Customer'} Note
+                  </p>
+                  
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                      {noteViewData.note}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  {noteViewData.type === 'admin' && (
+                    <button
+                      onClick={() => {
+                        closeNoteViewModal();
+                        openNoteModal(noteViewData.orderId, noteViewData.note, 'admin');
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      Edit Note
+                    </button>
+                  )}
+                  <button
+                    onClick={closeNoteViewModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Close
                   </button>
                 </div>
               </div>

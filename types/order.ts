@@ -33,6 +33,8 @@ export interface Order {
   kitchen_id?: number;
   priority?: string;
   notes?: string;
+  customer_note?: string | null;
+  admin_note?: string | null;
   created_at: string;
   updated_at?: string;
   items: OrderItem[];

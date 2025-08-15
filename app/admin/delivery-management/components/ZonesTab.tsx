@@ -48,10 +48,10 @@ export default function ZonesTab() {
       }
       const data = await response.json();
       console.log('Zones loaded:', data);
-      setZones(data);
+      setZones(data.zones || []);
       
       // Fetch kitchen assignments for all zones
-      await fetchAllZoneKitchens(data);
+      await fetchAllZoneKitchens(data.zones || []);
     } catch (error) {
       console.error('Failed to fetch zones:', error);
       toast.error('Failed to fetch zones');
@@ -125,13 +125,18 @@ export default function ZonesTab() {
     fetchZones();
   };
 
-  const filteredZones = zones.filter((zone) => {
+  const filteredZones = Array.isArray(zones) ? zones.filter((zone) => {
     const searchLower = searchTerm.toLowerCase();
     return (
       zone.name.toLowerCase().includes(searchLower) ||
       zone.city_name.toLowerCase().includes(searchLower)
     );
-  });
+  }) : [];
+
+  // Add warning if not array
+  if (!Array.isArray(zones)) {
+    console.warn('Zones data is not an array:', zones);
+  }
 
   const formatTime = (time: string) => {
     return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {

@@ -257,6 +257,8 @@ export default function ConfirmPage() {
     setAcknowledgeDeliveryRules(JSON.parse(localStorage.getItem('acknowledgeDeliveryRules') || 'false'))
           setDeliveryDateInitialized(JSON.parse(localStorage.getItem('deliveryDateInitialized') || 'false'))
       setCustomerSpecialNote(localStorage.getItem('customerSpecialNote') || '')
+      // Clear the note from localStorage immediately after loading it
+      localStorage.removeItem('customerSpecialNote')
   }, [])
 
   // Helper function to check if an item is eligible for category-specific promo
@@ -613,7 +615,8 @@ export default function ConfirmPage() {
               
               // Also clear localStorage cart data
               localStorage.removeItem('checkoutData')
-              console.log('🔍 [DEBUG] Checkout data cleared from localStorage')
+              localStorage.removeItem('customerSpecialNote')
+              console.log('🔍 [DEBUG] Checkout data and customer note cleared from localStorage')
               
               // Force refresh cart provider by triggering a cart update
               window.dispatchEvent(new CustomEvent('cartCleared'))

@@ -25,8 +25,44 @@ function getNextWorkingDay(date: Date, workingDays: string[]): Date {
   return nextDay;
 }
 
+// Utility function to check if a date is today
+function isToday(date: Date): boolean {
+  const today = new Date();
+  return date.getFullYear() === today.getFullYear() &&
+         date.getMonth() === today.getMonth() &&
+         date.getDate() === today.getDate();
+}
+
+// Utility function to get early delivery cutoff time from database
+async function getEarlyDeliveryCutoffTime(): Promise<string> {
+  try {
+    const result = await databaseService.query('SELECT early_delivery_cutoff_time FROM cart_settings LIMIT 1');
+    const settings = Array.isArray(result) && result.length > 0 ? result[0] : null;
+    return settings?.early_delivery_cutoff_time || '06:30'; // Default fallback
+  } catch (error) {
+    console.error('Error fetching early delivery cutoff time:', error);
+    return '06:30'; // Default fallback
+  }
+}
+
+// Utility function to check if current time is before the configured cutoff time
+async function isBeforeCutoffTime(): Promise<boolean> {
+  const cutoffTime = await getEarlyDeliveryCutoffTime();
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  
+  const [cutoffHours, cutoffMinutes] = cutoffTime.split(':').map(Number);
+  
+  return hours < cutoffHours || (hours === cutoffHours && minutes < cutoffMinutes);
+}
+
 // Utility function to calculate delivery date
-function calculateDeliveryDate(orderDate: Date, deliveryDays: number, workingDays: string[]): Date {
+async function calculateDeliveryDate(orderDate: Date, deliveryDays: number, workingDays: string[]): Promise<Date> {
+  if (deliveryDays === 1 && isToday(orderDate) && await isBeforeCutoffTime() && isWorkingDay(orderDate, workingDays)) {
+    return orderDate;
+  }
+
   if (deliveryDays === 0) {
     // Same day delivery - check if today is a working day
     if (isWorkingDay(orderDate, workingDays)) {
@@ -135,7 +171,7 @@ export async function GET(request: NextRequest) {
       currentDate.setDate(currentDate.getDate() + i);
       
       // Calculate delivery date for this order date
-      const deliveryDate = calculateDeliveryDate(currentDate, zoneData.delivery_days, availableDays);
+      const deliveryDate = await calculateDeliveryDate(currentDate, zoneData.delivery_days, availableDays);
       
              // Check if this delivery date is already in our list (use local timezone)
        const dateString = deliveryDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format in local timezone

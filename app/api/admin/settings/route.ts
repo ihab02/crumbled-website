@@ -5,7 +5,7 @@ import { clearDebugModeCache } from '@/lib/debug-utils';
 // GET /api/admin/settings
 export async function GET() {
   try {
-    const [settings] = await pool.query('SELECT * FROM cart_settings LIMIT 1');
+    const [settings] = await pool.query('SELECT cart_lifetime_days, debug_mode, early_delivery_cutoff_time FROM cart_settings LIMIT 1');
     
     return NextResponse.json({
       success: true,
@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { cart_lifetime_days, debug_mode } = body;
+    const { cart_lifetime_days, debug_mode, early_delivery_cutoff_time } = body;
 
     // Handle cart lifetime updates
     if (cart_lifetime_days !== undefined) {
@@ -38,6 +38,23 @@ export async function POST(request: Request) {
       await pool.query(
         'UPDATE cart_settings SET cart_lifetime_days = ? WHERE id = 1',
         [cart_lifetime_days]
+      );
+    }
+
+    // Handle early delivery cutoff time updates
+    if (early_delivery_cutoff_time !== undefined) {
+      // Validate time format (HH:MM)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(early_delivery_cutoff_time)) {
+        return NextResponse.json(
+          { success: false, error: 'Early delivery cutoff time must be in HH:MM format' },
+          { status: 400 }
+        );
+      }
+
+      await pool.query(
+        'UPDATE cart_settings SET early_delivery_cutoff_time = ? WHERE id = 1',
+        [early_delivery_cutoff_time]
       );
     }
 
