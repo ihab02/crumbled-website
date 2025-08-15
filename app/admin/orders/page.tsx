@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { useAdminAuth } from '@/hooks/use-admin-auth';
+import { ClientPDFGenerator } from '@/lib/client-pdf-generator';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -284,18 +285,36 @@ export default function AdminOrdersPage() {
 
   const printMultipleOrders = async (orderIds: number[]) => {
     try {
-      const response = await fetch('/api/admin/orders/print', {
+      // Get the selected orders
+      const selectedOrders = orders.filter(order => orderIds.includes(order.id));
+      
+      if (selectedOrders.length === 0) {
+        toast.error('No orders found to print');
+        return;
+      }
+
+      // Generate HTML on client-side (identical to server-side format)
+      const html = ClientPDFGenerator.generateBulkOrdersHTML(selectedOrders);
+      
+      // Send HTML to server for Puppeteer processing
+      const response = await fetch('/api/admin/orders/print-html', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include', // Ensure cookies are sent
         body: JSON.stringify({
-          orderIds,
-          type: orderIds.length > 1 ? 'bulk' : 'single'
+          html,
+          filename: `orders-${orderIds.join('-')}-${new Date().toISOString().split('T')[0]}.pdf`
         })
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          router.push('/admin/login');
+          return;
+        }
         throw new Error('Failed to generate PDF');
       }
 
@@ -509,18 +528,28 @@ export default function AdminOrdersPage() {
 
   const printOrder = async (order: Order) => {
     try {
-      const response = await fetch('/api/admin/orders/print', {
+      // Generate HTML on client-side (identical to server-side format)
+      const html = ClientPDFGenerator.generateOrderHTML(order);
+      
+      // Send HTML to server for Puppeteer processing
+      const response = await fetch('/api/admin/orders/print-html', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include', // Ensure cookies are sent
         body: JSON.stringify({
-          orderIds: [order.id],
-          type: 'single'
+          html,
+          filename: `order-${order.id}-${new Date().toISOString().split('T')[0]}.pdf`
         })
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          router.push('/admin/login');
+          return;
+        }
         throw new Error('Failed to generate PDF');
       }
 

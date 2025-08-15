@@ -1,109 +1,71 @@
-import puppeteer from 'puppeteer';
-import { Order } from '@/types/order';
-import fs from 'fs';
-import path from 'path';
+// Local Order interface that matches the page component
+interface Order {
+  id: number;
+  total: number;
+  status: string;
+  order_status?: string;
+  created_at: string;
+  payment_method: string;
+  guest_otp: string | null;
+  otp_verified: boolean;
+  customer_id: number | null;
+  customer_phone: string | null;
+  delivery_address: string | null;
+  delivery_city: string | null;
+  delivery_zone: string | null;
+  zone: string | null;
+  delivery_fee: number | null;
+  subtotal: number | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  delivery_days?: number | null;
+  delivery_time_slot_name?: string | null;
+  from_hour?: string | null;
+  to_hour?: string | null;
+  expected_delivery_date?: string | null;
+  delivery_man_id?: number | null;
+  delivery_man_name?: string | null;
+  delivery_man_phone?: string | null;
+  items: Array<{
+    id: number;
+    quantity: number;
+    unit_price: number;
+    product_name: string;
+    product_type: string;
+    pack_size?: string;
+    flavors?: Array<{
+      flavor_name: string;
+      size_name: string;
+      quantity: number;
+      image_url?: string;
+    }>;
+    flavor_details?: Array<{
+      flavor_name?: string;
+      name?: string;
+      size_name?: string;
+      size?: string;
+      quantity: number;
+      image_url?: string;
+    }> | string;
+  }>;
+  promo_code_id?: number | null;
+  promo_code?: string | null;
+  discount_amount?: number | null;
+  total_after_discount?: number | null;
+  total_amount?: number | null;
+}
 
-export class PDFGenerator {
-  /**
-   * Generate PDF for a single order
-   */
-  static async generateOrderPDF(order: Order): Promise<Buffer> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security'
-      ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
-    });
+export class ClientPDFGenerator {
+  // Logo URL for client-side PDF generation (using absolute URL)
+  private static readonly LOGO_URL = 'https://crumbled-eg.com/logo-no-bg.png';
 
-    try {
-      const page = await browser.newPage();
-      
-      // Set content and generate PDF
-      await page.setContent(this.generateOrderHTML(order), {
-        waitUntil: 'networkidle0'
-      });
 
-      const pdf = await page.pdf({
-        format: 'A4',
-        margin: {
-          top: '15mm',
-          right: '15mm',
-          bottom: '15mm',
-          left: '15mm'
-        },
-        printBackground: true
-      });
-
-      return Buffer.from(pdf);
-    } finally {
-      await browser.close();
-    }
-  }
-
-  /**
-   * Generate PDF for multiple orders
-   */
-  static async generateBulkOrdersPDF(orders: Order[]): Promise<Buffer> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security'
-      ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
-    });
-
-    try {
-      const page = await browser.newPage();
-      
-      // Set content and generate PDF
-      await page.setContent(this.generateBulkOrdersHTML(orders), {
-        waitUntil: 'networkidle0'
-      });
-
-      const pdf = await page.pdf({
-        format: 'A4',
-        margin: {
-          top: '15mm',
-          right: '15mm',
-          bottom: '15mm',
-          left: '15mm'
-        },
-        printBackground: true
-      });
-
-      return Buffer.from(pdf);
-    } finally {
-      await browser.close();
-    }
-  }
 
   /**
-   * Convert logo to base64 for embedding in PDF
+   * Generate the exact same HTML format as server-side Puppeteer
+   * This ensures identical quality across all platforms
    */
-  private static getLogoBase64(): string {
-    try {
-      const logoPath = path.join(process.cwd(), 'public', 'logo-no-bg.png');
-      const logoBuffer = fs.readFileSync(logoPath);
-      return `data:image/png;base64,${logoBuffer.toString('base64')}`;
-    } catch (error) {
-      console.warn('Logo not found, using text fallback');
-      return '';
-    }
-  }
-
-  /**
-   * Generate HTML for single order - Compact Design with Website Pink Theme
-   */
-  private static generateOrderHTML(order: Order): string {
+  static generateOrderHTML(order: Order): string {
     const orderDate = new Date(order.created_at).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -125,8 +87,6 @@ export class PDFGenerator {
     const deliveryFee = Number(order.delivery_fee) || 0;
     const discount = Number(order.discount_amount) || 0;
     const total = subtotal + deliveryFee - discount;
-
-    const logoBase64 = this.getLogoBase64();
 
     return `
       <!DOCTYPE html>
@@ -331,7 +291,7 @@ export class PDFGenerator {
           <div class="container">
             <div class="header">
               <div class="logo-section">
-                ${logoBase64 ? `<img src="${logoBase64}" alt="Crumbled Logo" class="logo">` : ''}
+                <img src="${ClientPDFGenerator.LOGO_URL}" alt="Crumbled Logo" class="logo">
                 <div class="brand-info">
                   <p>Delicious Cookies & Desserts</p>
                 </div>
@@ -475,9 +435,9 @@ export class PDFGenerator {
   }
 
   /**
-   * Generate HTML for multiple orders - Compact Design with Website Pink Theme
+   * Generate HTML for multiple orders - identical to server-side format
    */
-  private static generateBulkOrdersHTML(orders: Order[]): string {
+  static generateBulkOrdersHTML(orders: Order[]): string {
     const ordersHTML = orders.map((order, index) => {
       const orderDate = new Date(order.created_at).toLocaleString('en-US', {
         year: 'numeric',
@@ -492,13 +452,11 @@ export class PDFGenerator {
       const discount = Number(order.discount_amount) || 0;
       const total = subtotal + deliveryFee - discount;
 
-      const logoBase64 = this.getLogoBase64();
-
       return `
         <div class="order-section" style="page-break-after: always;">
           <div class="header">
             <div class="logo-section">
-              ${logoBase64 ? `<img src="${logoBase64}" alt="Crumbled Logo" class="logo">` : ''}
+              <img src="${ClientPDFGenerator.LOGO_URL}" alt="Crumbled Logo" class="logo">
               <div class="brand-info">
                 <p>Delicious Cookies & Desserts</p>
               </div>

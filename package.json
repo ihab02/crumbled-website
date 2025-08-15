@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "node .next/standalone/server.js",
+    "start:legacy": "next start",
     "lint": "next lint",
     "generate-favicon": "node scripts/generate-favicon.js",
     "fix-review-stats": "node scripts/fix-review-statistics.js",
