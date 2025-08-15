@@ -175,6 +175,10 @@ export default function NewCheckoutPage() {
     fromHour: string;
     toHour: string;
   } | null>(null)
+  
+  // Special note state
+  const [customerSpecialNote, setCustomerSpecialNote] = useState<string>('')
+  const [showSpecialNoteModal, setShowSpecialNoteModal] = useState(false)
 
   // Determine if user is logged in based on session status
   const isLoggedIn = status === 'authenticated' && session?.user
@@ -236,6 +240,12 @@ export default function NewCheckoutPage() {
     if (isSessionLoading) return
     startCheckout()
     fetchPaymentMethods()
+    
+    // Load customer special note from localStorage
+    const savedNote = localStorage.getItem('customerSpecialNote')
+    if (savedNote) {
+      setCustomerSpecialNote(savedNote)
+    }
   }, [isSessionLoading])
 
   // Reset acknowledgement when delivery address/zone changes
@@ -601,6 +611,9 @@ export default function NewCheckoutPage() {
   }
 
   const placeOrder = async () => {
+    debugLog('🔍 [DEBUG] placeOrder function called')
+    debugLog('🔍 [DEBUG] Checkout data:', checkoutData)
+    debugLog('🔍 [DEBUG] Customer special note:', customerSpecialNote)
     if (!checkoutData) return
 
     setPlacingOrder(true)
@@ -654,7 +667,8 @@ export default function NewCheckoutPage() {
         orderData: {
           ...orderData,
           deliveryDate: selectedDeliveryDate, // Ensure delivery date is passed to payment API
-          deliveryTimeSlot: deliveryTimeSlot // Pass delivery time slot information
+          deliveryTimeSlot: deliveryTimeSlot, // Pass delivery time slot information
+          customer_note: customerSpecialNote // Add customer special note
         }
       }
 
@@ -1689,6 +1703,35 @@ export default function NewCheckoutPage() {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Special Note Section */}
+                  <div className="space-y-4">
+                    <Label className="text-base font-medium">Special Instructions</Label>
+                    <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600">
+                          {customerSpecialNote ? (
+                            <span className="text-gray-900 font-medium">
+                              {customerSpecialNote.length > 50 
+                                ? `${customerSpecialNote.substring(0, 50)}...` 
+                                : customerSpecialNote}
+                            </span>
+                          ) : (
+                            "Add any special instructions, dietary requirements, or delivery notes"
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => setShowSpecialNoteModal(true)}
+                        variant="outline"
+                        size="sm"
+                        className="ml-4"
+                      >
+                        {customerSpecialNote ? 'Edit Note' : 'Add Note'}
+                      </Button>
+                    </div>
+                  </div>
+                  
                   <div className="flex justify-between mt-8 flex-col gap-3 sm:flex-row">
                     <Button variant="outline" onClick={() => setStep(1)} className="w-full sm:w-auto">
                       Back
@@ -1714,6 +1757,7 @@ export default function NewCheckoutPage() {
                           localStorage.setItem('promoDiscount', JSON.stringify(promoDiscount));
                           localStorage.setItem('acknowledgeDeliveryRules', JSON.stringify(acknowledgeDeliveryRules));
                           localStorage.setItem('deliveryDateInitialized', JSON.stringify(deliveryDateInitialized));
+                          localStorage.setItem('customerSpecialNote', customerSpecialNote);
                           // Navigate to confirmation page
                           router.push('/checkout-new/confirm');
                         }}
@@ -1776,6 +1820,46 @@ export default function NewCheckoutPage() {
                   disabled={otpCountdown > 0}
                 >
                   {otpCountdown > 0 ? `${otpCountdown}s` : 'Resend'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Special Note Modal */}
+        <Dialog open={showSpecialNoteModal} onOpenChange={setShowSpecialNoteModal}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add Special Instructions</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+
+              <div className="space-y-2">
+                <Label htmlFor="specialNote">Special Instructions</Label>
+                <Textarea
+                  id="specialNote"
+                  value={customerSpecialNote}
+                  onChange={(e) => setCustomerSpecialNote(e.target.value)}
+                  placeholder="e.g., Please deliver to the back entrance, No onions in the food, Special packaging required, etc."
+                  rows={6}
+                  className="resize-none"
+                />
+                <p className="text-xs text-gray-500">
+                  Maximum 500 characters. Your special instructions will be shared with our kitchen and delivery team.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowSpecialNoteModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => setShowSpecialNoteModal(false)}
+                  className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600"
+                >
+                  Save Note
                 </Button>
               </div>
             </div>

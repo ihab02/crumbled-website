@@ -172,6 +172,8 @@ export async function GET(request: any) {
         dts.name as delivery_time_slot_name,
         dts.from_hour,
         dts.to_hour,
+        o.admin_note,
+        o.customer_note,
         (o.subtotal + o.delivery_fee - COALESCE(o.discount_amount, 0)) as total_after_discount
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
@@ -304,13 +306,39 @@ export async function PATCH(request: any) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { orderId, status, expected_delivery_date } = await request.json()
+    const { orderId, status, expected_delivery_date, admin_note, customer_note } = await request.json()
 
     if (!orderId) {
       return NextResponse.json(
         { error: 'Order ID is required' },
         { status: 400 }
       )
+    }
+
+    // Update admin note if provided
+    if (admin_note !== undefined) {
+      await db.query(
+        'UPDATE orders SET admin_note = ? WHERE id = ?',
+        [admin_note, orderId]
+      );
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Admin note updated successfully'
+      });
+    }
+
+    // Update customer note if provided
+    if (customer_note !== undefined) {
+      await db.query(
+        'UPDATE orders SET customer_note = ? WHERE id = ?',
+        [customer_note, orderId]
+      );
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Customer note updated successfully'
+      });
     }
 
     // Update expected delivery date if provided

@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { 
   CheckCircle, 
@@ -190,6 +192,10 @@ export default function ConfirmPage() {
   const [otpCode, setOtpCode] = useState("")
   const [verifyingOtp, setVerifyingOtp] = useState(false)
   const [otpCountdown, setOtpCountdown] = useState(0)
+  
+  // Special note state
+  const [customerSpecialNote, setCustomerSpecialNote] = useState<string>('')
+  const [showSpecialNoteModal, setShowSpecialNoteModal] = useState(false)
 
   useEffect(() => {
     // Load all data from localStorage
@@ -249,7 +255,8 @@ export default function ConfirmPage() {
     setAppliedPromoCode(JSON.parse(localStorage.getItem('appliedPromoCode') || 'null'))
     setPromoDiscount(Number(localStorage.getItem('promoDiscount') || 0))
     setAcknowledgeDeliveryRules(JSON.parse(localStorage.getItem('acknowledgeDeliveryRules') || 'false'))
-    setDeliveryDateInitialized(JSON.parse(localStorage.getItem('deliveryDateInitialized') || 'false'))
+          setDeliveryDateInitialized(JSON.parse(localStorage.getItem('deliveryDateInitialized') || 'false'))
+      setCustomerSpecialNote(localStorage.getItem('customerSpecialNote') || '')
   }, [])
 
   // Helper function to check if an item is eligible for category-specific promo
@@ -546,7 +553,8 @@ export default function ConfirmPage() {
         paymentMethod, 
         orderData: {
           ...orderData,
-          deliveryDate: selectedDeliveryDate // Ensure delivery date is passed to payment API
+          deliveryDate: selectedDeliveryDate, // Ensure delivery date is passed to payment API
+          customer_note: customerSpecialNote // Add customer special note
         }
       }
       const paymentResponse = await fetch('/api/checkout/payment', {
@@ -685,6 +693,34 @@ export default function ConfirmPage() {
                 {/* Order Summary */}
                 <div className="space-y-4">
                   <h3 className="text-base sm:text-lg font-semibold text-gray-900">Order Summary</h3>
+                
+                {/* Special Note Section */}
+                <div className="space-y-4 mb-6">
+                  <Label className="text-base font-medium">Special Instructions</Label>
+                  <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg bg-gray-50">
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600">
+                        {customerSpecialNote ? (
+                          <span className="text-gray-900 font-medium">
+                            {customerSpecialNote.length > 50 
+                              ? `${customerSpecialNote.substring(0, 50)}...` 
+                              : customerSpecialNote}
+                          </span>
+                        ) : (
+                          "Add any special instructions, dietary requirements, or delivery notes"
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => setShowSpecialNoteModal(true)}
+                      variant="outline"
+                      size="sm"
+                      className="ml-4"
+                    >
+                      {customerSpecialNote ? 'Edit Note' : 'Add Note'}
+                    </Button>
+                  </div>
+                </div>
                   {/* Delivery Information */}
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <h4 className="font-medium text-gray-900 mb-2">Delivery Information</h4>
@@ -1012,6 +1048,49 @@ export default function ConfirmPage() {
           </div>
         </div>
       </div>
+      
+      {/* Special Note Modal */}
+      <Dialog open={showSpecialNoteModal} onOpenChange={setShowSpecialNoteModal}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Special Instructions</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+
+            <div className="space-y-2">
+              <Label htmlFor="specialNote">Special Instructions</Label>
+              <Textarea
+                id="specialNote"
+                value={customerSpecialNote}
+                onChange={(e) => setCustomerSpecialNote(e.target.value)}
+                placeholder="e.g., Please deliver to the back entrance, No onions in the food, Special packaging required, etc."
+                rows={6}
+                className="resize-none"
+              />
+              <p className="text-xs text-gray-500">
+                Maximum 500 characters. Your special instructions will be shared with our kitchen and delivery team.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowSpecialNoteModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  localStorage.setItem('customerSpecialNote', customerSpecialNote)
+                  setShowSpecialNoteModal(false)
+                }}
+                className="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600"
+              >
+                Save Note
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

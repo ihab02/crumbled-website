@@ -56,6 +56,7 @@ interface CheckoutPaymentRequest {
       fromHour: string;
       toHour: string;
     };
+    customer_note?: string;
   };
 }
 
@@ -301,6 +302,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           status, 
           payment_method,
           delivery_address,
+          delivery_additional_info,
           delivery_city,
           delivery_zone,
           zone,
@@ -310,8 +312,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           delivery_time_slot_name,
           from_hour,
           to_hour,
+          customer_note,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           customerId,
           finalPromoCodeId || null,
@@ -321,6 +324,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           orderStatus,
           paymentMethod === 'cod' ? 'cash' : 'card',
           orderData.deliveryAddress.street_address,
+          orderData.deliveryAddress.additional_info || null,
           orderData.deliveryAddress.city_name,
           orderData.deliveryAddress.zone_name,
           orderData.deliveryAddress.zone_name,
@@ -329,7 +333,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<CheckoutP
           orderData.deliveryDate || null,
           orderData.deliveryTimeSlot?.name || null,
           orderData.deliveryTimeSlot?.fromHour || null,
-          orderData.deliveryTimeSlot?.toHour || null
+          orderData.deliveryTimeSlot?.toHour || null,
+          orderData.customer_note || null
         ]
       );
       console.log('🔍 [DEBUG] Payment API - Inserted order with finalPromoCodeId:', finalPromoCodeId, 'and finalDiscountAmount:', finalDiscountAmount);

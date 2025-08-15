@@ -60,8 +60,10 @@ interface Order {
   promo_code_id?: number | null;
   promo_code?: string | null;
   discount_amount?: number | null;
-        total_after_discount?: number | null;
-      total_amount?: number | null;
+  total_after_discount?: number | null;
+  total_amount?: number | null;
+  admin_note?: string | null;
+  customer_note?: string | null;
 }
 
 interface DeliveryPerson {
@@ -135,6 +137,9 @@ export default function AdminOrdersPage() {
   const [sortOrder, setSortOrder] = useState<string>('DESC');
   const [editingDeliveryDate, setEditingDeliveryDate] = useState<{orderId: number, date: string} | null>(null);
   const [isUpdatingDeliveryDate, setIsUpdatingDeliveryDate] = useState(false);
+  const [isUpdatingAdminNote, setIsUpdatingAdminNote] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [noteModalData, setNoteModalData] = useState<{orderId: number, currentNote: string, type: 'admin' | 'customer'} | null>(null);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [selectedDeliveryDateFilters, setSelectedDeliveryDateFilters] = useState<Set<string>>(new Set());
   const printRef = useRef<HTMLDivElement>(null);
@@ -278,7 +283,7 @@ export default function AdminOrdersPage() {
           }
           
           if (assignableOrderIds.length < bulkSelectedOrders.size) {
-            toast.warning(`${bulkSelectedOrders.size - assignableOrderIds.length} delivered/cancelled orders were excluded from delivery assignment.`);
+            toast.error(`${bulkSelectedOrders.size - assignableOrderIds.length} delivered/cancelled orders were excluded from delivery assignment.`);
           }
           
           openDeliveryModal(assignableOrderIds);
@@ -494,13 +499,51 @@ export default function AdminOrdersPage() {
         throw new Error('Failed to update delivery date');
       }
 
-      toast.success('Delivery date updated');
-      setEditingDeliveryDate(null);
+      toast.success('Delivery date updated successfully');
       fetchOrders();
     } catch (error) {
       toast.error('Failed to update delivery date');
     } finally {
       setIsUpdatingDeliveryDate(false);
+      setEditingDeliveryDate(null);
+    }
+  };
+
+  const openNoteModal = (orderId: number, currentNote: string, type: 'admin' | 'customer') => {
+    setNoteModalData({ orderId, currentNote, type });
+    setShowNoteModal(true);
+  };
+
+  const closeNoteModal = () => {
+    setShowNoteModal(false);
+    setNoteModalData(null);
+  };
+
+  const updateNote = async (orderId: number, note: string, type: 'admin' | 'customer') => {
+    setIsUpdatingAdminNote(true);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          orderId, 
+          ...(type === 'admin' ? { admin_note: note } : { customer_note: note })
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update ${type} note`);
+      }
+
+      toast.success(`${type === 'admin' ? 'Admin' : 'Customer'} note updated successfully`);
+      fetchOrders();
+      closeNoteModal();
+    } catch (error) {
+      toast.error(`Failed to update ${type} note`);
+    } finally {
+      setIsUpdatingAdminNote(false);
     }
   };
 
@@ -893,37 +936,48 @@ export default function AdminOrdersPage() {
   const exportToPDF = () => {
     const ordersToExport = searchFilteredOrders;
     
-    const doc = new jsPDF();
+    // Create PDF in landscape orientation
+    const doc = new jsPDF('landscape');
     
-    // Note: Logo would need to be converted to base64 for PDF export
-    // For now, we'll use text branding
-    
-    // Add title and header information
+    // Add title and header information with Crumbled brand colors
     doc.setFontSize(24);
-    doc.setTextColor(41, 128, 185);
-    doc.text('Crumbled - Orders Report', 105, 35, { align: 'center' });
+    doc.setTextColor(190, 24, 93); // #be185d - Crumbled pink
+    doc.text('Crumbled - Orders Report', 150, 25, { align: 'center' });
+    
+    // Add logo using jsPDF image support
+    const logoUrl = 'https://crumbled-eg.com/logo-no-bg.png';
+    try {
+      // Add logo image (positioned in top-left)
+      doc.addImage(logoUrl, 'PNG', 20, 15, 30, 15);
+    } catch (error) {
+      // Fallback to text if image fails to load
+      doc.setFontSize(16);
+      doc.setTextColor(190, 24, 93);
+      doc.text('🍰 Crumbled', 20, 25);
+    }
     
     doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 105, 45, { align: 'center' });
-    doc.text(`Total Orders: ${ordersToExport.length}`, 105, 55, { align: 'center' });
+    doc.setTextColor(55, 65, 81); // #374151 - Dark gray
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 150, 35, { align: 'center' });
+    doc.text(`Total Orders: ${ordersToExport.length}`, 150, 42, { align: 'center' });
     
     // Add filter info
     if (filterStatus !== 'all' || searchTerm || hideCancelled || hideDelivered || selectedDeliveryDateFilters.size > 0) {
       doc.setFontSize(10);
+      doc.setTextColor(107, 114, 128); // #6b7280 - Gray
       let filterText = 'Filters: ';
       if (filterStatus !== 'all') filterText += `Status: ${filterStatus} `;
       if (searchTerm) filterText += `Search: ${searchTerm} `;
       if (hideCancelled) filterText += `Hide Cancelled `;
       if (hideDelivered) filterText += `Hide Delivered `;
       if (selectedDeliveryDateFilters.size > 0) {
-      const deliveryDateFilters = getDeliveryDateFilters();
-      const selectedLabels = deliveryDateFilters
-        .filter(filter => selectedDeliveryDateFilters.has(filter.key))
-        .map(filter => filter.label);
-      filterText += `Delivery Dates: ${selectedLabels.join(', ')} `;
-    }
-      doc.text(filterText, 20, 65);
+        const deliveryDateFilters = getDeliveryDateFilters();
+        const selectedLabels = deliveryDateFilters
+          .filter(filter => selectedDeliveryDateFilters.has(filter.key))
+          .map(filter => filter.label);
+        filterText += `Delivery Dates: ${selectedLabels.join(', ')} `;
+      }
+      doc.text(filterText, 20, 55);
     }
     
     // Group orders by zone for summary
@@ -936,11 +990,11 @@ export default function AdminOrdersPage() {
       return acc;
     }, {} as Record<string, Order[]>);
     
-    let currentY = 75;
+    let currentY = 70;
     
     // Add zone summary
     doc.setFontSize(14);
-    doc.setTextColor(41, 128, 185);
+    doc.setTextColor(190, 24, 93); // #be185d - Crumbled pink
     doc.text('Summary by Zone:', 20, currentY);
     currentY += 10;
     
@@ -956,20 +1010,26 @@ export default function AdminOrdersPage() {
       head: [['Zone', 'Orders', 'Total Revenue', 'Avg Order Value']],
       body: summaryData,
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
-      styles: { fontSize: 9 },
-      margin: { top: 5 }
+      headStyles: { fillColor: [190, 24, 93], textColor: [255, 255, 255] }, // Crumbled pink
+      styles: { fontSize: 8 },
+      margin: { top: 5 },
+      columnStyles: {
+        0: { cellWidth: 60 }, // Zone
+        1: { cellWidth: 25 }, // Orders
+        2: { cellWidth: 40 }, // Total Revenue
+        3: { cellWidth: 40 }  // Avg Order Value
+      }
     });
     
     currentY = (doc as any).lastAutoTable.finalY + 15;
     
     // Add detailed orders table
     doc.setFontSize(14);
-    doc.setTextColor(41, 128, 185);
+    doc.setTextColor(190, 24, 93); // #be185d - Crumbled pink
     doc.text('Detailed Orders:', 20, currentY);
     currentY += 10;
     
-    // Prepare detailed table data
+    // Prepare detailed table data - optimized for landscape fit
     const tableData = ordersToExport.map(order => [
       order.id.toString(),
       order.customer_name || 'Guest User',
@@ -977,34 +1037,34 @@ export default function AdminOrdersPage() {
       order.delivery_zone || order.zone || 'N/A',
       order.status,
       `EGP ${Number(order.total).toFixed(2)}`,
-      `EGP ${order.total_after_discount ? Number(order.total_after_discount).toFixed(2) : Number(order.total).toFixed(2)}`,
       order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
-      order.delivery_time_slot_name || 'N/A',
       order.delivery_man_name || 'Not Assigned',
-      new Date(order.created_at).toLocaleDateString()
+      new Date(order.created_at).toLocaleDateString(),
+      order.admin_note || 'N/A',
+      order.customer_note || 'N/A'
     ]);
     
-    // Add detailed table
+    // Add detailed table - optimized column widths for landscape
     autoTable(doc, {
       startY: currentY,
-      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Total After Discount', 'Expected Delivery', 'Time Slot', 'Delivery Person', 'Order Date']],
+      head: [['Order ID', 'Customer', 'Phone', 'Zone', 'Status', 'Total', 'Expected Delivery', 'Delivery Person', 'Order Date', 'Admin Note', 'Customer Note']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+      headStyles: { fillColor: [190, 24, 93], textColor: [255, 255, 255] }, // Crumbled pink
       styles: { fontSize: 7 },
       margin: { top: 5 },
       columnStyles: {
-        0: { cellWidth: 15 }, // Order ID
-        1: { cellWidth: 25 }, // Customer
-        2: { cellWidth: 20 }, // Phone
-        3: { cellWidth: 20 }, // Zone
-        4: { cellWidth: 15 }, // Status
-        5: { cellWidth: 18 }, // Total
-        6: { cellWidth: 18 }, // Total After Discount
-        7: { cellWidth: 25 }, // Expected Delivery
-        8: { cellWidth: 20 }, // Time Slot
-        9: { cellWidth: 20 }, // Delivery Person
-        10: { cellWidth: 20 }  // Order Date
+        0: { cellWidth: 18 }, // Order ID
+        1: { cellWidth: 35 }, // Customer
+        2: { cellWidth: 22 }, // Phone
+        3: { cellWidth: 22 }, // Zone
+        4: { cellWidth: 18 }, // Status
+        5: { cellWidth: 22 }, // Total
+        6: { cellWidth: 25 }, // Expected Delivery
+        7: { cellWidth: 30 }, // Delivery Person
+        8: { cellWidth: 20 }, // Order Date
+        9: { cellWidth: 35 }, // Admin Note
+        10: { cellWidth: 35 }  // Customer Note
       }
     });
     
@@ -1014,7 +1074,7 @@ export default function AdminOrdersPage() {
       currentY = 20;
       
       doc.setFontSize(14);
-      doc.setTextColor(41, 128, 185);
+      doc.setTextColor(190, 24, 93); // #be185d - Crumbled pink
       doc.text('Delivery Addresses:', 20, currentY);
       currentY += 10;
       
@@ -1035,9 +1095,17 @@ export default function AdminOrdersPage() {
           head: [['Order ID', 'Customer', 'Address', 'City', 'Zone', 'Expected Delivery']],
           body: addressData,
           theme: 'grid',
-          headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
-          styles: { fontSize: 8 },
-          margin: { top: 5 }
+          headStyles: { fillColor: [190, 24, 93], textColor: [255, 255, 255] }, // Crumbled pink
+          styles: { fontSize: 7 },
+          margin: { top: 5 },
+          columnStyles: {
+            0: { cellWidth: 20 }, // Order ID
+            1: { cellWidth: 35 }, // Customer
+            2: { cellWidth: 60 }, // Address
+            3: { cellWidth: 25 }, // City
+            4: { cellWidth: 25 }, // Zone
+            5: { cellWidth: 30 }  // Expected Delivery
+          }
         });
       }
     }
@@ -1631,6 +1699,52 @@ export default function AdminOrdersPage() {
                         <p className="text-gray-500">Payment</p>
                         <p className="font-medium">{order.payment_method}</p>
                       </div>
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Admin Note</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            {order.admin_note ? (
+                              <div className="text-sm text-gray-900 truncate" title={order.admin_note}>
+                                {order.admin_note}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No note</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => openNoteModal(order.id, order.admin_note || '', 'admin')}
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            title="Edit admin note"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Customer Note</p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            {order.customer_note ? (
+                              <div className="text-sm text-gray-900 truncate" title={order.customer_note}>
+                                {order.customer_note}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No note</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => openNoteModal(order.id, order.customer_note || '', 'customer')}
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            title="Edit customer note"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Actions */}
@@ -1754,6 +1868,12 @@ export default function AdminOrdersPage() {
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Admin Note
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Customer Note
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -1915,7 +2035,51 @@ export default function AdminOrdersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                  <div className="flex space-x-2">
+                        <div className="flex items-start space-x-2">
+                          <div className="flex-1 min-w-0">
+                            {order.admin_note ? (
+                              <div className="text-sm text-gray-900 max-w-xs truncate" title={order.admin_note}>
+                                {order.admin_note}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No note</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => openNoteModal(order.id, order.admin_note || '', 'admin')}
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            title="Edit admin note"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex items-start space-x-2">
+                          <div className="flex-1 min-w-0">
+                            {order.customer_note ? (
+                              <div className="text-sm text-gray-900 max-w-xs truncate" title={order.customer_note}>
+                                {order.customer_note}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No note</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => openNoteModal(order.id, order.customer_note || '', 'customer')}
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            title="Edit customer note"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div className="flex space-x-2">
                             <select
                               value={order.status}
                               onChange={(e) => handleStatusChange(order.id, e.target.value)}
@@ -2547,6 +2711,83 @@ export default function AdminOrdersPage() {
                     className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
                   >
                     Confirm Change
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Note Editing Modal */}
+        {showNoteModal && noteModalData && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-medium text-gray-900">
+                    Edit {noteModalData.type === 'admin' ? 'Admin' : 'Customer'} Note
+                  </h2>
+                  <button
+                    onClick={closeNoteModal}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg
+                      className="h-6 w-6"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 py-4">
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Order #{noteModalData.orderId} - {noteModalData.type === 'admin' ? 'Admin' : 'Customer'} Note
+                  </p>
+                  
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {noteModalData.type === 'admin' ? 'Admin' : 'Customer'} Note
+                  </label>
+                  <textarea
+                    defaultValue={noteModalData.currentNote}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    rows={8}
+                    placeholder={`Enter ${noteModalData.type === 'admin' ? 'admin' : 'customer'} note here...`}
+                    id="noteTextarea"
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    You can add detailed notes, instructions, or special requirements for this order.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={closeNoteModal}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const textarea = document.getElementById('noteTextarea') as HTMLTextAreaElement;
+                      if (textarea) {
+                        updateNote(noteModalData.orderId, textarea.value, noteModalData.type);
+                      }
+                    }}
+                    disabled={isUpdatingAdminNote}
+                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUpdatingAdminNote ? 'Saving...' : 'Save Note'}
                   </button>
                 </div>
               </div>
