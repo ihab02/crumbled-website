@@ -37,6 +37,8 @@ export async function GET(request: any) {
     const hideDelivered = searchParams.get('hideDelivered') === 'true'
     const showTodayDelivery = searchParams.get('showTodayDelivery') === 'true'
     const includeTomorrow = searchParams.get('includeTomorrow') === 'true'
+    const deliveryDates = searchParams.get('deliveryDates')
+    const zone = searchParams.get('zone')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
     const offset = (page - 1) * limit
@@ -81,6 +83,22 @@ export async function GET(request: any) {
       }
     }
 
+    // Filter by specific delivery dates
+    if (deliveryDates) {
+      const dates = deliveryDates.split(',');
+      if (dates.length > 0) {
+        const placeholders = dates.map(() => '?').join(',');
+        conditions.push(`DATE(CONVERT_TZ(o.expected_delivery_date, '+00:00', '+03:00')) IN (${placeholders})`);
+        params.push(...dates);
+      }
+    }
+
+    // Filter by zone
+    if (zone) {
+      conditions.push('o.delivery_zone = ?');
+      params.push(zone);
+    }
+
     // Combine all conditions
     if (conditions.length > 0) {
       whereClause = 'WHERE ' + conditions.join(' AND ')
@@ -96,6 +114,7 @@ export async function GET(request: any) {
       hideCancelled,
       hideDelivered,
       showTodayDelivery,
+      deliveryDates,
       params,
       limit,
       offset,
@@ -161,7 +180,7 @@ export async function GET(request: any) {
        LEFT JOIN delivery_men dm ON o.delivery_man_id = dm.id
        LEFT JOIN delivery_time_slots dts ON z.time_slot_id = dts.id
        ${whereClause}
-       ORDER BY ${sortBy === 'expected_delivery_date' ? 'o.expected_delivery_date' : 
+       ORDER BY ${sortBy === 'expected_delivery_date' ? 'COALESCE(o.expected_delivery_date, o.created_at)' : 
                  sortBy === 'delivery_zone' ? 'o.delivery_zone' :
                  sortBy === 'total_after_discount' ? 'total_after_discount' :
                  sortBy === 'customer_name' ? 'customer_name' :
@@ -285,11 +304,32 @@ export async function PATCH(request: any) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { orderId, status } = await request.json()
+    const { orderId, status, expected_delivery_date } = await request.json()
 
-    if (!orderId || !status) {
+    if (!orderId) {
       return NextResponse.json(
-        { error: 'Order ID and status are required' },
+        { error: 'Order ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Update expected delivery date if provided
+    if (expected_delivery_date !== undefined) {
+      await db.query(
+        'UPDATE orders SET expected_delivery_date = ? WHERE id = ?',
+        [expected_delivery_date, orderId]
+      );
+      
+      return NextResponse.json({
+        success: true,
+        message: 'Order delivery date updated successfully'
+      });
+    }
+
+    // Update status if provided
+    if (!status) {
+      return NextResponse.json(
+        { error: 'Status is required for status updates' },
         { status: 400 }
       )
     }

@@ -106,11 +106,11 @@ export default function AdminOrdersPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [hideCancelled, setHideCancelled] = useState<boolean>(false);
   const [hideDelivered, setHideDelivered] = useState<boolean>(false);
-  const [showTodayDelivery, setShowTodayDelivery] = useState<boolean>(false);
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set());
   const [bulkSelectedOrders, setBulkSelectedOrders] = useState<Set<number>>(new Set());
   const [isLoadingBulkAction, setIsLoadingBulkAction] = useState(false);
   const [filterDeliveryPerson, setFilterDeliveryPerson] = useState<string>('all');
+  const [filterZone, setFilterZone] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
@@ -118,13 +118,14 @@ export default function AdminOrdersPage() {
     currentPage: 1,
     totalPages: 1,
     totalOrders: 0,
-    limit: 10,
+    limit: 100,
     hasNextPage: false,
     hasPrevPage: false
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
+  const [zones, setZones] = useState<string[]>([]);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState<{orderId: number, newStatus: string} | null>(null);
@@ -132,6 +133,10 @@ export default function AdminOrdersPage() {
   const [isAssigningDelivery, setIsAssigningDelivery] = useState(false);
   const [sortBy, setSortBy] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<string>('DESC');
+  const [editingDeliveryDate, setEditingDeliveryDate] = useState<{orderId: number, date: string} | null>(null);
+  const [isUpdatingDeliveryDate, setIsUpdatingDeliveryDate] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [selectedDeliveryDateFilters, setSelectedDeliveryDateFilters] = useState<Set<string>>(new Set());
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -143,6 +148,7 @@ export default function AdminOrdersPage() {
     if (user) {
       fetchOrders();
       fetchDeliveryPersons();
+      fetchZones();
     }
   }, [user, authLoading, router]);
 
@@ -155,6 +161,18 @@ export default function AdminOrdersPage() {
       }
     } catch (error) {
       console.error('Failed to fetch delivery persons:', error);
+    }
+  };
+
+  const fetchZones = async () => {
+    try {
+      const response = await fetch('/api/admin/zones');
+      if (response.ok) {
+        const data = await response.json();
+        setZones(data.zones || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch zones:', error);
     }
   };
 
@@ -218,15 +236,23 @@ export default function AdminOrdersPage() {
     setBulkSelectedOrders(newBulkSelectedOrders);
   };
 
+  // Check if order can be assigned to delivery (for delivery-related actions only)
+  const canAssignToDelivery = (order: Order) => {
+    return order.status !== 'delivered' && order.status !== 'cancelled';
+  };
+
+  // Check if order can be included in bulk actions (all orders can be printed)
+  const canIncludeInBulkActions = (order: Order) => {
+    return true; // All orders can be included in bulk actions like printing
+  };
+
   const selectAllOrders = () => {
-    const assignableOrderIds = searchFilteredOrders
-      .filter(canAssignToDelivery)
-      .map(order => order.id);
+    const allOrderIds = searchFilteredOrders.map(order => order.id);
     
-    if (bulkSelectedOrders.size === assignableOrderIds.length) {
+    if (bulkSelectedOrders.size === allOrderIds.length) {
       setBulkSelectedOrders(new Set());
     } else {
-      setBulkSelectedOrders(new Set(assignableOrderIds));
+      setBulkSelectedOrders(new Set(allOrderIds));
     }
   };
 
@@ -240,7 +266,22 @@ export default function AdminOrdersPage() {
     try {
       switch (action) {
         case 'assign_delivery':
-          openDeliveryModal(Array.from(bulkSelectedOrders));
+          // Filter out delivered/cancelled orders for delivery assignment
+          const assignableOrderIds = Array.from(bulkSelectedOrders).filter(orderId => {
+            const order = searchFilteredOrders.find(o => o.id === orderId);
+            return order && canAssignToDelivery(order);
+          });
+          
+          if (assignableOrderIds.length === 0) {
+            toast.error('No assignable orders selected. Delivered and cancelled orders cannot be assigned to delivery.');
+            return;
+          }
+          
+          if (assignableOrderIds.length < bulkSelectedOrders.size) {
+            toast.warning(`${bulkSelectedOrders.size - assignableOrderIds.length} delivered/cancelled orders were excluded from delivery assignment.`);
+          }
+          
+          openDeliveryModal(assignableOrderIds);
           break;
         case 'mark_prepared':
           await updateMultipleOrderStatuses(Array.from(bulkSelectedOrders), 'prepared');
@@ -341,7 +382,7 @@ export default function AdminOrdersPage() {
       // Build query parameters
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '10',
+        limit: '100',
         sortBy: sortBy,
         sortOrder: sortOrder
       });
@@ -358,11 +399,28 @@ export default function AdminOrdersPage() {
       if (hideDelivered) {
         params.append('hideDelivered', 'true');
       }
-      if (showTodayDelivery) {
-        params.append('showTodayDelivery', 'true');
+      if (filterZone !== 'all') {
+        params.append('zone', filterZone);
       }
       
-      const response = await fetch(`/api/admin/orders?${params.toString()}`);
+      // Add delivery date filters
+      if (selectedDeliveryDateFilters.size > 0) {
+        const deliveryDateFilters = getDeliveryDateFilters();
+        const selectedDates = deliveryDateFilters
+          .filter(filter => selectedDeliveryDateFilters.has(filter.key))
+          .map(filter => filter.date);
+        if (selectedDates.length > 0) {
+          params.append('deliveryDates', selectedDates.join(','));
+          console.log('🔍 [DEBUG] Frontend - Selected delivery dates:', selectedDates);
+          console.log('🔍 [DEBUG] Frontend - Selected filter keys:', Array.from(selectedDeliveryDateFilters));
+        }
+      } else {
+        console.log('🔍 [DEBUG] Frontend - No delivery date filters selected');
+      }
+      
+      const url = `/api/admin/orders?${params.toString()}`;
+      console.log('🔍 [DEBUG] Frontend - Requesting URL:', url);
+      const response = await fetch(url);
       if (!response.ok) {
         if (response.status === 401) {
           router.push('/admin/login');
@@ -421,6 +479,157 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const updateDeliveryDate = async (orderId: number, newDate: string) => {
+    setIsUpdatingDeliveryDate(true);
+    try {
+      const response = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ orderId, expected_delivery_date: newDate })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update delivery date');
+      }
+
+      toast.success('Delivery date updated');
+      setEditingDeliveryDate(null);
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to update delivery date');
+    } finally {
+      setIsUpdatingDeliveryDate(false);
+    }
+  };
+
+  const getDeliveryDateFilters = () => {
+    const today = new Date();
+    // Format date as YYYY-MM-DD in local timezone
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const filters = [
+      {
+        key: '2days_before',
+        label: '2 Days Before',
+        date: formatDate(new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000))
+      },
+      {
+        key: '1day_before',
+        label: 'Yesterday',
+        date: formatDate(new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000))
+      },
+      {
+        key: 'today',
+        label: 'Today',
+        date: formatDate(today)
+      },
+      {
+        key: 'tomorrow',
+        label: 'Tomorrow',
+        date: formatDate(new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000))
+      },
+      {
+        key: '2days_after',
+        label: '2 Days After',
+        date: formatDate(new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000))
+      },
+      {
+        key: '3days_after',
+        label: '3 Days After',
+        date: formatDate(new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000))
+      },
+      {
+        key: '1week_after',
+        label: '1 Week After',
+        date: formatDate(new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000))
+      }
+    ];
+    return filters;
+  };
+
+  const toggleDeliveryDateFilter = (filterKey: string) => {
+    const newFilters = new Set(selectedDeliveryDateFilters);
+    if (newFilters.has(filterKey)) {
+      newFilters.delete(filterKey);
+      console.log('🔍 [DEBUG] Removed filter:', filterKey);
+    } else {
+      newFilters.add(filterKey);
+      console.log('🔍 [DEBUG] Added filter:', filterKey);
+    }
+    console.log('🔍 [DEBUG] New filters:', Array.from(newFilters));
+    setSelectedDeliveryDateFilters(newFilters);
+    
+    // Fetch orders with the new filters immediately
+    fetchOrdersWithFilters(newFilters);
+  };
+
+  const fetchOrdersWithFilters = async (filters: Set<string>, page: number = 1, hideCancelledParam?: boolean, hideDeliveredParam?: boolean) => {
+    setLoading(true);
+    try {
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '100',
+        sortBy: sortBy,
+        sortOrder: sortOrder
+      });
+      
+      if (fromDate) {
+        params.append('fromDate', fromDate);
+      }
+      if (toDate) {
+        params.append('toDate', toDate);
+      }
+      if (hideCancelledParam !== undefined ? hideCancelledParam : hideCancelled) {
+        params.append('hideCancelled', 'true');
+      }
+      if (hideDeliveredParam !== undefined ? hideDeliveredParam : hideDelivered) {
+        params.append('hideDelivered', 'true');
+      }
+      
+      // Add delivery date filters
+      if (filters.size > 0) {
+        const deliveryDateFilters = getDeliveryDateFilters();
+        const selectedDates = deliveryDateFilters
+          .filter(filter => filters.has(filter.key))
+          .map(filter => filter.date);
+        if (selectedDates.length > 0) {
+          params.append('deliveryDates', selectedDates.join(','));
+          console.log('🔍 [DEBUG] Frontend - Selected delivery dates:', selectedDates);
+          console.log('🔍 [DEBUG] Frontend - Selected filter keys:', Array.from(filters));
+        }
+      } else {
+        console.log('🔍 [DEBUG] Frontend - No delivery date filters selected');
+      }
+      
+      const url = `/api/admin/orders?${params.toString()}`;
+      console.log('🔍 [DEBUG] Frontend - Requesting URL:', url);
+      const response = await fetch(url);
+      if (!response.ok) {
+        if (response.status === 401) {
+          router.push('/admin/login');
+          return;
+        }
+        throw new Error('Failed to fetch orders');
+      }
+      const data = await response.json();
+      setOrders(data.orders || []);
+      setPagination(data.pagination);
+      setCurrentPage(page);
+    } catch (error) {
+      toast.error('Failed to fetch orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const confirmStatusChange = async () => {
     if (pendingStatusChange) {
       await updateOrderStatus(pendingStatusChange.orderId, pendingStatusChange.newStatus);
@@ -455,10 +664,7 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // Helper function to check if an order can be assigned to delivery
-  const canAssignToDelivery = (order: Order) => {
-    return order.status !== 'delivered' && order.status !== 'cancelled';
-  };
+
 
   const handleOrderSelection = (orderId: number) => {
     const order = searchFilteredOrders.find(o => o.id === orderId);
@@ -703,14 +909,20 @@ export default function AdminOrdersPage() {
     doc.text(`Total Orders: ${ordersToExport.length}`, 105, 55, { align: 'center' });
     
     // Add filter info
-    if (filterStatus !== 'all' || searchTerm || hideCancelled || hideDelivered || showTodayDelivery) {
+    if (filterStatus !== 'all' || searchTerm || hideCancelled || hideDelivered || selectedDeliveryDateFilters.size > 0) {
       doc.setFontSize(10);
       let filterText = 'Filters: ';
       if (filterStatus !== 'all') filterText += `Status: ${filterStatus} `;
       if (searchTerm) filterText += `Search: ${searchTerm} `;
       if (hideCancelled) filterText += `Hide Cancelled `;
       if (hideDelivered) filterText += `Hide Delivered `;
-      if (showTodayDelivery) filterText += `To Deliver Today `;
+      if (selectedDeliveryDateFilters.size > 0) {
+      const deliveryDateFilters = getDeliveryDateFilters();
+      const selectedLabels = deliveryDateFilters
+        .filter(filter => selectedDeliveryDateFilters.has(filter.key))
+        .map(filter => filter.label);
+      filterText += `Delivery Dates: ${selectedLabels.join(', ')} `;
+    }
       doc.text(filterText, 20, 65);
     }
     
@@ -873,12 +1085,12 @@ export default function AdminOrdersPage() {
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-lg shadow">
           <div className="px-4 py-5 sm:p-6">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-6 space-y-4 lg:space-y-0">
               <div>
                 <h1 className="text-2xl font-semibold text-gray-900">Orders</h1>
                 {/* Active Filters Display */}
-                {(hideCancelled || hideDelivered || showTodayDelivery) && (
-                  <div className="flex items-center space-x-2 mt-2">
+                {(hideCancelled || hideDelivered || selectedDeliveryDateFilters.size > 0) && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     <span className="text-sm text-gray-600">Active filters:</span>
                     {hideCancelled && (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -890,15 +1102,30 @@ export default function AdminOrdersPage() {
                         Hide Delivered
                       </span>
                     )}
-                    {showTodayDelivery && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                        🚚 To Deliver Today
+                    {selectedDeliveryDateFilters.size > 0 && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Delivery Date Filter
                       </span>
                     )}
                   </div>
                 )}
               </div>
-              <div className="flex items-center space-x-4">
+              
+              {/* Mobile: Collapsible Filters */}
+              <div className="lg:hidden">
+                <button
+                  onClick={() => setShowMobileFilters(!showMobileFilters)}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                  </svg>
+                  Filters & Search
+                </button>
+              </div>
+
+              {/* Desktop: Full Filter Bar */}
+              <div className="hidden lg:flex lg:items-center lg:space-x-4">
                 <div className="flex items-center space-x-2">
                   <input
                     type="text"
@@ -933,6 +1160,18 @@ export default function AdminOrdersPage() {
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={filterZone}
+                    onChange={(e) => setFilterZone(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  >
+                    <option value="all">All Zones</option>
+                    {zones.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="date"
                     placeholder="From Date"
@@ -961,8 +1200,9 @@ export default function AdminOrdersPage() {
                         type="checkbox"
                         checked={hideCancelled}
                         onChange={(e) => {
-                          setHideCancelled(e.target.checked);
-                          fetchOrders(1);
+                          const newHideCancelled = e.target.checked;
+                          setHideCancelled(newHideCancelled);
+                          fetchOrdersWithFilters(selectedDeliveryDateFilters, 1, newHideCancelled, hideDelivered);
                         }}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
@@ -974,40 +1214,32 @@ export default function AdminOrdersPage() {
                         type="checkbox"
                         checked={hideDelivered}
                         onChange={(e) => {
-                          setHideDelivered(e.target.checked);
-                          fetchOrders(1);
+                          const newHideDelivered = e.target.checked;
+                          setHideDelivered(newHideDelivered);
+                          fetchOrdersWithFilters(selectedDeliveryDateFilters, 1, hideCancelled, newHideDelivered);
                         }}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       <span className="text-sm text-gray-700">Hide Delivered</span>
                     </label>
                     
-                    <button
-                      onClick={() => {
-                        setShowTodayDelivery(!showTodayDelivery);
-                        fetchOrders(1);
-                      }}
-                      className={`inline-flex items-center px-3 py-2 border text-sm leading-4 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                        showTodayDelivery 
-                          ? 'border-transparent text-white bg-orange-600 hover:bg-orange-700' 
-                          : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                      }`}
-                    >
-                      🚚 To Deliver Today
-                    </button>
+
                   </div>
+
+
                   <button
-                    onClick={() => {
-                      setFromDate('');
-                      setToDate('');
-                      setSearchTerm('');
-                      setFilterStatus('all');
-                      setFilterDeliveryPerson('all');
-                      setHideCancelled(false);
-                      setHideDelivered(false);
-                      setShowTodayDelivery(false);
-                      fetchOrders(1);
-                    }}
+                                            onClick={() => {
+                          setFromDate('');
+                          setToDate('');
+                          setSearchTerm('');
+                          setFilterStatus('all');
+                          setFilterDeliveryPerson('all');
+                          setFilterZone('all');
+                          setHideCancelled(false);
+                          setHideDelivered(false);
+                          setSelectedDeliveryDateFilters(new Set());
+                          fetchOrdersWithFilters(new Set());
+                        }}
                     className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     Clear
@@ -1031,6 +1263,206 @@ export default function AdminOrdersPage() {
                 </div>
               </div>
             </div>
+
+            {/* Delivery Date Quick Filters */}
+            <div className="mb-6">
+              <div className="flex flex-wrap gap-2">
+                                  {getDeliveryDateFilters().map((filter) => (
+                    <button
+                      key={filter.key}
+                      onClick={() => {
+                        toggleDeliveryDateFilter(filter.key);
+                      }}
+                    className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors ${
+                      selectedDeliveryDateFilters.has(filter.key)
+                        ? 'border-transparent text-white bg-indigo-600 hover:bg-indigo-700'
+                        : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    {filter.label}
+                    {selectedDeliveryDateFilters.has(filter.key) && (
+                      <span className="ml-2 text-xs bg-white bg-opacity-20 px-1.5 py-0.5 rounded-full">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                ))}
+                {selectedDeliveryDateFilters.size > 0 && (
+                  <button
+                    onClick={() => {
+                      setSelectedDeliveryDateFilters(new Set());
+                      fetchOrdersWithFilters(new Set());
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+              {selectedDeliveryDateFilters.size > 0 && (
+                <div className="mt-2 text-sm text-gray-600">
+                  Showing orders for: {Array.from(selectedDeliveryDateFilters).map(key => 
+                    getDeliveryDateFilters().find(f => f.key === key)?.label
+                  ).join(', ')}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Filters Section */}
+            {showMobileFilters && (
+              <div className="lg:hidden mb-6 p-4 bg-gray-50 rounded-lg border">
+                <div className="space-y-4">
+                  {/* Search */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                    <input
+                      type="text"
+                      placeholder="Search orders..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    />
+                  </div>
+
+                  {/* Status Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    >
+                      <option value="all">All Status</option>
+                      {ORDER_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Delivery Person Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Person</label>
+                    <select
+                      value={filterDeliveryPerson}
+                      onChange={(e) => setFilterDeliveryPerson(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    >
+                      <option value="all">All Delivery Persons</option>
+                      <option value="assigned">Assigned Orders</option>
+                      <option value="unassigned">Unassigned Orders</option>
+                      {deliveryPersons.map((person) => (
+                        <option key={person.id} value={person.id.toString()}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Zone Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Zone</label>
+                    <select
+                      value={filterZone}
+                      onChange={(e) => setFilterZone(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    >
+                      <option value="all">All Zones</option>
+                      {zones.map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Date Range */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                      <input
+                        type="date"
+                        value={fromDate}
+                        onChange={(e) => setFromDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                      <input
+                        type="date"
+                        value={toDate}
+                        onChange={(e) => setToDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Filters */}
+                  <div className="space-y-2">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={hideCancelled}
+                        onChange={(e) => {
+                          const newHideCancelled = e.target.checked;
+                          setHideCancelled(newHideCancelled);
+                          fetchOrdersWithFilters(selectedDeliveryDateFilters, 1, newHideCancelled, hideDelivered);
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-700">Hide Cancelled</span>
+                    </label>
+                    
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={hideDelivered}
+                        onChange={(e) => {
+                          const newHideDelivered = e.target.checked;
+                          setHideDelivered(newHideDelivered);
+                          fetchOrdersWithFilters(selectedDeliveryDateFilters, 1, hideCancelled, newHideDelivered);
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-700">Hide Delivered</span>
+                    </label>
+                    
+
+                  </div>
+
+
+
+                  {/* Action Buttons */}
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => fetchOrders(1)}
+                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      Apply Filters
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFromDate('');
+                        setToDate('');
+                        setSearchTerm('');
+                        setFilterStatus('all');
+                        setFilterDeliveryPerson('all');
+                        setFilterZone('all');
+                        setHideCancelled(false);
+                        setHideDelivered(false);
+                        setSelectedDeliveryDateFilters(new Set());
+                        fetchOrdersWithFilters(new Set());
+                      }}
+                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Bulk Actions */}
             {bulkSelectedOrders.size > 0 && (
@@ -1081,7 +1513,183 @@ export default function AdminOrdersPage() {
               </div>
             )}
 
-            <div className="overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="lg:hidden space-y-4 mb-6">
+              {searchFilteredOrders.map((order) => (
+                <div key={order.id} className="bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                  <div className="p-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={bulkSelectedOrders.has(order.id)}
+                          onChange={() => toggleBulkSelection(order.id)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">#{order.id}</h3>
+                          <p className="text-sm text-gray-500">{order.customer_name || 'Guest'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => toggleOrderExpansion(order.id)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          {expandedOrders.has(order.id) ? (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                          ) : (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Order Details */}
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-500">Phone</p>
+                        <p className="font-medium">{order.customer_phone || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Zone</p>
+                        <p className="font-medium">{order.zone || order.delivery_zone || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Expected Delivery</p>
+                        {editingDeliveryDate?.orderId === order.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="date"
+                              value={editingDeliveryDate.date}
+                              onChange={(e) => setEditingDeliveryDate({...editingDeliveryDate, date: e.target.value})}
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => updateDeliveryDate(order.id, editingDeliveryDate.date)}
+                                disabled={isUpdatingDeliveryDate}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                              >
+                                {isUpdatingDeliveryDate ? 'Saving...' : 'Save'}
+                              </button>
+                              <button
+                                onClick={() => setEditingDeliveryDate(null)}
+                                className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              {order.expected_delivery_date ? (
+                                <div>
+                                  <div className="font-medium">{new Date(order.expected_delivery_date).toLocaleDateString()}</div>
+                                  {order.delivery_days && order.delivery_days > 0 ? (
+                                    <div className="text-xs text-gray-400">+{order.delivery_days} days</div>
+                                  ) : order.delivery_days === 0 ? (
+                                    <div className="text-xs text-gray-400">Today</div>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Not set</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => setEditingDeliveryDate({
+                                orderId: order.id,
+                                date: order.expected_delivery_date ? new Date(order.expected_delivery_date).toISOString().split('T')[0] : ''
+                              })}
+                              className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              title="Edit delivery date"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Total</p>
+                        <p className="font-medium">EGP {Number(order.total).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Status</p>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Payment</p>
+                        <p className="font-medium">{order.payment_method}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex flex-col space-y-2">
+                        <select
+                          value={order.status}
+                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                          className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                        >
+                          {ORDER_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => fetchOrderDetails(order.id)}
+                          className="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Items */}
+                    {expandedOrders.has(order.id) && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3">Order Items</h4>
+                        {order.items && order.items.length > 0 ? (
+                          <div className="space-y-3">
+                            {order.items.map((item, index) => (
+                              <div key={index} className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-gray-900">{item.product_name}</h5>
+                                    <p className="text-sm text-gray-600">{item.product_type}</p>
+                                    <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-medium">EGP {Number(item.unit_price).toFixed(2)}</p>
+                                    <p className="text-sm text-gray-500">Total: EGP {(Number(item.unit_price) * item.quantity).toFixed(2)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-gray-500">No items found</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden lg:block overflow-x-auto">
               {/* Collapse All Button */}
               <div className="mb-2 flex justify-end">
                 <button
@@ -1097,13 +1705,13 @@ export default function AdminOrdersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <input
                         type="checkbox"
-                        checked={bulkSelectedOrders.size === searchFilteredOrders.filter(canAssignToDelivery).length && searchFilteredOrders.filter(canAssignToDelivery).length > 0}
+                        checked={bulkSelectedOrders.size === searchFilteredOrders.length && searchFilteredOrders.length > 0}
                         onChange={selectAllOrders}
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Expand
+                      
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => handleSort('id')}>
                       Order ID {sortBy === 'id' && (sortOrder === 'ASC' ? '↑' : '↓')}
@@ -1141,7 +1749,7 @@ export default function AdminOrdersPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
                       Payment
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1161,8 +1769,7 @@ export default function AdminOrdersPage() {
                             type="checkbox"
                             checked={bulkSelectedOrders.has(order.id)}
                             onChange={() => toggleBulkSelection(order.id)}
-                            disabled={!canAssignToDelivery(order)}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
@@ -1201,15 +1808,59 @@ export default function AdminOrdersPage() {
                         {order.zone || order.delivery_zone || 'N/A'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.expected_delivery_date ? (
-                          <div>
-                            <div>{new Date(order.expected_delivery_date).toLocaleDateString()}</div>
-                            {order.delivery_days && order.delivery_days > 0 && (
-                              <div className="text-xs text-gray-400">+{order.delivery_days} days</div>
-                            )}
+                        {editingDeliveryDate?.orderId === order.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="date"
+                              value={editingDeliveryDate.date}
+                              onChange={(e) => setEditingDeliveryDate({...editingDeliveryDate, date: e.target.value})}
+                              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => updateDeliveryDate(order.id, editingDeliveryDate.date)}
+                                disabled={isUpdatingDeliveryDate}
+                                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                              >
+                                {isUpdatingDeliveryDate ? 'Saving...' : 'Save'}
+                              </button>
+                              <button
+                                onClick={() => setEditingDeliveryDate(null)}
+                                className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         ) : (
-                          'N/A'
+                          <div className="flex items-center space-x-2">
+                            <div>
+                                                          {order.expected_delivery_date ? (
+                              <div>
+                                <div>{new Date(order.expected_delivery_date).toLocaleDateString()}</div>
+                                {order.delivery_days && order.delivery_days > 0 ? (
+                                  <div className="text-xs text-gray-400">+{order.delivery_days} days</div>
+                                ) : order.delivery_days === 0 ? (
+                                  <div className="text-xs text-gray-400">Today</div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">Not set</span>
+                            )}
+                            </div>
+                            <button
+                              onClick={() => setEditingDeliveryDate({
+                                orderId: order.id,
+                                date: order.expected_delivery_date ? new Date(order.expected_delivery_date).toISOString().split('T')[0] : ''
+                              })}
+                              className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              title="Edit delivery date"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -1253,7 +1904,7 @@ export default function AdminOrdersPage() {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 w-20">
                         {order.payment_method}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -1397,8 +2048,8 @@ export default function AdminOrdersPage() {
 
             {/* Pagination Controls */}
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
-                <div className="text-sm text-gray-700">
+              <div className="flex flex-col sm:flex-row items-center justify-between px-6 py-4 border-t border-gray-200 space-y-4 sm:space-y-0">
+                <div className="text-sm text-gray-700 text-center sm:text-left">
                   Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to {Math.min(pagination.currentPage * pagination.limit, pagination.totalOrders)} of {pagination.totalOrders} orders
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1407,17 +2058,46 @@ export default function AdminOrdersPage() {
                     disabled={!pagination.hasPrevPage}
                     className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Previous
+                    ← Previous
                   </button>
-                  <span className="px-3 py-2 text-sm text-gray-700">
-                    Page {pagination.currentPage} of {pagination.totalPages}
-                  </span>
+                  <div className="flex items-center space-x-1">
+                    {/* First Page */}
+                    {pagination.currentPage > 2 && (
+                      <button
+                        onClick={() => fetchOrders(1)}
+                        className="px-2 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      >
+                        1
+                      </button>
+                    )}
+                    {/* Ellipsis */}
+                    {pagination.currentPage > 3 && (
+                      <span className="px-2 py-2 text-sm text-gray-500">...</span>
+                    )}
+                    {/* Current Page */}
+                    <span className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 border border-indigo-600 rounded-md">
+                      {pagination.currentPage}
+                    </span>
+                    {/* Ellipsis */}
+                    {pagination.currentPage < pagination.totalPages - 2 && (
+                      <span className="px-2 py-2 text-sm text-gray-500">...</span>
+                    )}
+                    {/* Last Page */}
+                    {pagination.currentPage < pagination.totalPages - 1 && (
+                      <button
+                        onClick={() => fetchOrders(pagination.totalPages)}
+                        className="px-2 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      >
+                        {pagination.totalPages}
+                      </button>
+                    )}
+                  </div>
                   <button
                     onClick={() => fetchOrders(pagination.currentPage + 1)}
                     disabled={!pagination.hasNextPage}
                     className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Next
+                    Next →
                   </button>
                 </div>
               </div>
