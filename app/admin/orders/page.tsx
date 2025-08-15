@@ -1124,8 +1124,8 @@ export default function AdminOrdersPage() {
       order.expected_delivery_date ? new Date(order.expected_delivery_date).toLocaleDateString() : 'N/A',
       order.delivery_man_name || 'Not Assigned',
       new Date(order.created_at).toLocaleDateString(),
-      order.customer_note || 'N/A',
-      order.admin_note || 'N/A'
+      order.customer_note || '',
+      order.admin_note || ''
     ]);
     
     // Add detailed table - optimized column widths for landscape
